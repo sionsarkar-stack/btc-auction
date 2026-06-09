@@ -1,10 +1,6 @@
 package com.btc.btc_auction.entity;
 
-import jakarta.persistence.Entity;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
-import jakarta.persistence.Table;
+import jakarta.persistence.*;
 
 @Entity
 @Table(name = "players")
@@ -15,20 +11,16 @@ public class PlayerEntity {
     private Long id;
 
     private String name;
+
     private String seed;
+
     private boolean sold;
+
     private int soldPrice;
+
     private String team;
 
     public PlayerEntity() {
-    }
-
-    public PlayerEntity(String name, String seed, boolean sold, int soldPrice, String team) {
-        this.name = name;
-        this.seed = seed;
-        this.sold = sold;
-        this.soldPrice = soldPrice;
-        this.team = team;
     }
 
     public Long getId() {

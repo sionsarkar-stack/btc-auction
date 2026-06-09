@@ -1,37 +1,53 @@
 package com.btc.btc_auction.service;
 
-import com.btc.btc_auction.model.AuctionLog;
+import com.btc.btc_auction.entity.AuctionLogEntity;
+import com.btc.btc_auction.repository.AuctionLogRepository;
 import org.springframework.stereotype.Service;
 
-import java.util.ArrayList;
 import java.util.List;
 
 @Service
 public class AuctionLogService {
 
-    private final List<AuctionLog> logs = new ArrayList<>();
+    private final AuctionLogRepository auctionLogRepository;
 
-    public void addLog(AuctionLog log) {
-        logs.add(log);
+    public AuctionLogService(
+            AuctionLogRepository auctionLogRepository) {
+
+        this.auctionLogRepository = auctionLogRepository;
     }
 
-    public List<AuctionLog> getLogs() {
-        return logs;
+    public void addLog(
+            AuctionLogEntity log) {
+
+        auctionLogRepository.save(log);
     }
 
-    public AuctionLog getLastLog() {
+    public List<AuctionLogEntity> getLogs() {
+
+        return auctionLogRepository.findAll();
+    }
+
+    public AuctionLogEntity getLastLog() {
+
+        List<AuctionLogEntity> logs = auctionLogRepository.findAll();
 
         if (logs.isEmpty()) {
             return null;
         }
 
-        return logs.get(logs.size() - 1);
+        return logs.get(
+                logs.size() - 1);
     }
 
     public void removeLastLog() {
 
-        if (!logs.isEmpty()) {
-            logs.remove(logs.size() - 1);
+        AuctionLogEntity lastLog = getLastLog();
+
+        if (lastLog != null) {
+
+            auctionLogRepository.delete(
+                    lastLog);
         }
     }
 }

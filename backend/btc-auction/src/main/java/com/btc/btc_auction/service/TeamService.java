@@ -1,56 +1,42 @@
 package com.btc.btc_auction.service;
 
-import com.btc.btc_auction.model.Team;
+import com.btc.btc_auction.entity.TeamEntity;
+import com.btc.btc_auction.repository.TeamRepository;
 import org.springframework.stereotype.Service;
 
-import java.util.ArrayList;
 import java.util.List;
 
 @Service
 public class TeamService {
 
-    private final List<Team> teams = new ArrayList<>();
+    private final TeamRepository teamRepository;
 
-    public TeamService() {
+    public TeamService(
+            TeamRepository teamRepository) {
 
-        teams.add(
-                new Team(
-                        "Dinda",
-                        5000,
-                        0,
-                        9));
-
-        teams.add(
-                new Team(
-                        "Boni",
-                        6300,
-                        0,
-                        9));
-
-        teams.add(
-                new Team(
-                        "Swapneel",
-                        6200,
-                        0,
-                        9));
-
-        teams.add(
-                new Team(
-                        "Swaswata",
-                        6200,
-                        0,
-                        9));
+        this.teamRepository = teamRepository;
     }
 
-    public List<Team> getTeams() {
-        return teams;
+    public List<TeamEntity> getAllTeams() {
+
+        return teamRepository.findAll();
     }
 
-    public Team getTeam(String captainName) {
+    public TeamEntity getTeam(
+            String captainName) {
 
-        return teams.stream()
-                .filter(team -> team.getCaptainName().equals(captainName))
-                .findFirst()
+        return teamRepository
+                .findByCaptainName(captainName)
                 .orElse(null);
+    }
+
+    public void saveTeam(
+            TeamEntity team) {
+
+        teamRepository.save(team);
+    }
+
+    public List<TeamEntity> getTeams() {
+        return teamRepository.findAll();
     }
 }

@@ -1,6 +1,6 @@
 package com.btc.btc_auction.controller;
 
-import com.btc.btc_auction.model.AuctionLog;
+import com.btc.btc_auction.entity.AuctionLogEntity;
 import com.btc.btc_auction.service.AuctionLogService;
 import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -21,7 +21,7 @@ public class AuctionLogController {
     }
 
     @GetMapping("/api/logs")
-    public List<AuctionLog> getLogs() {
+    public List<AuctionLogEntity> getLogs() {
 
         return auctionLogService.getLogs();
     }

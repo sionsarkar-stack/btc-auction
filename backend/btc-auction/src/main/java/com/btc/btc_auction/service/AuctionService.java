@@ -1,15 +1,16 @@
 package com.btc.btc_auction.service;
 
+import com.btc.btc_auction.entity.AuctionLogEntity;
+import com.btc.btc_auction.entity.PlayerEntity;
+import com.btc.btc_auction.entity.TeamEntity;
 import com.btc.btc_auction.model.Auction;
 import com.btc.btc_auction.model.AuctionLog;
-import com.btc.btc_auction.model.Player;
-import com.btc.btc_auction.model.Team;
 import org.springframework.stereotype.Service;
 
 @Service
 public class AuctionService {
 
-    private Auction currentAuction = new Auction("", "", 0, "None");
+    private Auction currentAuction;
 
     private final TeamService teamService;
     private final PlayerService playerService;
@@ -23,13 +24,20 @@ public class AuctionService {
         this.teamService = teamService;
         this.playerService = playerService;
         this.auctionLogService = auctionLogService;
+
+        currentAuction = new Auction(
+                "",
+                "",
+                0,
+                "None");
     }
 
     public Auction getCurrentAuction() {
         return currentAuction;
     }
 
-    public void nominatePlayer(String playerName,
+    public void nominatePlayer(
+            String playerName,
             String seed) {
 
         currentAuction = new Auction(
@@ -39,24 +47,28 @@ public class AuctionService {
                 "None");
     }
 
-    public String sellPlayer(String playerName,
+    public String sellPlayer(
+            String playerName,
             String captainName,
             int soldPrice) {
 
-        Team team = teamService.getTeam(captainName);
+        TeamEntity team = teamService.getTeam(captainName);
 
         if (team == null) {
             return "Team not found";
         }
 
-        Player player = playerService.getPlayer(playerName);
+        PlayerEntity player = playerService.getPlayer(playerName);
 
-        if (player != null) {
-
-            player.setSold(true);
-            player.setSoldPrice(soldPrice);
-            player.setTeam(captainName);
+        if (player == null) {
+            return "Player not found";
         }
+
+        player.setSold(true);
+        player.setSoldPrice(soldPrice);
+        player.setTeam(captainName);
+
+        playerService.savePlayer(player);
 
         team.setPurse(
                 team.getPurse() - soldPrice);
@@ -67,13 +79,15 @@ public class AuctionService {
         team.setPlayersLeft(
                 team.getPlayersLeft() - 1);
 
-        team.getSquad().add(playerName);
+        teamService.saveTeam(team);
 
-        auctionLogService.addLog(
-                new AuctionLog(
-                        playerName,
-                        captainName,
-                        soldPrice));
+        AuctionLogEntity log = new AuctionLogEntity();
+
+        log.setPlayerName(playerName);
+        log.setCaptainName(captainName);
+        log.setSoldPrice(soldPrice);
+
+        auctionLogService.addLog(log);
 
         currentAuction = new Auction(
                 "",
@@ -81,25 +95,25 @@ public class AuctionService {
                 0,
                 "None");
 
-        return playerName +
-                " sold to " +
-                captainName +
-                " for ₹" +
-                soldPrice;
+        return playerName
+                + " sold to "
+                + captainName
+                + " for ₹"
+                + soldPrice;
     }
 
     public String undoLastSale() {
 
-        AuctionLog lastLog = auctionLogService.getLastLog();
+        AuctionLogEntity lastLog = auctionLogService.getLastLog();
 
         if (lastLog == null) {
             return "No sale to undo";
         }
 
-        Player player = playerService.getPlayer(
+        PlayerEntity player = playerService.getPlayer(
                 lastLog.getPlayerName());
 
-        Team team = teamService.getTeam(
+        TeamEntity team = teamService.getTeam(
                 lastLog.getCaptainName());
 
         if (player != null) {
@@ -107,6 +121,8 @@ public class AuctionService {
             player.setSold(false);
             player.setSoldPrice(0);
             player.setTeam("");
+
+            playerService.savePlayer(player);
         }
 
         if (team != null) {
@@ -121,9 +137,7 @@ public class AuctionService {
             team.setPlayersLeft(
                     team.getPlayersLeft() + 1);
 
-            team.getSquad()
-                    .remove(
-                            lastLog.getPlayerName());
+            teamService.saveTeam(team);
         }
 
         auctionLogService.removeLastLog();

@@ -1,58 +1,55 @@
 package com.btc.btc_auction.service;
 
-import com.btc.btc_auction.model.Player;
+import com.btc.btc_auction.entity.PlayerEntity;
+import com.btc.btc_auction.repository.PlayerRepository;
 import org.springframework.stereotype.Service;
 
-import java.util.ArrayList;
 import java.util.List;
 
 @Service
 public class PlayerService {
 
-    private final List<Player> players = new ArrayList<>();
+    private final PlayerRepository playerRepository;
 
-    public PlayerService() {
-
-        players.add(new Player(
-                "Sushovan Da",
-                "Z",
-                false,
-                0,
-                ""));
-
-        players.add(new Player(
-                "Ujjwal",
-                "Z",
-                false,
-                0,
-                ""));
-
-        players.add(new Player(
-                "Sawon",
-                "Z",
-                false,
-                0,
-                ""));
+    public PlayerService(PlayerRepository playerRepository) {
+        this.playerRepository = playerRepository;
     }
 
-    public List<Player> getPlayers() {
-        return players;
+    public List<PlayerEntity> getAllPlayers() {
+        return playerRepository.findAll();
     }
 
-    // ADD HERE
-    public List<Player> getUnsoldPlayers() {
-
-        return players.stream()
+    public List<PlayerEntity> getUnsoldPlayers() {
+        return playerRepository.findAll()
+                .stream()
                 .filter(player -> !player.isSold())
                 .toList();
     }
 
-    public Player getPlayer(String name) {
-
-        return players.stream()
-                .filter(player ->
-                        player.getName().equals(name))
-                .findFirst()
+    public PlayerEntity getPlayer(String name) {
+        return playerRepository
+                .findByName(name)
                 .orElse(null);
+    }
+
+    public void addPlayer(String name, String seed) {
+
+        PlayerEntity player = new PlayerEntity();
+
+        player.setName(name);
+        player.setSeed(seed);
+        player.setSold(false);
+        player.setSoldPrice(0);
+        player.setTeam("");
+
+        playerRepository.save(player);
+    }
+
+    public void savePlayer(PlayerEntity player) {
+        playerRepository.save(player);
+    }
+
+    public void deletePlayer(Long id) {
+        playerRepository.deleteById(id);
     }
 }

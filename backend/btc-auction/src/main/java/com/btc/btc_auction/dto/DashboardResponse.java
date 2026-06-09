@@ -1,17 +1,17 @@
 package com.btc.btc_auction.dto;
 
+import com.btc.btc_auction.entity.TeamEntity;
 import com.btc.btc_auction.model.Auction;
-import com.btc.btc_auction.model.Team;
 
 import java.util.List;
 
 public class DashboardResponse {
 
     private Auction currentAuction;
-    private List<Team> teams;
+    private List<TeamEntity> teams;
 
     public DashboardResponse(Auction currentAuction,
-                             List<Team> teams) {
+            List<TeamEntity> teams) {
         this.currentAuction = currentAuction;
         this.teams = teams;
     }
@@ -20,7 +20,7 @@ public class DashboardResponse {
         return currentAuction;
     }
 
-    public List<Team> getTeams() {
+    public List<TeamEntity> getTeams() {
         return teams;
     }
 }

@@ -1,6 +1,6 @@
 package com.btc.btc_auction.controller;
 
-import com.btc.btc_auction.model.Team;
+import com.btc.btc_auction.entity.TeamEntity;
 import com.btc.btc_auction.service.TeamService;
 import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -19,7 +19,7 @@ public class TeamController {
     }
 
     @GetMapping("/api/teams")
-    public List<Team> getTeams() {
-        return teamService.getTeams();
+    public List<TeamEntity> getTeams() {
+        return teamService.getAllTeams();
     }
 }

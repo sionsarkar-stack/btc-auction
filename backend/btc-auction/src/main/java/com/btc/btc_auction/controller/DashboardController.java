@@ -15,7 +15,7 @@ public class DashboardController {
     private final TeamService teamService;
 
     public DashboardController(AuctionService auctionService,
-                               TeamService teamService) {
+            TeamService teamService) {
         this.auctionService = auctionService;
         this.teamService = teamService;
     }
@@ -25,7 +25,6 @@ public class DashboardController {
 
         return new DashboardResponse(
                 auctionService.getCurrentAuction(),
-                teamService.getTeams()
-        );
+                teamService.getAllTeams());
     }
 }
