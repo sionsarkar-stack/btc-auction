@@ -1,6 +1,7 @@
 package com.btc.btc_auction.controller;
 
 import com.btc.btc_auction.model.Auction;
+import com.btc.btc_auction.model.ManualSaleRequest;
 import com.btc.btc_auction.model.NominationRequest;
 import com.btc.btc_auction.model.SellPlayerRequest;
 import com.btc.btc_auction.service.AuctionService;
@@ -46,5 +47,15 @@ public class AuctionController {
     public String undoSale() {
 
         return auctionService.undoLastSale();
+    }
+
+    @PostMapping("/api/auction/manual-sale")
+    public String manualSale(
+            @RequestBody ManualSaleRequest request) {
+
+        return auctionService.manualSale(
+                request.getPlayerName(),
+                request.getNewCaptain(),
+                request.getNewPrice(), request.getReason());
     }
 }

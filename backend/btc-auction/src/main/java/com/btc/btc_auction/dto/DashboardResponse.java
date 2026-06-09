@@ -8,10 +8,10 @@ import java.util.List;
 public class DashboardResponse {
 
     private Auction currentAuction;
-    private List<TeamEntity> teams;
+    private List<TeamDashboardDto> teams;
 
     public DashboardResponse(Auction currentAuction,
-            List<TeamEntity> teams) {
+            List<TeamDashboardDto> teams) {
         this.currentAuction = currentAuction;
         this.teams = teams;
     }
@@ -20,7 +20,7 @@ public class DashboardResponse {
         return currentAuction;
     }
 
-    public List<TeamEntity> getTeams() {
+    public List<TeamDashboardDto> getTeams() {
         return teams;
     }
 }

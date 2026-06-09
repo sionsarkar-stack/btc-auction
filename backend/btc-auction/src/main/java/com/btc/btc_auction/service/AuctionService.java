@@ -4,7 +4,6 @@ import com.btc.btc_auction.entity.AuctionLogEntity;
 import com.btc.btc_auction.entity.PlayerEntity;
 import com.btc.btc_auction.entity.TeamEntity;
 import com.btc.btc_auction.model.Auction;
-import com.btc.btc_auction.model.AuctionLog;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -15,15 +14,21 @@ public class AuctionService {
     private final TeamService teamService;
     private final PlayerService playerService;
     private final AuctionLogService auctionLogService;
+    private final AdminActionLogService adminActionLogService;
+    private final AuctionEventService auctionEventService;
 
     public AuctionService(
             TeamService teamService,
             PlayerService playerService,
-            AuctionLogService auctionLogService) {
+            AuctionLogService auctionLogService,
+            AdminActionLogService adminActionLogService,
+            AuctionEventService auctionEventService) {
 
         this.teamService = teamService;
         this.playerService = playerService;
         this.auctionLogService = auctionLogService;
+        this.adminActionLogService = adminActionLogService;
+        this.auctionEventService = auctionEventService;
 
         currentAuction = new Auction(
                 "",
@@ -45,6 +50,12 @@ public class AuctionService {
                 seed,
                 0,
                 "None");
+        auctionEventService.logEvent(
+                "PLAYER_NOMINATED",
+                playerName,
+                "",
+                0,
+                "Seed " + seed);
     }
 
     public String sellPlayer(
@@ -88,6 +99,12 @@ public class AuctionService {
         log.setSoldPrice(soldPrice);
 
         auctionLogService.addLog(log);
+        auctionEventService.logEvent(
+                "PLAYER_SOLD",
+                playerName,
+                captainName,
+                soldPrice,
+                "Player sold in auction");
 
         currentAuction = new Auction(
                 "",
@@ -141,7 +158,85 @@ public class AuctionService {
         }
 
         auctionLogService.removeLastLog();
+        auctionEventService.logEvent(
+                "SALE_UNDONE",
+                lastLog.getPlayerName(),
+                lastLog.getCaptainName(),
+                lastLog.getSoldPrice(),
+                "Undo last sale");
 
         return "Last sale undone";
+    }
+
+    public String manualSale(
+            String playerName,
+            String newCaptain,
+            int newPrice,
+            String reason) {
+
+        PlayerEntity player = playerService.getPlayer(playerName);
+
+        if (player == null) {
+            return "Player not found";
+        }
+
+        String oldCaptain = player.getTeam();
+
+        int oldPrice = player.getSoldPrice();
+
+        TeamEntity oldTeam = teamService.getTeam(oldCaptain);
+
+        TeamEntity newTeam = teamService.getTeam(newCaptain);
+
+        if (newTeam == null) {
+            return "New team not found";
+        }
+
+        if (oldTeam != null) {
+
+            oldTeam.setPurse(
+                    oldTeam.getPurse() + oldPrice);
+
+            oldTeam.setPlayersBought(
+                    oldTeam.getPlayersBought() - 1);
+
+            oldTeam.setPlayersLeft(
+                    oldTeam.getPlayersLeft() + 1);
+
+            teamService.saveTeam(oldTeam);
+        }
+
+        newTeam.setPurse(
+                newTeam.getPurse() - newPrice);
+
+        newTeam.setPlayersBought(
+                newTeam.getPlayersBought() + 1);
+
+        newTeam.setPlayersLeft(
+                newTeam.getPlayersLeft() - 1);
+
+        teamService.saveTeam(newTeam);
+
+        adminActionLogService.addLog(
+                "MANUAL_SALE",
+                playerName,
+                oldCaptain,
+                newCaptain,
+                oldPrice,
+                newPrice,
+                reason);
+        auctionEventService.logEvent(
+                "MANUAL_SALE",
+                playerName,
+                newCaptain,
+                newPrice,
+                reason);
+
+        player.setTeam(newCaptain);
+        player.setSoldPrice(newPrice);
+
+        playerService.savePlayer(player);
+
+        return "Manual Sale Updated";
     }
 }
