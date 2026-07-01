@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Client } from "@stomp/stompjs";
 import SockJS from "sockjs-client";
 
+import { API_URL } from "../config";
 import LiveActivity from "../components/LiveActivity";
 
 function Dashboard() {
@@ -59,7 +60,7 @@ function Dashboard() {
 
         const client = new Client({
             webSocketFactory: () =>
-                new SockJS("http://localhost:8080/ws"),
+                new SockJS(`${API_URL}/ws`),
             reconnectDelay: 5000,
         });
 
@@ -89,22 +90,22 @@ function Dashboard() {
 
     const loadDashboard = () => {
 
-        fetch("http://localhost:8080/api/dashboard")
+        fetch(`${API_URL}/api/dashboard`)
             .then(r => r.json())
             .then(setDashboard);
 
-        fetch("http://localhost:8080/api/events")
+        fetch(`${API_URL}/api/events`)
             .then(r => r.json())
             .then(data =>
                 setEvents(
                     data.slice().reverse().slice(0, 20)
                 ));
 
-        fetch("http://localhost:8080/api/auction/status")
+        fetch(`${API_URL}/api/auction/status`)
             .then(r => r.json())
             .then(setAuctionStatus);
 
-        fetch("http://localhost:8080/api/rtm/current")
+        fetch(`${API_URL}/api/rtm/current`)
             .then(async r => {
 
                 if (!r.ok) {
@@ -134,7 +135,7 @@ function Dashboard() {
         audio.play();
 
         const response = await fetch(
-            "http://localhost:8080/api/rtm/claim",
+            `${API_URL}/api/rtm/claim`,
             {
                 method: "POST",
                 headers: {
@@ -163,7 +164,7 @@ function Dashboard() {
 
         const response = await fetch(
 
-            "http://localhost:8080/api/rtm/bid",
+            `${API_URL}/api/rtm/bid`,
 
             {
 
@@ -195,7 +196,7 @@ function Dashboard() {
 
         const response = await fetch(
 
-            "http://localhost:8080/api/rtm/accept",
+            `${API_URL}/api/rtm/accept`,
 
             {
 
@@ -227,7 +228,7 @@ function Dashboard() {
 
         const response = await fetch(
 
-            "http://localhost:8080/api/rtm/decline",
+            `${API_URL}/api/rtm/decline`,
 
             {
 
@@ -581,7 +582,7 @@ function Dashboard() {
 
                             {event.eventType ===
                                 "REVERSE_TARGET_TRIGGERED" &&
-                                "🎯 REVERSE TARGET"}
+                                "🎯 BlackList"}
 
                             {event.eventType ===
                                 "CAPTAIN_TRIBUNAL" &&

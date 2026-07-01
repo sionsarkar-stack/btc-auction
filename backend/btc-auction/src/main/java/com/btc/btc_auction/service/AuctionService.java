@@ -102,13 +102,13 @@ public class AuctionService {
 
                 int basePrice = switch (seed.trim().toLowerCase()) {
 
-                        case "hackers" -> 800;
+                        case "a" -> 800;
 
-                        case "developers" -> 600;
+                        case "b" -> 600;
 
-                        case "new joiners" -> 100;
+                        case "c" -> 100;
 
-                        case "interns" -> 50;
+                        case "d" -> 50;
 
                         default -> 100;
                 };
@@ -205,26 +205,29 @@ public class AuctionService {
                         if (target.getRivalCaptain().equalsIgnoreCase(captainName)
                                         && target.getPlayerName().equalsIgnoreCase(playerName)) {
 
-                                TeamEntity rewardTeam = teamService.getTeam(
-                                                target.getCaptainName());
+                                TeamEntity rivalTeam = teamService.getTeam(
+                                                captainName);
 
-                                if (rewardTeam != null) {
+                                if (rivalTeam != null) {
 
-                                        rewardTeam.setPurse(
-                                                        rewardTeam.getPurse() + 300);
+                                        rivalTeam.setPurse(
+                                                        rivalTeam.getPurse() - 300);
 
-                                        teamService.saveTeam(rewardTeam);
+                                        teamService.saveTeam(rivalTeam);
 
                                         auctionEventService.logEvent(
                                                         "REVERSE_TARGET_TRIGGERED",
                                                         playerName,
-                                                        target.getCaptainName(),
-                                                        300,
+                                                        captainName,
+                                                        -300,
                                                         target.getCaptainName()
                                                                         + " predicted "
                                                                         + captainName
                                                                         + " buying "
-                                                                        + playerName);
+                                                                        + playerName
+                                                                        + " so "
+                                                                        + captainName
+                                                                        + " loses ₹300");
 
                                 }
 
@@ -460,20 +463,20 @@ public class AuctionService {
 
                                         switch (team.getCaptainName()) {
 
-                                                case "Joy":
+                                                case "Jit":
                                                         team.setPurse(10000);
                                                         break;
 
-                                                case "Rimo":
+                                                case "Pritam":
                                                         team.setPurse(10000);
                                                         break;
 
-                                                case "Sujay":
-                                                        team.setPurse(9400);
+                                                case "Annanya":
+                                                        team.setPurse(10500);
                                                         break;
 
                                                 case "Dragleeoo":
-                                                        team.setPurse(9200);
+                                                        team.setPurse(10000);
                                                         break;
                                         }
 
@@ -623,12 +626,6 @@ public class AuctionService {
                 config.setAuctionPhase(AuctionPhase.SOLD);
 
                 auctionConfigService.save(config);
-
-                Auction auction = currentAuctionService.getCurrentAuction();
-
-                System.out.println("Leader = " + auction.getLeader());
-                System.out.println("Bid = " + auction.getCurrentBid());
-                System.out.println("Player = " + auction.getCurrentPlayer());
 
                 auctionEventService.logEvent(
                                 "SOLD",

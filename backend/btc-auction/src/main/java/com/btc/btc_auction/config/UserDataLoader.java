@@ -27,18 +27,18 @@ public class UserDataLoader implements CommandLineRunner {
                                         "ADMIN");
 
                         createUser(
-                                        "Rimo",
-                                        "nini",
+                                        "Jit",
+                                        "hulk",
                                         "CAPTAIN");
 
                         createUser(
-                                        "Joy",
-                                        "misti",
+                                        "Annanya",
+                                        "boni",
                                         "CAPTAIN");
 
                         createUser(
-                                        "Sujay",
-                                        "pritam",
+                                        "Pritam",
+                                        "sujay",
                                         "CAPTAIN");
 
                         createUser(
@@ -52,7 +52,7 @@ public class UserDataLoader implements CommandLineRunner {
                                         "VIEWER");
 
                         System.out.println(
-                                        "Season X Users Loaded");
+                                        "HULK SEASON 1");
                 }
         }
 

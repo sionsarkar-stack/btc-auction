@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 
+import { API_URL } from "../config";
+
 function NominatePlayer() {
 
     const [players, setPlayers] = useState([]);
@@ -11,7 +13,7 @@ function NominatePlayer() {
         try {
 
             const response = await fetch(
-                "http://localhost:8080/api/players/available"
+                `${API_URL}/api/players/available`
             );
 
             const data = await response.json();
@@ -52,7 +54,7 @@ function NominatePlayer() {
 
             const response = await fetch(
 
-                "http://localhost:8080/api/auction/nominate",
+                `${API_URL}/api/auction/nominate`,
 
                 {
 

@@ -3,6 +3,8 @@ import { Client } from "@stomp/stompjs";
 import SockJS from "sockjs-client";
 import axios from "axios";
 
+import { API_URL } from "../config";
+
 function AuctionScreen() {
 
     const [auction, setAuction] =
@@ -37,7 +39,7 @@ function AuctionScreen() {
 
             axios
                 .get(
-                    "http://localhost:8080/api/auction/status"
+                    `${API_URL}/api/auction/status`
                 )
                 .then(response => {
 
@@ -49,7 +51,7 @@ function AuctionScreen() {
 
             axios
                 .get(
-                    "http://localhost:8080/api/auction/current"
+                    `${API_URL}/api/auction/current`
                 )
                 .then(response => {
 
@@ -61,7 +63,7 @@ function AuctionScreen() {
 
             axios
                 .get(
-                    "http://localhost:8080/api/events"
+                    `${API_URL}/api/events`
                 )
                 .then(response => {
 
@@ -112,7 +114,7 @@ function AuctionScreen() {
 
             axios
                 .get(
-                    "http://localhost:8080/api/silent-bid/active"
+                    `${API_URL}/api/silent-bid/active`
                 )
                 .then(response => {
 
@@ -128,7 +130,7 @@ function AuctionScreen() {
 
         const client = new Client({
             webSocketFactory: () =>
-                new SockJS("http://localhost:8080/ws"),
+                new SockJS(`${API_URL}/ws`),
             reconnectDelay: 5000
         });
 
@@ -292,7 +294,7 @@ function AuctionScreen() {
                                     "ALL_TARGETS_ACHIEVED" &&
                                     "🥇 ALL TARGETS ACHIEVED"}
                                 {latestEvent.eventType === "REVERSE_TARGET_TRIGGERED" &&
-                                    "🎯 REVERSE TARGET"}
+                                    "🎯 BlackList"}
                                 {latestEvent.eventType === "JOKER_USED" &&
                                     "🃏 JOKER ACTIVATED"}
 
@@ -317,9 +319,7 @@ function AuctionScreen() {
 
                             <p>
 
-                                {["BOUNTY", "GOLDEN_BOUNTY", "REVERSE_TARGET_TRIGGERED"].includes(
-                                    latestEvent.eventType
-                                ) &&
+                                {latestEvent.eventType === "BOUNTY" &&
                                     latestEvent.amount > 0 && (
 
                                         <>
@@ -328,6 +328,27 @@ function AuctionScreen() {
                                         </>
 
                                     )}
+
+                                {latestEvent.eventType === "GOLDEN_BOUNTY" &&
+                                    latestEvent.amount > 0 && (
+
+                                        <>
+                                            Reward : ₹{latestEvent.amount}
+                                            <br />
+                                        </>
+
+                                    )}
+
+                                {latestEvent.eventType === "REVERSE_TARGET_TRIGGERED" && (
+
+                                    <>
+                                        {latestEvent.amount < 0
+                                            ? `Penalty : ₹${Math.abs(latestEvent.amount)}`
+                                            : `Reward : ₹${latestEvent.amount}`}
+                                        <br />
+                                    </>
+
+                                )}
 
                                 {latestEvent.eventType !== "REVERSE_TARGET_TRIGGERED" &&
                                     latestEvent.details}
@@ -570,7 +591,7 @@ function AuctionScreen() {
                                                         : event.eventType === "SOLD"
                                                             ? "SOLD"
                                                             : event.eventType === "REVERSE_TARGET_TRIGGERED"
-                                                                ? "REVERSE TARGET"
+                                                                ? "BlackList"
                                                                 : event.eventType
                                         }
 
@@ -581,8 +602,10 @@ function AuctionScreen() {
                                         <>
                                             <div>{event.details}</div>
 
-                                            <div style={{ color: "green", fontWeight: "bold" }}>
-                                                Reward : ₹{event.amount}
+                                            <div style={{ color: event.amount < 0 ? "#b91c1c" : "green", fontWeight: "bold" }}>
+                                                {event.amount < 0
+                                                    ? `Penalty : ₹${Math.abs(event.amount)}`
+                                                    : `Reward : ₹${event.amount}`}
                                             </div>
                                         </>
 

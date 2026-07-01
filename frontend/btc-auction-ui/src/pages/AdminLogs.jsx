@@ -1,12 +1,14 @@
 import { useEffect, useState } from "react";
 
+import { API_URL } from "../config";
+
 function AdminLogs() {
 
     const [logs, setLogs] = useState([]);
 
     useEffect(() => {
 
-        fetch("http://localhost:8080/api/admin/logs")
+        fetch(`${API_URL}/api/admin/logs`)
             .then(response => response.json())
             .then(data => setLogs(data));
 

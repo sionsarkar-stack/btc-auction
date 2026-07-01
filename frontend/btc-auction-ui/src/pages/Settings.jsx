@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 
+import { API_URL } from "../config";
+
 function Settings() {
 
     const [config, setConfig] =
@@ -38,7 +40,7 @@ function Settings() {
 
         const response =
             await fetch(
-                "http://localhost:8080/api/auction/reset",
+                `${API_URL}/api/auction/reset`,
                 {
                     method: "POST"
                 }
@@ -53,19 +55,19 @@ function Settings() {
     useEffect(() => {
 
         fetch(
-            "http://localhost:8080/api/config"
+            `${API_URL}/api/config`
         )
             .then(res => res.json())
             .then(data => setConfig(data));
 
         fetch(
-            "http://localhost:8080/api/players"
+            `${API_URL}/api/players`
         )
             .then(res => res.json())
             .then(data => setPlayers(data));
 
         fetch(
-            "http://localhost:8080/api/bounty"
+            `${API_URL}/api/bounty`
         )
             .then(res => res.json())
             .then(data => {
@@ -108,7 +110,7 @@ function Settings() {
 
         const response =
             await fetch(
-                "http://localhost:8080/api/config",
+                `${API_URL}/api/config`,
                 {
                     method: "POST",
                     headers: {
@@ -132,7 +134,7 @@ function Settings() {
 
             const response =
                 await fetch(
-                    "http://localhost:8080/api/bounty",
+                    `${API_URL}/api/bounty`,
                     {
                         method: "POST",
                         headers: {
@@ -186,6 +188,33 @@ function Settings() {
                                 e.target.value
                         })
                     }
+                />
+
+            </div>
+
+            <div className="form-field">
+
+                <label>
+                    Show Joker & Tribunal Features
+                </label>
+
+                <input
+                    type="checkbox"
+                    checked={
+                        config.showSpecialFeatures !== false
+                    }
+                    onChange={(e) =>
+                        setConfig({
+                            ...config,
+                            showSpecialFeatures:
+                                e.target.checked
+                        })
+                    }
+                    style={{
+                        width: "18px",
+                        height: "18px",
+                        marginTop: "8px"
+                    }}
                 />
 
             </div>

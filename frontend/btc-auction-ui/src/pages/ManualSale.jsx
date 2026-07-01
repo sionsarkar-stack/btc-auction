@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 
+import { API_URL } from "../config";
+
 function ManualSale() {
 
     const [players, setPlayers] = useState([]);
@@ -13,11 +15,11 @@ function ManualSale() {
 
     useEffect(() => {
 
-        fetch("http://localhost:8080/api/players")
+        fetch(`${API_URL}/api/players`)
             .then(response => response.json())
             .then(data => setPlayers(data));
 
-        fetch("http://localhost:8080/api/teams")
+        fetch(`${API_URL}/api/teams`)
             .then(response => response.json())
             .then(data => setTeams(data));
 
@@ -27,7 +29,7 @@ function ManualSale() {
 
         const response =
             await fetch(
-                "http://localhost:8080/api/auction/manual-sale",
+                `${API_URL}/api/auction/manual-sale`,
                 {
                     method: "POST",
                     headers: {

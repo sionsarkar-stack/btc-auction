@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
+import { API_URL } from "./config";
 import Dashboard from "./pages/Dashboard";
 import AuctionManager from "./pages/AuctionManager";
 import NominatePlayer from "./pages/NominatePlayer";
@@ -25,6 +26,18 @@ function App() {
     useState(
       localStorage.getItem("role")
     );
+
+  const [config, setConfig] =
+    useState(null);
+
+  useEffect(() => {
+    fetch(`${API_URL}/api/config`)
+      .then(res => res.json())
+      .then(data => setConfig(data));
+  }, []);
+
+  const showSpecialFeatures =
+    config?.showSpecialFeatures ?? true;
 
   if (!role) {
 
@@ -171,7 +184,7 @@ function App() {
 
 
 
-          {role !== "VIEWER" && (
+          {role !== "VIEWER" && showSpecialFeatures && (
 
             <button
               className={
@@ -201,15 +214,17 @@ function App() {
 
           )}
 
-          <button
-            className="button-secondary"
-            onClick={() =>
-              setScreen("joker")}
-          >
+          {showSpecialFeatures && (
+            <button
+              className="button-secondary"
+              onClick={() =>
+                setScreen("joker")}
+            >
 
-            My Joker
+              My Joker
 
-          </button>
+            </button>
+          )}
           {role !== "VIEWER" && (
 
             <button
@@ -218,7 +233,7 @@ function App() {
                 setScreen("reverse-target")}
             >
 
-              🎯 Reverse Target
+              🎯 BlackList
 
             </button>
 
@@ -287,10 +302,12 @@ function App() {
 
         {screen === "tribunal" &&
           role !== "VIEWER" &&
+          showSpecialFeatures &&
           <CaptainTribunal />}
         {screen === "joker" &&
 
           role !== "VIEWER" &&
+          showSpecialFeatures &&
 
           <MyJoker />}
 

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { API_URL } from "../config";
 
 function PlayersImport() {
 
@@ -31,7 +32,7 @@ function PlayersImport() {
 
             const response =
                 await fetch(
-                    "http://localhost:8080/api/players/import",
+                    `${API_URL}/api/players/import`,
                     {
                         method: "POST",
                         body: formData

@@ -21,51 +21,51 @@ public class TeamDataLoader implements CommandLineRunner {
 
         if (teamRepository.count() == 0) {
 
-            TeamEntity joy = new TeamEntity();
+            TeamEntity jit = new TeamEntity();
 
-            joy.setCaptainName("Joy");
+            jit.setCaptainName("Jit");
 
-            joy.setPurse(10000);
+            jit.setPurse(10000);
 
-            joy.setPlayersBought(0);
+            jit.setPlayersBought(0);
 
-            joy.setPlayersLeft(10);
+            jit.setPlayersLeft(10);
 
-            TeamEntity rimo = new TeamEntity();
+            TeamEntity pritam = new TeamEntity();
 
-            rimo.setCaptainName("Rimo");
+            pritam.setCaptainName("Pritam");
 
-            rimo.setPurse(10000);
+            pritam.setPurse(10000);
 
-            rimo.setPlayersBought(0);
+            pritam.setPlayersBought(0);
 
-            rimo.setPlayersLeft(10);
+            pritam.setPlayersLeft(10);
 
-            TeamEntity sujay = new TeamEntity();
+            TeamEntity annanya = new TeamEntity();
 
-            sujay.setCaptainName("Sujay");
+            annanya.setCaptainName("Annanya");
 
-            sujay.setPurse(9400);
+            annanya.setPurse(10500);
 
-            sujay.setPlayersBought(0);
+            annanya.setPlayersBought(0);
 
-            sujay.setPlayersLeft(10);
+            annanya.setPlayersLeft(10);
 
             TeamEntity dragleeoo = new TeamEntity();
 
             dragleeoo.setCaptainName("Dragleeoo");
 
-            dragleeoo.setPurse(9000);
+            dragleeoo.setPurse(10000);
 
             dragleeoo.setPlayersBought(0);
 
             dragleeoo.setPlayersLeft(10);
 
-            teamRepository.save(joy);
+            teamRepository.save(jit);
 
-            teamRepository.save(rimo);
+            teamRepository.save(pritam);
 
-            teamRepository.save(sujay);
+            teamRepository.save(annanya);
 
             teamRepository.save(dragleeoo);
 

@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 
+import { API_URL } from "../config";
+
 function AuctionManager() {
 
     const [teams, setTeams] = useState([]);
@@ -18,11 +20,11 @@ function AuctionManager() {
         try {
 
             const teamsResponse = await fetch(
-                "http://localhost:8080/api/teams"
+                `${API_URL}/api/teams`
             );
 
             const playersResponse = await fetch(
-                "http://localhost:8080/api/players/available"
+                `${API_URL}/api/players/available`
             );
 
             const teamsData =
@@ -66,7 +68,7 @@ function AuctionManager() {
         }
 
         const response = await fetch(
-            "http://localhost:8080/api/auction/call-sold",
+            `${API_URL}/api/auction/call-sold`,
             {
                 method: "POST"
             }
@@ -97,7 +99,7 @@ function AuctionManager() {
         try {
 
             const response = await fetch(
-                "http://localhost:8080/api/auction/sold",
+                `${API_URL}/api/auction/sold`,
                 {
                     method: "POST",
                     headers: {
@@ -140,7 +142,7 @@ function AuctionManager() {
         try {
 
             const response = await fetch(
-                "http://localhost:8080/api/auction/undo",
+                `${API_URL}/api/auction/undo`,
                 {
                     method: "POST",
                 }
@@ -168,7 +170,7 @@ function AuctionManager() {
 
         const response =
             await fetch(
-                "http://localhost:8080/api/auction/start",
+                `${API_URL}/api/auction/start`,
                 {
                     method: "POST"
                 });
@@ -187,7 +189,7 @@ function AuctionManager() {
         }
 
         await fetch(
-            "http://localhost:8080/api/auction/update-current",
+            `${API_URL}/api/auction/update-current`,
             {
                 method: "POST",
                 headers: {

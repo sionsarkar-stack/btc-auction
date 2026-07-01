@@ -34,7 +34,7 @@ function SilentBid() {
         const response =
             await fetch(
 
-                `http://localhost:8080/api/silent-bid/${username}`
+                `${API_URL}/api/silent-bid/${username}`
 
             );
 
@@ -71,7 +71,7 @@ function SilentBid() {
 
         const response =
             await fetch(
-                "http://localhost:8080/api/silent-bid/submit",
+                `${API_URL}/api/silent-bid/submit`,
                 {
 
                     method: "POST",

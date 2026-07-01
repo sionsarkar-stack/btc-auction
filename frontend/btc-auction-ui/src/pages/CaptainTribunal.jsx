@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 
+import { API_URL } from "../config";
+
 function CaptainTribunal() {
 
     const username = localStorage.getItem("username");
@@ -40,12 +42,12 @@ function CaptainTribunal() {
 
             const captainResponse =
                 await fetch(
-                    "http://localhost:8080/api/teams"
+                    `${API_URL}/api/teams`
                 );
 
             const statusResponse =
                 await fetch(
-                    "http://localhost:8080/api/tribunal/status"
+                    `${API_URL}/api/tribunal/status`
                 );
 
             const statusData =
@@ -60,7 +62,7 @@ function CaptainTribunal() {
 
             const playerResponse =
                 await fetch(
-                    "http://localhost:8080/api/players/available"
+                    `${API_URL}/api/players/available`
                 );
 
             const playerData =
@@ -143,7 +145,7 @@ function CaptainTribunal() {
         try {
 
             await fetch(
-                "http://localhost:8080/api/tribunal/trusted",
+                `${API_URL}/api/tribunal/trusted`,
                 {
                     method: "POST",
                     headers: {
@@ -164,7 +166,7 @@ function CaptainTribunal() {
             for (const targetCaptain in votes) {
 
                 await fetch(
-                    "http://localhost:8080/api/tribunal/vote",
+                    `${API_URL}/api/tribunal/vote`,
                     {
                         method: "POST",
                         headers: {
@@ -224,7 +226,7 @@ function CaptainTribunal() {
 
             const response =
                 await fetch(
-                    "http://localhost:8080/api/tribunal/generate",
+                    `${API_URL}/api/tribunal/generate`,
                     {
                         method: "POST"
                     }

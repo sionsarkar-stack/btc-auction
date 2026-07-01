@@ -1,5 +1,7 @@
 import { useState } from "react";
 
+import { API_URL } from "../config";
+
 function Login({ onLogin }) {
 
     const [username, setUsername] =
@@ -15,7 +17,7 @@ function Login({ onLogin }) {
 
         const response =
             await fetch(
-                "http://localhost:8080/api/login",
+                `${API_URL}/api/login`,
                 {
                     method: "POST",
                     headers: {
@@ -68,7 +70,7 @@ function Login({ onLogin }) {
         <div className="form-card">
 
             <h1>
-                BTC Auction Login
+                Hulk Auction Season 1 Login
             </h1>
 
             <div className="form-field">

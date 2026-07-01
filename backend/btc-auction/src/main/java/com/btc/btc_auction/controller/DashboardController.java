@@ -60,11 +60,6 @@ public class DashboardController {
                                         boolean rtmAvailable = !rtmRepository.existsByCaptainNameAndUsedTrue(
                                                         team.getCaptainName());
 
-                                        System.out.println(
-                                                        team.getCaptainName()
-                                                                        + " -> RTM Available = "
-                                                                        + rtmAvailable);
-
                                         return new TeamDashboardDto(
                                                         team.getCaptainName(),
                                                         team.getPurse(),

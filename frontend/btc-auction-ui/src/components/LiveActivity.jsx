@@ -3,6 +3,8 @@ import EventOverlay from "./EventOverlay";
 import { Client } from "@stomp/stompjs";
 import SockJS from "sockjs-client";
 
+import { API_URL } from "../config";
+
 function LiveActivity() {
 
     const [events, setEvents] = useState([]);
@@ -19,7 +21,7 @@ function LiveActivity() {
 
         const client = new Client({
             webSocketFactory: () =>
-                new SockJS("http://localhost:8080/ws"),
+                new SockJS(`${API_URL}/ws`),
             reconnectDelay: 5000
         });
 
@@ -47,7 +49,7 @@ function LiveActivity() {
 
     const loadEvents = () => {
 
-        fetch("http://localhost:8080/api/events")
+        fetch(`${API_URL}/api/events`)
             .then(response => response.json())
             .then(data => {
 

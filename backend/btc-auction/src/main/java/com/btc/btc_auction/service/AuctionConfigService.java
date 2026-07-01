@@ -46,6 +46,8 @@ public class AuctionConfigService {
         config.setSeasonName(
                 "BTC Season X RELOADED");
 
+        config.setShowSpecialFeatures(true);
+
         config.setSquadSize(10);
 
         config.setBountyBonus(100);

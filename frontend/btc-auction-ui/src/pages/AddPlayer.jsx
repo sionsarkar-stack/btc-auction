@@ -9,7 +9,7 @@ function AddPlayer() {
     const addPlayer = async () => {
 
         const response = await fetch(
-            "http://localhost:8080/api/players",
+            `${API_URL}/api/players`,
             {
                 method: "POST",
                 headers: {

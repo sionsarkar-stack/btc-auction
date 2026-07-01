@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 
+import { API_URL } from "../config";
+
 function SilentBidManager() {
 
     const [players, setPlayers] = useState([]);
@@ -27,7 +29,7 @@ function SilentBidManager() {
     const loadPlayers = async () => {
 
         const response = await fetch(
-            "http://localhost:8080/api/players/available"
+            `${API_URL}/api/players/available`
         );
 
         setPlayers(await response.json());
@@ -37,7 +39,7 @@ function SilentBidManager() {
     const loadBids = async () => {
 
         const response = await fetch(
-            "http://localhost:8080/api/silent-bid/all"
+            `${API_URL}/api/silent-bid/all`
         );
 
         setBids(await response.json());
@@ -55,7 +57,7 @@ function SilentBidManager() {
         }
 
         const response = await fetch(
-            "http://localhost:8080/api/silent-bid/start",
+            `${API_URL}/api/silent-bid/start`,
             {
 
                 method: "POST",
@@ -88,7 +90,7 @@ function SilentBidManager() {
 
         const response =
             await fetch(
-                "http://localhost:8080/api/silent-bid/winner"
+                `${API_URL}/api/silent-bid/winner`
             );
 
         if (!response.ok) {
@@ -147,7 +149,7 @@ function SilentBidManager() {
         const response =
             await fetch(
 
-                "http://localhost:8080/api/silent-bid/sell",
+                `${API_URL}/api/silent-bid/sell`,
 
                 {
 
@@ -176,7 +178,7 @@ function SilentBidManager() {
     const resetRound = async () => {
 
         const response = await fetch(
-            "http://localhost:8080/api/silent-bid/clear",
+            `${API_URL}/api/silent-bid/clear`,
             {
                 method: "POST"
             });

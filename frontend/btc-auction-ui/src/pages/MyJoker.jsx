@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 
+import { API_URL } from "../config";
+
 function MyJoker() {
 
     const username =
@@ -36,7 +38,7 @@ function MyJoker() {
         if (role === "ADMIN") {
 
             fetch(
-                "http://localhost:8080/api/jokers"
+                `${API_URL}/api/jokers`
             )
                 .then(response => response.json())
                 .then(setAllJokers)
@@ -46,7 +48,7 @@ function MyJoker() {
         }
 
         fetch(
-            `http://localhost:8080/api/jokers/${username}`
+            `${API_URL}/api/jokers/${username}`
         )
             .then(response => response.json())
             .then(data => setJoker(data[0]))
@@ -124,7 +126,7 @@ function MyJoker() {
 
         const response =
             await fetch(
-                "http://localhost:8080/api/jokers/use",
+                `${API_URL}/api/jokers/use`,
                 {
                     method: "POST",
                     headers: {

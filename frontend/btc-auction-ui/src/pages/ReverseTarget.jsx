@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 
+import { API_URL } from "../config";
+
 function ReverseTarget() {
 
     const username =
@@ -34,24 +36,24 @@ function ReverseTarget() {
 
     useEffect(() => {
 
-        fetch("http://localhost:8080/api/players")
+        fetch(`${API_URL}/api/players`)
             .then(response => response.json())
             .then(setPlayers);
 
-        fetch("http://localhost:8080/api/teams")
+        fetch(`${API_URL}/api/teams`)
             .then(response => response.json())
             .then(setCaptains);
 
         if (isAdmin) {
 
-            fetch("http://localhost:8080/api/reverse-target")
+            fetch(`${API_URL}/api/reverse-target`)
                 .then(response => response.json())
                 .then(setAllTargets);
 
         } else {
 
             fetch(
-                `http://localhost:8080/api/reverse-target/${username}`
+                `${API_URL}/api/reverse-target/${username}`
             )
                 .then(response => {
 
@@ -83,7 +85,7 @@ function ReverseTarget() {
 
         const response =
             await fetch(
-                "http://localhost:8080/api/reverse-target",
+                `${API_URL}/api/reverse-target`,
                 {
 
                     method: "POST",
@@ -117,7 +119,7 @@ function ReverseTarget() {
 
                     <h1>
 
-                        🎯 Reverse Targets
+                        🎯 BlackLists
 
                     </h1>
 
@@ -193,9 +195,16 @@ function ReverseTarget() {
 
                 <h1>
 
-                    🎯 Reverse Target
+                    🎯 BlackList
 
                 </h1>
+
+                <p style={{ marginBottom: "20px" }}>
+
+                    If the selected rival captain buys this player,
+                    the rival captain loses ₹300.
+
+                </p>
 
                 {submitted ? (
 
@@ -343,7 +352,7 @@ function ReverseTarget() {
                             onClick={submit}
                         >
 
-                            🎯 Submit Reverse Target
+                            🎯 Submit BlackList
 
                         </button>
 
