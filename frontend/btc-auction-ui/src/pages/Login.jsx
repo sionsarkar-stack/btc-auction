@@ -28,6 +28,16 @@ function Login({ onLogin }) {
                     })
                 });
 
+        if (!response.ok) {
+
+            setError(
+                "Invalid username or password"
+            );
+
+            return;
+
+        }
+
         const user =
             await response.json();
 

@@ -260,3 +260,26 @@ label {
         grid-template-columns: 1fr;
     }
 }
+
+.standings-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 12px;
+}
+
+.standings-table th {
+    background: #f3f4f6;
+    padding: 12px;
+    text-align: left;
+    font-weight: 700;
+    border-bottom: 2px solid #d1d5db;
+}
+
+.standings-table td {
+    padding: 12px;
+    border-bottom: 1px solid #e5e7eb;
+}
+
+.standings-table tr:hover {
+    background: #f9fafb;
+}

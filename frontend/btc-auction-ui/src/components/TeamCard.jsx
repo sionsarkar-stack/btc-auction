@@ -17,13 +17,8 @@ function TeamCard({ team }) {
           Left {team.playersLeft}
         </span>
       </div>
-
       <p>
-        <strong>Max Z Bid:</strong> ₹{team.maxZBid}
-      </p>
-
-      <p>
-        <strong>Max A/B/C Bid:</strong> ₹{team.maxABCBid}
+        <strong>Max Bid:</strong> ₹{team.maxBid}
       </p>
 
       <div className="squad-title">

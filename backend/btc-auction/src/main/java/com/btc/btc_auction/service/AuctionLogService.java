@@ -2,6 +2,8 @@ package com.btc.btc_auction.service;
 
 import com.btc.btc_auction.entity.AuctionLogEntity;
 import com.btc.btc_auction.repository.AuctionLogRepository;
+
+import org.springframework.lang.NonNull;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -18,7 +20,7 @@ public class AuctionLogService {
     }
 
     public void addLog(
-            AuctionLogEntity log) {
+            @NonNull AuctionLogEntity log) {
 
         auctionLogRepository.save(log);
     }
@@ -49,5 +51,10 @@ public class AuctionLogService {
             auctionLogRepository.delete(
                     lastLog);
         }
+    }
+
+    public void clearLogs() {
+
+        auctionLogRepository.deleteAll();
     }
 }

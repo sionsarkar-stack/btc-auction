@@ -1,6 +1,5 @@
 package com.btc.btc_auction.dto;
 
-import com.btc.btc_auction.entity.TeamEntity;
 import com.btc.btc_auction.model.Auction;
 
 import java.util.List;

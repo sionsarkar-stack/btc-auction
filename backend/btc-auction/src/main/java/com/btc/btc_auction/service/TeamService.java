@@ -2,6 +2,8 @@ package com.btc.btc_auction.service;
 
 import com.btc.btc_auction.entity.TeamEntity;
 import com.btc.btc_auction.repository.TeamRepository;
+
+import org.springframework.lang.NonNull;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -31,12 +33,26 @@ public class TeamService {
     }
 
     public void saveTeam(
-            TeamEntity team) {
+            @NonNull TeamEntity team) {
 
         teamRepository.save(team);
     }
 
     public List<TeamEntity> getTeams() {
         return teamRepository.findAll();
+    }
+
+    public int getMaxBid(
+            TeamEntity team) {
+
+        if (team == null) {
+
+            return 0;
+
+        }
+
+        return team.getPurse()
+                - (team.getPlayersLeft() - 1) * 100;
+
     }
 }

@@ -8,6 +8,13 @@ import AddPlayer from "./pages/AddPlayer";
 import ManualSale from "./pages/ManualSale";
 import AdminLogs from "./pages/AdminLogs";
 import Login from "./pages/Login";
+import Settings from "./pages/Settings";
+import PlayersImport from "./pages/PlayersImport";
+import CaptainTribunal from "./pages/CaptainTribunal";
+import MyJoker from "./pages/MyJoker";
+import SilentBidManager from "./pages/SilentBidManager";
+import SilentBid from "./pages/SilentBid";
+import ReverseTarget from "./pages/ReverseTarget";
 
 function App() {
 
@@ -41,7 +48,9 @@ function App() {
           }}
         >
           Logged in as:
+          {" "}
           {localStorage.getItem("username")}
+          {" "}
           (
           {role}
           )
@@ -57,7 +66,7 @@ function App() {
             Dashboard
           </button>
 
-          {role !== "VIEWER" && (
+          {role === "CAPTAIN" && (
 
             <button
               className="button-secondary"
@@ -100,6 +109,17 @@ function App() {
             </button>
 
           )}
+          {role === "ADMIN" && (
+
+            <button
+              className="button-secondary"
+              onClick={() =>
+                setScreen("import-players")}
+            >
+              Import Players
+            </button>
+
+          )}
 
           {role === "ADMIN" && (
 
@@ -121,6 +141,22 @@ function App() {
 
             <button
               className={
+                screen === "settings"
+                  ? "button button-active"
+                  : "button-secondary"
+              }
+              onClick={() =>
+                setScreen("settings")}
+            >
+              Settings
+            </button>
+
+          )}
+
+          {role === "ADMIN" && (
+
+            <button
+              className={
                 screen === "admin-logs"
                   ? "button button-active"
                   : "button-secondary"
@@ -133,12 +169,83 @@ function App() {
 
           )}
 
+
+
+          {role !== "VIEWER" && (
+
+            <button
+              className={
+                screen === "tribunal"
+                  ? "button button-active"
+                  : "button-secondary"
+              }
+              onClick={() =>
+                setScreen("tribunal")}
+            >
+              Captain Tribunal
+            </button>
+
+          )}
+
+          {role === "CAPTAIN" && (
+
+            <button
+              className="button-secondary"
+              onClick={() =>
+                setScreen("silent-bid")}
+            >
+
+              🔒 Silent Bid
+
+            </button>
+
+          )}
+
+          <button
+            className="button-secondary"
+            onClick={() =>
+              setScreen("joker")}
+          >
+
+            My Joker
+
+          </button>
+          {role !== "VIEWER" && (
+
+            <button
+              className="button-secondary"
+              onClick={() =>
+                setScreen("reverse-target")}
+            >
+
+              🎯 Reverse Target
+
+            </button>
+
+          )}
+
+          {role === "ADMIN" && (
+
+            <button
+              className="button-secondary"
+              onClick={() =>
+                setScreen("silent-bid")}
+            >
+              🔒 Silent Bid
+            </button>
+
+          )}
+
           <button
             className="button-secondary"
             onClick={() => {
 
               localStorage.removeItem(
                 "role"
+              );
+
+              localStorage.removeItem(
+                "username"
               );
 
               window.location.reload();
@@ -154,7 +261,7 @@ function App() {
           <Dashboard />}
 
         {screen === "nominate" &&
-          role !== "VIEWER" &&
+          role === "CAPTAIN" &&
           <NominatePlayer />}
 
         {screen === "auction" &&
@@ -175,6 +282,35 @@ function App() {
         {screen === "admin-logs" &&
           role === "ADMIN" &&
           <AdminLogs />}
+
+
+
+        {screen === "tribunal" &&
+          role !== "VIEWER" &&
+          <CaptainTribunal />}
+        {screen === "joker" &&
+
+          role !== "VIEWER" &&
+
+          <MyJoker />}
+
+        {screen === "settings" &&
+          role === "ADMIN" &&
+          <Settings />}
+        {screen === "import-players" &&
+          role === "ADMIN" &&
+          <PlayersImport />}
+
+        {screen === "silent-bid" &&
+          role === "ADMIN" &&
+          <SilentBidManager />}
+
+        {screen === "silent-bid" &&
+          role === "CAPTAIN" &&
+          <SilentBid />}
+        {screen === "reverse-target" &&
+          role !== "VIEWER" &&
+          <ReverseTarget />}
 
       </div>
 

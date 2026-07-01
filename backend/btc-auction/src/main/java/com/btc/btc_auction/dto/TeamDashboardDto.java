@@ -8,26 +8,26 @@ public class TeamDashboardDto {
     private int purse;
     private int playersBought;
     private int playersLeft;
-    private int maxZBid;
-    private int maxABCBid;
+    private int maxBid;
     private List<String> squad;
+    private boolean rtmAvailable;
 
     public TeamDashboardDto(
             String captainName,
             int purse,
             int playersBought,
             int playersLeft,
-            int maxZBid,
-            int maxABCBid,
-            List<String> squad) {
+            int maxBid,
+            List<String> squad,
+            boolean rtmAvailable) {
 
         this.captainName = captainName;
         this.purse = purse;
         this.playersBought = playersBought;
         this.playersLeft = playersLeft;
-        this.maxZBid = maxZBid;
-        this.maxABCBid = maxABCBid;
+        this.maxBid = maxBid;
         this.squad = squad;
+        this.rtmAvailable = rtmAvailable;
     }
 
     public String getCaptainName() {
@@ -46,15 +46,15 @@ public class TeamDashboardDto {
         return playersLeft;
     }
 
-    public int getMaxZBid() {
-        return maxZBid;
-    }
-
-    public int getMaxABCBid() {
-        return maxABCBid;
+    public int getMaxBid() {
+        return maxBid;
     }
 
     public List<String> getSquad() {
         return squad;
+    }
+
+    public boolean isRtmAvailable() {
+        return rtmAvailable;
     }
 }

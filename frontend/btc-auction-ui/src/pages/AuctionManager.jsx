@@ -10,6 +10,8 @@ function AuctionManager() {
     const [soldPrice, setSoldPrice] = useState("");
 
     const [message, setMessage] = useState("");
+    const [auctionMode, setAuctionMode] =
+        useState("LIVE");
 
     const loadData = async () => {
 
@@ -46,6 +48,36 @@ function AuctionManager() {
     useEffect(() => {
         loadData();
     }, []);
+
+    const callSold = async () => {
+
+        if (
+            !playerName ||
+            !captainName ||
+            !soldPrice
+        ) {
+
+            setMessage(
+                "Please fill all fields."
+            );
+
+            return;
+
+        }
+
+        const response = await fetch(
+            "http://localhost:8080/api/auction/call-sold",
+            {
+                method: "POST"
+            }
+        );
+
+        const result =
+            await response.text();
+
+        setMessage(result);
+
+    };
 
     const sellPlayer = async () => {
 
@@ -132,6 +164,44 @@ function AuctionManager() {
         }
     };
 
+    const startAuction = async () => {
+
+        const response =
+            await fetch(
+                "http://localhost:8080/api/auction/start",
+                {
+                    method: "POST"
+                });
+
+        const result =
+            await response.text();
+
+        alert(result);
+
+    };
+
+    const updateCurrentAuction = async (captain, price) => {
+
+        if (!captain || !price) {
+            return;
+        }
+
+        await fetch(
+            "http://localhost:8080/api/auction/update-current",
+            {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    captainName: captain,
+                    currentBid: Number(price)
+                })
+            }
+        );
+
+    };
+
     return (
         <div className="app-container">
 
@@ -142,6 +212,15 @@ function AuctionManager() {
             </div>
 
             <div className="form-card">
+
+                <button
+                    className="button"
+                    onClick={startAuction}
+                >
+
+                    🚀 Start Auction
+
+                </button>
 
                 <h2>Sell Player</h2>
 
@@ -204,11 +283,18 @@ function AuctionManager() {
                         <select
                             className="select"
                             value={captainName}
-                            onChange={(e) =>
-                                setCaptainName(
-                                    e.target.value
-                                )
-                            }
+                            onChange={async (e) => {
+
+                                const captain = e.target.value;
+
+                                setCaptainName(captain);
+
+                                await updateCurrentAuction(
+                                    captain,
+                                    soldPrice
+                                );
+
+                            }}
                         >
 
                             <option value="">
@@ -248,11 +334,18 @@ function AuctionManager() {
                             className="input"
                             type="number"
                             value={soldPrice}
-                            onChange={(e) =>
-                                setSoldPrice(
-                                    e.target.value
-                                )
-                            }
+                            onChange={async (e) => {
+
+                                const price = e.target.value;
+
+                                setSoldPrice(price);
+
+                                await updateCurrentAuction(
+                                    captainName,
+                                    price
+                                );
+
+                            }}
                         />
 
                     </div>
@@ -260,10 +353,23 @@ function AuctionManager() {
                     <div className="button-group">
 
                         <button
+                            className="button-secondary"
+                            type="button"
+                            onClick={callSold}
+                        >
+
+                            🟢 CALL SOLD
+
+                        </button>
+
+
+                        <button
                             className="button"
                             type="submit"
                         >
-                            SOLD
+
+                            ✅ CONFIRM SALE
+
                         </button>
 
                         <button
@@ -271,7 +377,9 @@ function AuctionManager() {
                             type="button"
                             onClick={undoSale}
                         >
-                            UNDO LAST SALE
+
+                            ↩️ UNDO LAST SALE
+
                         </button>
 
                     </div>

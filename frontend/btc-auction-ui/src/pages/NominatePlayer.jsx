@@ -51,30 +51,44 @@ function NominatePlayer() {
         try {
 
             const response = await fetch(
+
                 "http://localhost:8080/api/auction/nominate",
+
                 {
+
                     method: "POST",
+
                     headers: {
+
                         "Content-Type": "application/json",
+
                     },
+
                     body: JSON.stringify({
+
                         playerName: player.name,
+
                         seed: player.seed,
+
+                        captainName: localStorage.getItem("username")
+
                     }),
+
                 }
+
             );
 
-            if (!response.ok) {
-                throw new Error();
+            const result =
+                await response.text();
+
+            setMessage(result);
+
+            if (result === "Player nominated") {
+
+                setSelectedPlayer("");
+
+                await loadPlayers();
             }
-
-            setMessage(
-                `${player.name} (${player.seed}) nominated successfully.`
-            );
-
-            setSelectedPlayer("");
-
-            await loadPlayers();
 
         } catch (error) {
 
@@ -155,7 +169,11 @@ function NominatePlayer() {
 
                     <div
                         className={
-                            message.includes("Unable")
+                            message.includes("already sold")
+                                ||
+                                message.includes("not found")
+                                ||
+                                message.includes("Unable")
                                 ? "message-error"
                                 : "message-success"
                         }

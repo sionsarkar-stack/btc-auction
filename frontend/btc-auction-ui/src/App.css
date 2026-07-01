@@ -11,6 +11,7 @@
   &:hover {
     border-color: var(--accent-border);
   }
+
   &:focus-visible {
     outline: 2px solid var(--accent);
     outline-offset: 2px;
@@ -42,8 +43,7 @@
     z-index: 1;
     top: 34px;
     height: 28px;
-    transform: perspective(2000px) rotateZ(300deg) rotateX(44deg) rotateY(39deg)
-      scale(1.4);
+    transform: perspective(2000px) rotateZ(300deg) rotateX(44deg) rotateY(39deg) scale(1.4);
   }
 
   .vite {
@@ -51,8 +51,7 @@
     top: 107px;
     height: 26px;
     width: auto;
-    transform: perspective(2000px) rotateZ(300deg) rotateX(40deg) rotateY(39deg)
-      scale(0.8);
+    transform: perspective(2000px) rotateZ(300deg) rotateX(40deg) rotateY(39deg) scale(0.8);
   }
 }
 
@@ -75,9 +74,10 @@
   border-top: 1px solid var(--border);
   text-align: left;
 
-  & > div {
+  &>div {
     flex: 1 1 0;
     padding: 32px;
+
     @media (max-width: 1024px) {
       padding: 24px 20px;
     }
@@ -130,6 +130,7 @@
     &:hover {
       box-shadow: var(--shadow);
     }
+
     .button-icon {
       height: 18px;
       width: 18px;
@@ -156,6 +157,7 @@
 #spacer {
   height: 88px;
   border-top: 1px solid var(--border);
+
   @media (max-width: 1024px) {
     height: 48px;
   }
@@ -177,8 +179,501 @@
     left: 0;
     border-left-color: var(--border);
   }
+
   &::after {
     right: 0;
     border-right-color: var(--border);
   }
+}
+
+.joker-overlay {
+
+  position: fixed;
+
+  inset: 0;
+
+  background:
+    radial-gradient(circle,
+      rgba(255, 255, 255, .12),
+      rgba(0, 0, 0, .92));
+
+  backdrop-filter: blur(10px);
+
+  display: flex;
+
+  justify-content: center;
+
+  align-items: center;
+
+  z-index: 99999;
+
+  animation:
+    fadeIn .4s ease,
+    flashBg .8s ease;
+
+}
+
+.joker-card {
+
+  position: relative;
+
+  width: 650px;
+
+  max-width: 90%;
+
+  padding: 45px;
+
+  border-radius: 24px;
+
+  overflow: hidden;
+
+  border: 4px solid rgba(255, 255, 255, .15);
+
+  text-align: center;
+
+  background: linear-gradient(135deg, #2b1055, #5f27cd);
+
+  color: white;
+
+  box-shadow:
+    0 0 35px rgba(255, 255, 255, .35),
+    0 0 80px rgba(255, 255, 255, .20),
+    0 0 140px rgba(255, 255, 255, .10);
+
+  animation:
+
+    zoomBounce .7s ease;
+
+}
+
+.joker-card::before {
+
+  content: "";
+
+  position: absolute;
+
+  inset: -3px;
+
+  border-radius: 24px;
+
+  background: linear-gradient(90deg,
+      transparent,
+      rgba(255, 255, 255, .9),
+      transparent);
+
+  animation: borderMove 3s linear infinite;
+
+  opacity: .35;
+
+}
+
+.joker-overlay.veto .joker-card {
+
+  background: linear-gradient(135deg,
+      #7f1d1d,
+      #dc2626);
+
+}
+
+.joker-overlay.bid_block .joker-card {
+
+  background: linear-gradient(135deg,
+      #7c2d12,
+      #f97316);
+
+}
+
+.joker-overlay.bid_steal .joker-card {
+
+  background: linear-gradient(135deg,
+      #312e81,
+      #7c3aed);
+
+}
+
+.joker-overlay.last_strike .joker-card {
+
+  background: linear-gradient(135deg,
+      #92400e,
+      #facc15);
+
+  color: black;
+
+}
+
+.joker-icon {
+
+  font-size: 110px;
+
+  animation:
+    pulse 1s infinite,
+
+    shake .6s ease;
+
+}
+
+.joker-title {
+
+  margin-top: 15px;
+
+  font-size: 48px;
+
+  font-weight: 900;
+
+  letter-spacing: 5px;
+
+  text-transform: uppercase;
+
+}
+
+.joker-captain {
+
+  margin-top: 20px;
+
+  font-size: 82px;
+
+  font-weight: 900;
+
+  letter-spacing: 5px;
+
+  text-shadow:
+
+    0 0 20px rgba(255, 255, 255, .6),
+
+    0 0 40px rgba(255, 255, 255, .35);
+
+  animation:
+
+    captainEntry .6s ease .25s both;
+
+}
+
+.joker-type {
+
+  margin-top: 20px;
+
+  font-size: 34px;
+
+  font-weight: bold;
+
+  letter-spacing: 4px;
+
+  text-transform: uppercase;
+
+  text-shadow:
+
+    0 0 10px white,
+
+    0 0 25px white;
+
+}
+
+@keyframes zoomIn {
+
+  from {
+
+    opacity: 0;
+
+    transform: scale(.5);
+
+  }
+
+  to {
+
+    opacity: 1;
+
+    transform: scale(1);
+
+  }
+
+}
+
+@keyframes fadeIn {
+
+  from {
+
+    opacity: 0;
+
+  }
+
+  to {
+
+    opacity: 1;
+
+  }
+
+}
+
+@keyframes pulse {
+
+  0% {
+
+    transform: scale(1);
+
+  }
+
+  50% {
+
+    transform: scale(1.15);
+
+  }
+
+  100% {
+
+    transform: scale(1);
+
+  }
+
+}
+
+@keyframes rotateIn {
+
+  from {
+
+    transform:
+      rotate(-180deg) scale(.2);
+
+    opacity: 0;
+
+  }
+
+  to {
+
+    transform:
+      rotate(0) scale(1);
+
+    opacity: 1;
+
+  }
+
+}
+
+@keyframes borderMove {
+
+  from {
+
+    transform: rotate(0deg);
+
+  }
+
+  to {
+
+    transform: rotate(360deg);
+
+  }
+
+}
+
+@keyframes borderMove {
+
+  from {
+
+    transform: rotate(0deg);
+
+  }
+
+  to {
+
+    transform: rotate(360deg);
+
+  }
+
+}
+
+@keyframes flashBg {
+
+  0% {
+
+    opacity: 0;
+
+  }
+
+  30% {
+
+    opacity: 1;
+
+  }
+
+  100% {
+
+    opacity: 1;
+
+  }
+
+}
+
+@keyframes captainEntry {
+
+  0% {
+
+    opacity: 0;
+
+    transform:
+
+      scale(.3) translateY(80px);
+
+  }
+
+  60% {
+
+    transform:
+
+      scale(1.15);
+
+  }
+
+  100% {
+
+    opacity: 1;
+
+    transform:
+
+      scale(1) translateY(0);
+
+  }
+
+}
+
+body.joker-flash {
+
+  animation: screenFlash .35s ease;
+
+}
+
+@keyframes screenFlash {
+
+  0% {
+
+    filter: brightness(100%);
+
+  }
+
+  30% {
+
+    filter: brightness(240%);
+
+  }
+
+  100% {
+
+    filter: brightness(100%);
+
+  }
+
+}
+
+@keyframes zoomBounce {
+
+  0% {
+
+    opacity: 0;
+
+    transform:
+
+      scale(.2);
+
+  }
+
+  60% {
+
+    transform:
+
+      scale(1.15);
+
+  }
+
+  80% {
+
+    transform:
+
+      scale(.95);
+
+  }
+
+  100% {
+
+    opacity: 1;
+
+    transform:
+
+      scale(1);
+
+  }
+
+}
+
+.joker-type {
+
+  animation:
+
+    fadeMessage .5s ease .45s both;
+
+}
+
+@keyframes fadeMessage {
+
+  from {
+
+    opacity: 0;
+
+    transform:
+
+      translateY(20px);
+
+  }
+
+  to {
+
+    opacity: 1;
+
+    transform:
+
+      translateY(0);
+
+  }
+
+}
+
+@keyframes shake {
+
+  0% {
+
+    transform: rotate(0);
+
+  }
+
+  20% {
+
+    transform: rotate(-12deg);
+
+  }
+
+  40% {
+
+    transform: rotate(12deg);
+
+  }
+
+  60% {
+
+    transform: rotate(-8deg);
+
+  }
+
+  100% {
+
+    transform: rotate(0);
+
+  }
+
+}
+
+.joker-overlay.silent .joker-card {
+
+  background: linear-gradient(135deg,
+      #065f46,
+      #10b981);
+
+  color: white;
+
 }

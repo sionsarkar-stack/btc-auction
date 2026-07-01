@@ -21,36 +21,55 @@ public class TeamDataLoader implements CommandLineRunner {
 
         if (teamRepository.count() == 0) {
 
-            TeamEntity dinda = new TeamEntity();
-            dinda.setCaptainName("Dinda");
-            dinda.setPurse(5000);
-            dinda.setPlayersBought(0);
-            dinda.setPlayersLeft(9);
+            TeamEntity joy = new TeamEntity();
 
-            TeamEntity boni = new TeamEntity();
-            boni.setCaptainName("Boni");
-            boni.setPurse(6300);
-            boni.setPlayersBought(0);
-            boni.setPlayersLeft(9);
+            joy.setCaptainName("Joy");
 
-            TeamEntity swapneel = new TeamEntity();
-            swapneel.setCaptainName("Swapneel");
-            swapneel.setPurse(6200);
-            swapneel.setPlayersBought(0);
-            swapneel.setPlayersLeft(9);
+            joy.setPurse(10000);
 
-            TeamEntity swaswata = new TeamEntity();
-            swaswata.setCaptainName("Swaswata");
-            swaswata.setPurse(6200);
-            swaswata.setPlayersBought(0);
-            swaswata.setPlayersLeft(9);
+            joy.setPlayersBought(0);
 
-            teamRepository.save(dinda);
-            teamRepository.save(boni);
-            teamRepository.save(swapneel);
-            teamRepository.save(swaswata);
+            joy.setPlayersLeft(10);
 
-            System.out.println("Teams Loaded");
+            TeamEntity rimo = new TeamEntity();
+
+            rimo.setCaptainName("Rimo");
+
+            rimo.setPurse(10000);
+
+            rimo.setPlayersBought(0);
+
+            rimo.setPlayersLeft(10);
+
+            TeamEntity sujay = new TeamEntity();
+
+            sujay.setCaptainName("Sujay");
+
+            sujay.setPurse(9400);
+
+            sujay.setPlayersBought(0);
+
+            sujay.setPlayersLeft(10);
+
+            TeamEntity dragleeoo = new TeamEntity();
+
+            dragleeoo.setCaptainName("Dragleeoo");
+
+            dragleeoo.setPurse(9000);
+
+            dragleeoo.setPlayersBought(0);
+
+            dragleeoo.setPlayersLeft(10);
+
+            teamRepository.save(joy);
+
+            teamRepository.save(rimo);
+
+            teamRepository.save(sujay);
+
+            teamRepository.save(dragleeoo);
+
+            System.out.println("Season X Teams Loaded");
         }
     }
 }

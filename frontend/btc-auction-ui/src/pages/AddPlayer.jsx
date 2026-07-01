@@ -3,7 +3,7 @@ import { useState } from "react";
 function AddPlayer() {
 
     const [name, setName] = useState("");
-    const [seed, setSeed] = useState("C");
+    const [seed, setSeed] = useState("EMERGING");
     const [message, setMessage] = useState("");
 
     const addPlayer = async () => {
@@ -26,7 +26,7 @@ function AddPlayer() {
 
         setMessage(result);
         setName("");
-        setSeed("C");
+        setSeed("EMERGING");
     };
 
     return (
@@ -62,10 +62,29 @@ function AddPlayer() {
                             setSeed(e.target.value)
                         }
                     >
-                        <option value="Z">Z</option>
-                        <option value="A">A</option>
-                        <option value="B">B</option>
-                        <option value="C">C</option>
+                        <option value="ICON">
+                            ICON
+                        </option>
+
+                        <option value="STAR">
+                            STAR
+                        </option>
+
+                        <option value="CHALLENGER">
+                            CHALLENGER
+                        </option>
+
+                        <option value="PRO">
+                            PRO
+                        </option>
+
+                        <option value="FOUNDATION">
+                            FOUNDATION
+                        </option>
+
+                        <option value="EMERGING">
+                            EMERGING
+                        </option>
                     </select>
                 </div>
 
