@@ -27,23 +27,23 @@ public class UserDataLoader implements CommandLineRunner {
                                         "ADMIN");
 
                         createUser(
-                                        "Jit",
-                                        "hulk",
+                                        "Rimo",
+                                        "nini",
                                         "CAPTAIN");
 
                         createUser(
-                                        "Annanya",
-                                        "boni",
+                                        "Nantu",
+                                        "shankha",
                                         "CAPTAIN");
 
                         createUser(
-                                        "Pritam",
-                                        "sujay",
+                                        "Sujay",
+                                        "pritamMVP",
                                         "CAPTAIN");
 
                         createUser(
-                                        "Dragleeoo",
-                                        "AMDSena",
+                                        "Joy",
+                                        "misti",
                                         "CAPTAIN");
 
                         createUser(
@@ -52,7 +52,7 @@ public class UserDataLoader implements CommandLineRunner {
                                         "VIEWER");
 
                         System.out.println(
-                                        "HULK SEASON 1");
+                                        "BTC SEASON X Reloaded");
                 }
         }
 

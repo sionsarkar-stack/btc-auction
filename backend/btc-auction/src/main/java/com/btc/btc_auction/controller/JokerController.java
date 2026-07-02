@@ -87,9 +87,34 @@ public class JokerController {
 
         }
 
-        return jokerService.useJoker(
+        String result = jokerService.useJoker(
                 request.getCaptainName(),
                 request.getJokerType());
+
+        if (!result.contains("activated")) {
+            return result;
+        }
+
+        switch (request.getJokerType()) {
+
+            case VETO:
+                auctionService.vetoCurrentAuction();
+                break;
+
+            case LAST_STRIKE:
+                auctionService.applyLastStrike(request.getCaptainName());
+                break;
+
+            case STEAL_BID:
+                // Future implementation
+                break;
+
+            case BID_BLOCK:
+                // Future implementation
+                break;
+        }
+
+        return result;
 
     }
 

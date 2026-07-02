@@ -283,3 +283,631 @@ label {
 .standings-table tr:hover {
     background: #f9fafb;
 }
+
+.joker-overlay {
+
+    position: fixed;
+
+    inset: 0;
+
+    background:
+        radial-gradient(circle,
+            rgba(255, 255, 255, .12),
+            rgba(0, 0, 0, .92));
+
+    backdrop-filter: blur(10px);
+
+    display: flex;
+
+    justify-content: center;
+
+    align-items: center;
+
+    z-index: 99999;
+
+    animation:
+        fadeIn .4s ease,
+        flashBg .8s ease;
+
+}
+
+.joker-card {
+
+    position: relative;
+
+    width: 650px;
+
+    max-width: 90%;
+
+    padding: 45px;
+
+    border-radius: 24px;
+
+    overflow: hidden;
+
+    border: 4px solid rgba(255, 255, 255, .15);
+
+    text-align: center;
+
+    background: linear-gradient(135deg, #2b1055, #5f27cd);
+
+    color: white;
+
+    box-shadow:
+        0 0 35px rgba(255, 255, 255, .35),
+        0 0 80px rgba(255, 255, 255, .20),
+        0 0 140px rgba(255, 255, 255, .10);
+
+    animation:
+
+        zoomBounce .7s ease;
+
+}
+
+.joker-card::before {
+
+    content: "";
+
+    position: absolute;
+
+    inset: -3px;
+
+    border-radius: 24px;
+
+    background: linear-gradient(90deg,
+            transparent,
+            rgba(255, 255, 255, .9),
+            transparent);
+
+    animation: borderMove 3s linear infinite;
+
+    opacity: .35;
+
+}
+
+.joker-overlay.veto .joker-card {
+
+    background: linear-gradient(135deg,
+            #7f1d1d,
+            #dc2626);
+
+}
+
+.joker-overlay.bid_block .joker-card {
+
+    background: linear-gradient(135deg,
+            #7c2d12,
+            #f97316);
+
+}
+
+.joker-overlay.bid_steal .joker-card {
+
+    background: linear-gradient(135deg,
+            #312e81,
+            #7c3aed);
+
+}
+
+.joker-overlay.last_strike .joker-card {
+
+    background: linear-gradient(135deg,
+            #92400e,
+            #facc15);
+
+    color: black;
+
+}
+
+.joker-icon {
+
+    font-size: 110px;
+
+    animation:
+        pulse 1s infinite,
+
+        shake .6s ease;
+
+}
+
+.joker-title {
+
+    margin-top: 15px;
+
+    font-size: 48px;
+
+    font-weight: 900;
+
+    letter-spacing: 5px;
+
+    text-transform: uppercase;
+
+}
+
+.joker-captain {
+
+    margin-top: 20px;
+
+    font-size: 82px;
+
+    font-weight: 900;
+
+    letter-spacing: 5px;
+
+    text-shadow:
+
+        0 0 20px rgba(255, 255, 255, .6),
+
+        0 0 40px rgba(255, 255, 255, .35);
+
+    animation:
+
+        captainEntry .6s ease .25s both;
+
+}
+
+.joker-type {
+
+    margin-top: 20px;
+
+    font-size: 34px;
+
+    font-weight: bold;
+
+    letter-spacing: 4px;
+
+    text-transform: uppercase;
+
+    text-shadow:
+
+        0 0 10px white,
+
+        0 0 25px white;
+
+}
+
+@keyframes zoomIn {
+
+    from {
+
+        opacity: 0;
+
+        transform: scale(.5);
+
+    }
+
+    to {
+
+        opacity: 1;
+
+        transform: scale(1);
+
+    }
+
+}
+
+@keyframes fadeIn {
+
+    from {
+
+        opacity: 0;
+
+    }
+
+    to {
+
+        opacity: 1;
+
+    }
+
+}
+
+@keyframes pulse {
+
+    0% {
+
+        transform: scale(1);
+
+    }
+
+    50% {
+
+        transform: scale(1.15);
+
+    }
+
+    100% {
+
+        transform: scale(1);
+
+    }
+
+}
+
+@keyframes rotateIn {
+
+    from {
+
+        transform:
+            rotate(-180deg) scale(.2);
+
+        opacity: 0;
+
+    }
+
+    to {
+
+        transform:
+            rotate(0) scale(1);
+
+        opacity: 1;
+
+    }
+
+}
+
+@keyframes borderMove {
+
+    from {
+
+        transform: rotate(0deg);
+
+    }
+
+    to {
+
+        transform: rotate(360deg);
+
+    }
+
+}
+
+@keyframes borderMove {
+
+    from {
+
+        transform: rotate(0deg);
+
+    }
+
+    to {
+
+        transform: rotate(360deg);
+
+    }
+
+}
+
+@keyframes flashBg {
+
+    0% {
+
+        opacity: 0;
+
+    }
+
+    30% {
+
+        opacity: 1;
+
+    }
+
+    100% {
+
+        opacity: 1;
+
+    }
+
+}
+
+@keyframes captainEntry {
+
+    0% {
+
+        opacity: 0;
+
+        transform:
+
+            scale(.3) translateY(80px);
+
+    }
+
+    60% {
+
+        transform:
+
+            scale(1.15);
+
+    }
+
+    100% {
+
+        opacity: 1;
+
+        transform:
+
+            scale(1) translateY(0);
+
+    }
+
+}
+
+body.joker-flash {
+
+    animation: screenFlash .35s ease;
+
+}
+
+@keyframes screenFlash {
+
+    0% {
+
+        filter: brightness(100%);
+
+    }
+
+    30% {
+
+        filter: brightness(240%);
+
+    }
+
+    100% {
+
+        filter: brightness(100%);
+
+    }
+
+}
+
+@keyframes zoomBounce {
+
+    0% {
+
+        opacity: 0;
+
+        transform:
+
+            scale(.2);
+
+    }
+
+    60% {
+
+        transform:
+
+            scale(1.15);
+
+    }
+
+    80% {
+
+        transform:
+
+            scale(.95);
+
+    }
+
+    100% {
+
+        opacity: 1;
+
+        transform:
+
+            scale(1);
+
+    }
+
+}
+
+.joker-type {
+
+    animation:
+
+        fadeMessage .5s ease .45s both;
+
+}
+
+@keyframes fadeMessage {
+
+    from {
+
+        opacity: 0;
+
+        transform:
+
+            translateY(20px);
+
+    }
+
+    to {
+
+        opacity: 1;
+
+        transform:
+
+            translateY(0);
+
+    }
+
+}
+
+@keyframes shake {
+
+    0% {
+
+        transform: rotate(0);
+
+    }
+
+    20% {
+
+        transform: rotate(-12deg);
+
+    }
+
+    40% {
+
+        transform: rotate(12deg);
+
+    }
+
+    60% {
+
+        transform: rotate(-8deg);
+
+    }
+
+    100% {
+
+        transform: rotate(0);
+
+    }
+
+}
+
+.joker-overlay.silent .joker-card {
+
+    background: linear-gradient(135deg,
+            #065f46,
+            #10b981);
+
+    color: white;
+
+}
+
+.player-grid {
+
+    display: grid;
+
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+
+    gap: 15px;
+
+    margin-top: 20px;
+
+}
+
+.player-card {
+
+    background: #1b1b1b;
+
+    border: 2px solid transparent;
+
+    border-radius: 12px;
+
+    padding: 18px;
+
+    cursor: pointer;
+
+    transition: all .25s ease;
+
+}
+
+.player-card:not(.forbidden):hover {
+    transform: translateY(-3px);
+    border-color: #00ff95;
+    box-shadow: 0 8px 20px rgba(0, 255, 149, 0.25);
+}
+
+.player-card.selected {
+
+    border-color: #00ff95;
+
+    background: #133322;
+
+}
+
+.player-card.forbidden {
+    opacity: .6;
+    filter: grayscale(100%);
+    cursor: not-allowed;
+    border: 2px solid #b91c1c;
+    background: linear-gradient(135deg, #3a1111, #1f1f1f);
+}
+
+.player-name {
+    font-size: 20px;
+    font-weight: 700;
+    color: #fff;
+}
+
+.player-seed {
+    display: inline-block;
+    margin-top: 10px;
+    padding: 4px 10px;
+    border-radius: 20px;
+    background: #2b2b2b;
+    color: #ffd54f;
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.tribunal-tag {
+    margin-top: 15px;
+    padding: 6px 10px;
+    border-radius: 20px;
+    background: #b91c1c;
+    color: white;
+    font-weight: bold;
+    text-align: center;
+}
+
+.selected-tag {
+
+    margin-top: 10px;
+
+    color: #00ff95;
+
+    font-weight: bold;
+
+}
+
+.player-card.selected {
+    border: 3px solid #00ff95;
+    background: linear-gradient(135deg, #133322, #0d281d);
+    box-shadow:
+        0 0 15px rgba(0, 255, 149, .45),
+        0 0 30px rgba(0, 255, 149, .2);
+    transform: scale(1.03);
+}
+
+.tribunal-table {
+
+    width: 100%;
+
+    border-collapse: collapse;
+
+    margin-top: 15px;
+
+}
+
+.tribunal-table th {
+
+    background: #222;
+
+    color: white;
+
+    padding: 12px;
+
+    text-align: left;
+
+}
+
+.tribunal-table td {
+
+    padding: 12px;
+
+    border-bottom: 1px solid #444;
+
+}
+
+.tribunal-table tbody tr:hover {
+
+    background: rgba(255, 255, 255, .05);
+
+}
+
+.joker-overlay.tribunal_result .joker-card {
+    background: linear-gradient(135deg, #7f1d1d, #dc2626);
+}

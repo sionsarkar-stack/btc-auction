@@ -18,6 +18,7 @@ function CaptainTribunal() {
 
     const [loading, setLoading] = useState(true);
     const [status, setStatus] = useState([]);
+    const [forbiddenPicks, setForbiddenPicks] = useState([]);
 
     useEffect(() => {
 
@@ -39,6 +40,18 @@ function CaptainTribunal() {
     const loadData = async () => {
 
         try {
+
+            if (role === "ADMIN") {
+
+                const forbiddenResponse =
+                    await fetch(`${API_URL}/api/tribunal/forbidden`);
+
+                const forbiddenData =
+                    await forbiddenResponse.json();
+
+                setForbiddenPicks(forbiddenData);
+
+            }
 
             const captainResponse =
                 await fetch(
@@ -527,6 +540,50 @@ function CaptainTribunal() {
                                 Waiting for all captains to submit.
 
                             </p>
+
+                        )}
+
+
+
+                    </div>
+                    <div className="form-card">
+
+                        <h2>🚫 Tribunal Ban Results</h2>
+
+                        {forbiddenPicks.length === 0 ? (
+
+                            <p>No tribunal results generated yet.</p>
+
+                        ) : (
+
+                            <table className="tribunal-table">
+
+                                <thead>
+
+                                    <tr>
+                                        <th>Captain</th>
+                                        <th>Banned Player</th>
+                                    </tr>
+
+                                </thead>
+
+                                <tbody>
+
+                                    {forbiddenPicks.map(result => (
+
+                                        <tr key={result.captainName}>
+
+                                            <td>👑 {result.captainName}</td>
+
+                                            <td>🚫 {result.playerName}</td>
+
+                                        </tr>
+
+                                    ))}
+
+                                </tbody>
+
+                            </table>
 
                         )}
 

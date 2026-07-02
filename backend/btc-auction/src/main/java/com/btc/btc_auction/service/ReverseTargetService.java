@@ -40,12 +40,12 @@ public class ReverseTargetService {
         if (repository.findByCaptainName(
                 target.getCaptainName()).isPresent()) {
 
-            return "BlackList already submitted.";
+            return "Reverse Target already submitted.";
         }
 
         repository.save(target);
 
-        return "BlackList saved.";
+        return "Reverse Target saved.";
     }
 
     public ReverseTargetEntity getByCaptain(

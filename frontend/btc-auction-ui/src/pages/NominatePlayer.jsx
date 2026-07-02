@@ -7,6 +7,7 @@ function NominatePlayer() {
     const [players, setPlayers] = useState([]);
     const [selectedPlayer, setSelectedPlayer] = useState("");
     const [message, setMessage] = useState(null);
+    const [forbiddenPlayer, setForbiddenPlayer] = useState("");
 
     const loadPlayers = async () => {
 
@@ -32,8 +33,33 @@ function NominatePlayer() {
     };
 
     useEffect(() => {
+
         loadPlayers();
+
+        fetch(
+
+            `${API_URL}/api/forbidden/${localStorage.getItem("username")}`
+
+        )
+
+            .then(res => res.json())
+
+            .then(data => {
+
+                if (data) {
+
+                    setForbiddenPlayer(data.playerName);
+
+                }
+
+            })
+
+            .catch(() => { });
+
     }, []);
+
+
+
 
     const nominatePlayer = async () => {
 
@@ -129,32 +155,92 @@ function NominatePlayer() {
                             Available Players
                         </label>
 
-                        <select
-                            className="select"
-                            value={selectedPlayer}
-                            onChange={(e) =>
-                                setSelectedPlayer(
-                                    e.target.value
-                                )
-                            }
-                        >
 
-                            <option value="">
-                                Select Player
-                            </option>
+                        {forbiddenPlayer && (
 
-                            {players.map((player) => (
+                            <div className="message-error">
 
-                                <option
-                                    key={player.name}
-                                    value={player.name}
-                                >
-                                    {player.name} ({player.seed})
-                                </option>
+                                🚫 Tribunal Ban:
+                                <strong> {forbiddenPlayer}</strong>
+                                <br />
+                                You cannot nominate this player.
 
-                            ))}
+                            </div>
 
-                        </select>
+                        )}
+                        <div className="player-grid">
+
+                            {players.map((player) => {
+
+                                const isForbidden =
+                                    player.name === forbiddenPlayer;
+
+                                return (
+
+                                    <div
+                                        key={player.name}
+                                        className={`player-card ${selectedPlayer === player.name
+                                            ? "selected"
+                                            : ""
+                                            } ${isForbidden
+                                                ? "forbidden"
+                                                : ""
+                                            }`}
+                                        onClick={
+                                            isForbidden
+                                                ? undefined
+                                                : () => setSelectedPlayer(player.name)
+                                        }
+                                    >
+
+                                        <div className="player-name">
+
+                                            {player.name}
+
+                                        </div>
+
+                                        <div className="player-seed">
+
+                                            Seed {player.seed}
+
+                                        </div>
+                                        {selectedPlayer === player.name && (
+
+                                            <div className="selected-tag">
+
+                                                ✅ Selected
+
+                                            </div>
+
+                                        )}
+
+                                        {isForbidden && (
+
+                                            <div className="tribunal-tag">
+
+                                                🚫 Tribunal Ban
+
+                                            </div>
+
+                                        )}
+                                    </div>
+
+                                );
+
+                            })}
+
+                        </div>
+
+                        {selectedPlayer && (
+
+                            <div className="message-success">
+
+                                ✅ Selected Player:
+                                <strong> {selectedPlayer}</strong>
+
+                            </div>
+
+                        )}
 
                     </div>
 

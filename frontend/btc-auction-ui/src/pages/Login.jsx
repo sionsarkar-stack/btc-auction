@@ -70,7 +70,7 @@ function Login({ onLogin }) {
         <div className="form-card">
 
             <h1>
-                Hulk Auction Season 1 Login
+                BTC Auction Login
             </h1>
 
             <div className="form-field">

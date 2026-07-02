@@ -18,156 +18,169 @@ import java.util.Map;
 @Service
 public class TribunalService {
 
-    private final TribunalVoteService voteService;
-    private final TrustedCaptainService trustedCaptainService;
-    private final ForbiddenPickService forbiddenPickService;
-    private final TeamService teamService;
+        private final TribunalVoteService voteService;
+        private final TrustedCaptainService trustedCaptainService;
+        private final ForbiddenPickService forbiddenPickService;
+        private final TeamService teamService;
+        private final AuctionEventService auctionEventService;
 
-    public TribunalService(
-            TribunalVoteService voteService,
-            TrustedCaptainService trustedCaptainService,
-            ForbiddenPickService forbiddenPickService,
-            TeamService teamService) {
+        public TribunalService(
+                        TribunalVoteService voteService,
+                        TrustedCaptainService trustedCaptainService,
+                        ForbiddenPickService forbiddenPickService,
+                        TeamService teamService,
+                        AuctionEventService auctionEventService) {
 
-        this.voteService = voteService;
-        this.trustedCaptainService = trustedCaptainService;
-        this.forbiddenPickService = forbiddenPickService;
-        this.teamService = teamService;
-    }
-
-    public void generateForbiddenPick(
-            String captainName) {
-
-        List<TribunalVoteEntity> votes = voteService.getVotesAgainst(
-                captainName);
-
-        if (votes.isEmpty()) {
-            return;
+                this.voteService = voteService;
+                this.trustedCaptainService = trustedCaptainService;
+                this.forbiddenPickService = forbiddenPickService;
+                this.teamService = teamService;
+                this.auctionEventService = auctionEventService;
         }
 
-        Map<String, Integer> voteCount = new HashMap<>();
+        public ForbiddenPickEntity generateForbiddenPick(String captainName) {
 
-        for (TribunalVoteEntity vote : votes) {
+                List<TribunalVoteEntity> votes = voteService.getVotesAgainst(
+                                captainName);
 
-            voteCount.put(
-                    vote.getPlayerName(),
-                    voteCount.getOrDefault(
-                            vote.getPlayerName(),
-                            0) + 1);
-        }
-
-        String forbiddenPlayer = null;
-
-        // Majority wins
-        for (Map.Entry<String, Integer> entry : voteCount.entrySet()) {
-
-            if (entry.getValue() >= 2) {
-
-                forbiddenPlayer = entry.getKey();
-
-                break;
-            }
-        }
-
-        // No majority
-        if (forbiddenPlayer == null) {
-
-            TrustedCaptainEntity trusted = trustedCaptainService.getByCaptain(
-                    captainName);
-
-            if (trusted == null) {
-                return;
-            }
-
-            for (TribunalVoteEntity vote : votes) {
-
-                if (vote.getVotingCaptain()
-                        .equalsIgnoreCase(
-                                trusted.getTrustedCaptain())) {
-
-                    forbiddenPlayer = vote.getPlayerName();
-
-                    break;
+                if (votes.isEmpty()) {
+                        return null;
                 }
-            }
+
+                Map<String, Integer> voteCount = new HashMap<>();
+
+                for (TribunalVoteEntity vote : votes) {
+
+                        voteCount.put(
+                                        vote.getPlayerName(),
+                                        voteCount.getOrDefault(
+                                                        vote.getPlayerName(),
+                                                        0) + 1);
+                }
+
+                String forbiddenPlayer = null;
+
+                // Majority wins
+                for (Map.Entry<String, Integer> entry : voteCount.entrySet()) {
+
+                        if (entry.getValue() >= 2) {
+
+                                forbiddenPlayer = entry.getKey();
+
+                                break;
+                        }
+                }
+
+                // No majority
+                if (forbiddenPlayer == null) {
+
+                        TrustedCaptainEntity trusted = trustedCaptainService.getByCaptain(
+                                        captainName);
+
+                        if (trusted == null) {
+                                return null;
+                        }
+
+                        for (TribunalVoteEntity vote : votes) {
+
+                                if (vote.getVotingCaptain()
+                                                .equalsIgnoreCase(
+                                                                trusted.getTrustedCaptain())) {
+
+                                        forbiddenPlayer = vote.getPlayerName();
+
+                                        break;
+                                }
+                        }
+                }
+
+                if (forbiddenPlayer == null) {
+                        return null;
+                }
+
+                forbiddenPickService.deleteByCaptain(
+                                captainName);
+
+                ForbiddenPickEntity pick = new ForbiddenPickEntity();
+
+                pick.setCaptainName(
+                                captainName);
+
+                pick.setPlayerName(
+                                forbiddenPlayer);
+
+                forbiddenPickService.save(pick);
+                return pick;
         }
 
-        if (forbiddenPlayer == null) {
-            return;
+        public void generateAll() {
+
+                for (TeamEntity team : teamService.getAllTeams()) {
+
+                        ForbiddenPickEntity forbidden = generateForbiddenPick(team.getCaptainName());
+
+                        if (forbidden != null) {
+
+                                auctionEventService.logEvent(
+                                                "TRIBUNAL_RESULT",
+                                                forbidden.getPlayerName(),
+                                                forbidden.getCaptainName(),
+                                                0,
+                                                "🚫 " + forbidden.getCaptainName()
+                                                                + " cannot nominate "
+                                                                + forbidden.getPlayerName());
+
+                        }
+
+                }
+
         }
 
-        forbiddenPickService.deleteByCaptain(
-                captainName);
+        public List<TribunalCaptainStatus> getStatus() {
 
-        ForbiddenPickEntity pick = new ForbiddenPickEntity();
+                List<TribunalCaptainStatus> result = new ArrayList<>();
 
-        pick.setCaptainName(
-                captainName);
+                for (TeamEntity team : teamService.getAllTeams()) {
 
-        pick.setPlayerName(
-                forbiddenPlayer);
+                        TrustedCaptainEntity trusted = trustedCaptainService.getByCaptain(
+                                        team.getCaptainName());
 
-        forbiddenPickService.save(
-                pick);
-    }
+                        List<TribunalVoteEntity> voteEntities = voteService.getVotesByCaptain(
+                                        team.getCaptainName());
 
-    public void generateAll() {
+                        List<TribunalVoteRequest> votes = new ArrayList<>();
 
-        teamService.getAllTeams()
+                        for (TribunalVoteEntity vote : voteEntities) {
 
-                .forEach(team ->
+                                TribunalVoteRequest request = new TribunalVoteRequest();
 
-                generateForbiddenPick(
+                                request.setVotingCaptain(
+                                                vote.getVotingCaptain());
 
-                        team.getCaptainName()));
+                                request.setTargetCaptain(
+                                                vote.getTargetCaptain());
 
-    }
+                                request.setPlayerName(
+                                                vote.getPlayerName());
 
-    public List<TribunalCaptainStatus> getStatus() {
+                                votes.add(request);
+                        }
 
-        List<TribunalCaptainStatus> result = new ArrayList<>();
+                        result.add(
 
-        for (TeamEntity team : teamService.getAllTeams()) {
+                                        new TribunalCaptainStatus(
 
-            TrustedCaptainEntity trusted = trustedCaptainService.getByCaptain(
-                    team.getCaptainName());
+                                                        team.getCaptainName(),
 
-            List<TribunalVoteEntity> voteEntities = voteService.getVotesByCaptain(
-                    team.getCaptainName());
+                                                        voteEntities.size() == 3,
 
-            List<TribunalVoteRequest> votes = new ArrayList<>();
+                                                        trusted == null
+                                                                        ? ""
+                                                                        : trusted.getTrustedCaptain(),
 
-            for (TribunalVoteEntity vote : voteEntities) {
+                                                        votes));
+                }
 
-                TribunalVoteRequest request = new TribunalVoteRequest();
-
-                request.setVotingCaptain(
-                        vote.getVotingCaptain());
-
-                request.setTargetCaptain(
-                        vote.getTargetCaptain());
-
-                request.setPlayerName(
-                        vote.getPlayerName());
-
-                votes.add(request);
-            }
-
-            result.add(
-
-                    new TribunalCaptainStatus(
-
-                            team.getCaptainName(),
-
-                            voteEntities.size() == 3,
-
-                            trusted == null
-                                    ? ""
-                                    : trusted.getTrustedCaptain(),
-
-                            votes));
+                return result;
         }
-
-        return result;
-    }
 }

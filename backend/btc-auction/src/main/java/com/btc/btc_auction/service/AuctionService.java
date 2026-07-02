@@ -102,13 +102,13 @@ public class AuctionService {
 
                 int basePrice = switch (seed.trim().toLowerCase()) {
 
-                        case "a" -> 800;
+                        case "hackers" -> 800;
 
-                        case "b" -> 600;
+                        case "developers" -> 600;
 
-                        case "c" -> 100;
+                        case "new joiners" -> 100;
 
-                        case "d" -> 50;
+                        case "interns" -> 50;
 
                         default -> 100;
                 };
@@ -205,29 +205,29 @@ public class AuctionService {
                         if (target.getRivalCaptain().equalsIgnoreCase(captainName)
                                         && target.getPlayerName().equalsIgnoreCase(playerName)) {
 
-                                TeamEntity rivalTeam = teamService.getTeam(
-                                                captainName);
+                                TeamEntity predictingTeam = teamService.getTeam(
+                                                target.getCaptainName());
 
-                                if (rivalTeam != null) {
+                                if (predictingTeam != null) {
 
-                                        rivalTeam.setPurse(
-                                                        rivalTeam.getPurse() - 300);
+                                        predictingTeam.setPurse(
+                                                        predictingTeam.getPurse() + 300);
 
-                                        teamService.saveTeam(rivalTeam);
+                                        teamService.saveTeam(predictingTeam);
 
                                         auctionEventService.logEvent(
                                                         "REVERSE_TARGET_TRIGGERED",
                                                         playerName,
                                                         captainName,
-                                                        -300,
+                                                        300,
                                                         target.getCaptainName()
                                                                         + " predicted "
                                                                         + captainName
                                                                         + " buying "
                                                                         + playerName
                                                                         + " so "
-                                                                        + captainName
-                                                                        + " loses ₹300");
+                                                                        + target.getCaptainName()
+                                                                        + " gains ₹300");
 
                                 }
 
@@ -463,19 +463,19 @@ public class AuctionService {
 
                                         switch (team.getCaptainName()) {
 
-                                                case "Jit":
+                                                case "Rimo":
                                                         team.setPurse(10000);
                                                         break;
 
-                                                case "Pritam":
-                                                        team.setPurse(10000);
+                                                case "Sujay":
+                                                        team.setPurse(9400);
                                                         break;
 
-                                                case "Annanya":
-                                                        team.setPurse(10500);
+                                                case "Nantu":
+                                                        team.setPurse(9300);
                                                         break;
 
-                                                case "Dragleeoo":
+                                                case "Joy":
                                                         team.setPurse(10000);
                                                         break;
                                         }

@@ -45,6 +45,14 @@ function Dashboard() {
         rtm &&
         rtm.status === "BID_SUBMITTED";
 
+    const currentTeam =
+        dashboard?.teams?.find(
+            team => team.captainName === username
+        );
+
+    const rtmAlreadyUsed =
+        currentTeam ? !currentTeam.rtmAvailable : false;
+
     const [auctionStatus, setAuctionStatus] =
         useState(null);
 
@@ -416,12 +424,13 @@ function Dashboard() {
                                         : "button-secondary"
                                 }
                                 disabled={
-                                    auctionStatus?.auctionPhase !== "SOLD"
+                                    auctionStatus?.auctionPhase !== "SOLD" ||
+                                    rtmAlreadyUsed
                                 }
                                 onClick={claimRtm}
                             >
 
-                                CLAIM RTM
+                                {rtmAlreadyUsed ? "RTM ALREADY USED" : "CLAIM RTM"}
 
                             </button>
 
@@ -582,7 +591,7 @@ function Dashboard() {
 
                             {event.eventType ===
                                 "REVERSE_TARGET_TRIGGERED" &&
-                                "🎯 BlackList"}
+                                "🎯 Reverse Target"}
 
                             {event.eventType ===
                                 "CAPTAIN_TRIBUNAL" &&

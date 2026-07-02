@@ -233,7 +233,7 @@ function App() {
                 setScreen("reverse-target")}
             >
 
-              🎯 BlackList
+              🎯 Reverse Target
 
             </button>
 

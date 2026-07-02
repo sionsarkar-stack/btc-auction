@@ -129,4 +129,16 @@ public class TribunalController {
                 return tribunalService.getStatus();
 
         }
+
+        @GetMapping("/api/tribunal/results")
+        public List<ForbiddenPickEntity> getResults() {
+                return forbiddenPickService.getAll();
+        }
+
+        @GetMapping("/api/forbidden/{captain}")
+        public ForbiddenPickEntity getForbidden(
+                        @PathVariable String captain) {
+
+                return forbiddenPickService.getByCaptain(captain);
+        }
 }

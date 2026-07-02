@@ -85,26 +85,17 @@ function LiveActivity() {
                             case "GOLDEN_BOUNTY":
 
                                 navigator.vibrate?.([200, 100, 200]);
-                                new Audio("/sounds/golden.mp3").play().catch(() => { });
+                                new Audio("/sounds/last-strike.mp3").play().catch(() => { });
 
                                 break;
 
                             case "RTM_CLAIMED":
 
                                 navigator.vibrate?.([400]);
-                                new Audio("/sounds/rtm.mp3").play().catch(() => { });
-
-                                break;
-
-                            case "LAST_STRIKE":
-                                navigator.vibrate?.([150, 100, 150]);
-                                new Audio("/sounds/strike.mp3").play().catch(() => { });
-                                break;
-
-                            case "PLAYER_VETOED":
-                                navigator.vibrate?.([500]);
                                 new Audio("/sounds/veto.mp3").play().catch(() => { });
+
                                 break;
+
 
                             default:
                                 break;

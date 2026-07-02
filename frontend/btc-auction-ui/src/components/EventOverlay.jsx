@@ -11,6 +11,15 @@ function EventOverlay({ event }) {
 
     switch (event?.eventType) {
 
+        case "TRIBUNAL_RESULT":
+
+            icon = "⚖️";
+            title = "CAPTAIN TRIBUNAL";
+            captain = `👑 ${event.captainName.toUpperCase()} 👑`;
+            message = `${event.playerName.toUpperCase()} IS BANNED`;
+
+            break;
+
         case "PLAYER_VETOED":
 
             icon = "🚫";
@@ -88,29 +97,20 @@ function EventOverlay({ event }) {
         let sound = "";
 
         switch (event.eventType) {
-
-            case "PLAYER_VETOED":
+            case "RTM_CLAIMED":
                 sound = "/sounds/veto.mp3";
                 break;
 
-            case "RTM_CLAIMED":
-                sound = "/sounds/rtm.mp3";
-                break;
-
             case "BOUNTY":
-                sound = "/sounds/bounty.mp3";
+                sound = "/sounds/bid-block.mp3";
                 break;
 
             case "GOLDEN_BOUNTY":
-                sound = "/sounds/golden.mp3";
-                break;
-
-            case "LAST_STRIKE":
-                sound = "/sounds/strike.mp3";
+                sound = "/sounds/last-strike.mp3";
                 break;
 
             case "JOKER_USED":
-                sound = "/sounds/joker.mp3";
+                sound = "/sounds/bid-steal.mp3";
                 break;
 
             default:

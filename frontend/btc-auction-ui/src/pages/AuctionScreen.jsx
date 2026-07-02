@@ -294,7 +294,7 @@ function AuctionScreen() {
                                     "ALL_TARGETS_ACHIEVED" &&
                                     "🥇 ALL TARGETS ACHIEVED"}
                                 {latestEvent.eventType === "REVERSE_TARGET_TRIGGERED" &&
-                                    "🎯 BlackList"}
+                                    "🎯 Reverse Target"}
                                 {latestEvent.eventType === "JOKER_USED" &&
                                     "🃏 JOKER ACTIVATED"}
 
@@ -591,7 +591,7 @@ function AuctionScreen() {
                                                         : event.eventType === "SOLD"
                                                             ? "SOLD"
                                                             : event.eventType === "REVERSE_TARGET_TRIGGERED"
-                                                                ? "BlackList"
+                                                                ? "Reverse Target"
                                                                 : event.eventType
                                         }
 

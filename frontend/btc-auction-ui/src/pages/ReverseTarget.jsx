@@ -119,7 +119,7 @@ function ReverseTarget() {
 
                     <h1>
 
-                        🎯 BlackLists
+                        🎯 Reverse Targets
 
                     </h1>
 
@@ -195,14 +195,14 @@ function ReverseTarget() {
 
                 <h1>
 
-                    🎯 BlackList
+                    🎯 Reverse Target
 
                 </h1>
 
                 <p style={{ marginBottom: "20px" }}>
 
                     If the selected rival captain buys this player,
-                    the rival captain loses ₹300.
+                    the captain who predicted it gains ₹300.
 
                 </p>
 
@@ -352,7 +352,7 @@ function ReverseTarget() {
                             onClick={submit}
                         >
 
-                            🎯 Submit BlackList
+                            🎯 Submit Reverse Target
 
                         </button>
 
