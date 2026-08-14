@@ -202,7 +202,7 @@ function ReverseTarget() {
                 <p style={{ marginBottom: "20px" }}>
 
                     If the selected rival captain buys this player,
-                    the captain who predicted it gains ₹300.
+                    ₹200 is immediately deducted from that captain's purse.
 
                 </p>
 

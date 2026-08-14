@@ -7,7 +7,6 @@ function NominatePlayer() {
     const [players, setPlayers] = useState([]);
     const [selectedPlayer, setSelectedPlayer] = useState("");
     const [message, setMessage] = useState(null);
-    const [forbiddenPlayer, setForbiddenPlayer] = useState("");
 
     const loadPlayers = async () => {
 
@@ -35,26 +34,6 @@ function NominatePlayer() {
     useEffect(() => {
 
         loadPlayers();
-
-        fetch(
-
-            `${API_URL}/api/forbidden/${localStorage.getItem("username")}`
-
-        )
-
-            .then(res => res.json())
-
-            .then(data => {
-
-                if (data) {
-
-                    setForbiddenPlayer(data.playerName);
-
-                }
-
-            })
-
-            .catch(() => { });
 
     }, []);
 
@@ -156,24 +135,9 @@ function NominatePlayer() {
                         </label>
 
 
-                        {forbiddenPlayer && (
-
-                            <div className="message-error">
-
-                                🚫 Tribunal Ban:
-                                <strong> {forbiddenPlayer}</strong>
-                                <br />
-                                You cannot nominate this player.
-
-                            </div>
-
-                        )}
                         <div className="player-grid">
 
                             {players.map((player) => {
-
-                                const isForbidden =
-                                    player.name === forbiddenPlayer;
 
                                 return (
 
@@ -182,15 +146,8 @@ function NominatePlayer() {
                                         className={`player-card ${selectedPlayer === player.name
                                             ? "selected"
                                             : ""
-                                            } ${isForbidden
-                                                ? "forbidden"
-                                                : ""
                                             }`}
-                                        onClick={
-                                            isForbidden
-                                                ? undefined
-                                                : () => setSelectedPlayer(player.name)
-                                        }
+                                        onClick={() => setSelectedPlayer(player.name)}
                                     >
 
                                         <div className="player-name">
@@ -201,7 +158,7 @@ function NominatePlayer() {
 
                                         <div className="player-seed">
 
-                                            Seed {player.seed}
+                                            {player.seed || "Unseeded"} · Base ₹{player.basePrice}
 
                                         </div>
                                         {selectedPlayer === player.name && (
@@ -214,15 +171,6 @@ function NominatePlayer() {
 
                                         )}
 
-                                        {isForbidden && (
-
-                                            <div className="tribunal-tag">
-
-                                                🚫 Tribunal Ban
-
-                                            </div>
-
-                                        )}
                                     </div>
 
                                 );

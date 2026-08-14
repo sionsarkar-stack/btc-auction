@@ -51,8 +51,27 @@ public class TeamService {
 
         }
 
-        return team.getPurse()
-                - (team.getPlayersLeft() - 1) * 100;
+        return Math.max(0, team.getPurse()
+                - Math.max(0, team.getPlayersLeft()) - 2 * 100);
 
+    }
+
+    /** Replaces legacy teams with the four official Season 11 captains. */
+    public void resetSeasonElevenTeams() {
+        teamRepository.deleteAll();
+        saveSeasonElevenTeam("Sen", 5000);
+        saveSeasonElevenTeam("Gappu", 5300);
+        saveSeasonElevenTeam("Anirban", 5300);
+        saveSeasonElevenTeam("Joy", 5300);
+    }
+
+    private void saveSeasonElevenTeam(String captainName, int purse) {
+        TeamEntity team = new TeamEntity();
+        team.setCaptainName(captainName);
+        team.setPurse(purse);
+        team.setPlayersBought(0);
+        // Ten-player squads include the captain, so only nine players are bought.
+        team.setPlayersLeft(9);
+        teamRepository.save(team);
     }
 }

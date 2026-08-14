@@ -6,6 +6,8 @@ import com.btc.btc_auction.service.BountyPlayerService;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Set;
+import java.util.Arrays;
 
 @RestController
 @CrossOrigin(origins = {
@@ -35,30 +37,31 @@ public class BountyPlayerController {
         public String saveBounties(
                         @RequestBody BountyConfigRequest request) {
 
+                List<String> selectedPlayers = Arrays.asList(
+                                request.getPlayerOne(), request.getPlayerTwo(),
+                                request.getPlayerThree(), request.getPlayerFour(),
+                                request.getGoldenPlayerOne(), request.getGoldenPlayerTwo());
+
+                if (selectedPlayers.stream().anyMatch(player -> player == null || player.isBlank())
+                                || Set.copyOf(selectedPlayers).size() != 6) {
+                        return "Select six different players: four normal and two golden bounties.";
+                }
+
                 service.deleteAll();
 
-                savePlayer(
-                                request.getPlayerOne(),
-                                request.getGoldenPlayer());
-
-                savePlayer(
-                                request.getPlayerTwo(),
-                                request.getGoldenPlayer());
-
-                savePlayer(
-                                request.getPlayerThree(),
-                                request.getGoldenPlayer());
-
-                savePlayer(
-                                request.getPlayerFour(),
-                                request.getGoldenPlayer());
+                savePlayer(request.getPlayerOne(), false);
+                savePlayer(request.getPlayerTwo(), false);
+                savePlayer(request.getPlayerThree(), false);
+                savePlayer(request.getPlayerFour(), false);
+                savePlayer(request.getGoldenPlayerOne(), true);
+                savePlayer(request.getGoldenPlayerTwo(), true);
 
                 return "Bounty Players Saved";
         }
 
         private void savePlayer(
                         String playerName,
-                        String goldenPlayer) {
+                        boolean golden) {
 
                 if (playerName == null ||
                                 playerName.isBlank()) {
@@ -70,9 +73,7 @@ public class BountyPlayerController {
                 bounty.setPlayerName(
                                 playerName);
 
-                bounty.setGolden(
-                                playerName.equalsIgnoreCase(
-                                                goldenPlayer));
+                bounty.setGolden(golden);
 
                 bounty.setRevealed(false);
 

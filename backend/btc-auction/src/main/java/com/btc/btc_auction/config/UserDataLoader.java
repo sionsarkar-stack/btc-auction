@@ -19,41 +19,21 @@ public class UserDataLoader implements CommandLineRunner {
         @Override
         public void run(String... args) {
 
-                if (userRepository.count() == 0) {
+                createOrUpdateUser("auctioneer", "Sarkar", "ADMIN");
+                createOrUpdateUser("Sen", "sagar", "CAPTAIN");
+                createOrUpdateUser("Gappu", "gondhi", "CAPTAIN");
+                createOrUpdateUser("Anirban", "raja", "CAPTAIN");
+                createOrUpdateUser("Joy", "mistu", "CAPTAIN");
+                createOrUpdateUser("viewer", "viewer", "VIEWER");
+                System.out.println("BTC Season 11 users loaded");
+        }
 
-                        createUser(
-                                        "auctioneer",
-                                        "Sarkar",
-                                        "ADMIN");
-
-                        createUser(
-                                        "Rimo",
-                                        "nini",
-                                        "CAPTAIN");
-
-                        createUser(
-                                        "Nantu",
-                                        "shankha",
-                                        "CAPTAIN");
-
-                        createUser(
-                                        "Sujay",
-                                        "pritamMVP",
-                                        "CAPTAIN");
-
-                        createUser(
-                                        "Joy",
-                                        "misti",
-                                        "CAPTAIN");
-
-                        createUser(
-                                        "viewer",
-                                        "viewer",
-                                        "VIEWER");
-
-                        System.out.println(
-                                        "BTC SEASON X Reloaded");
-                }
+        private void createOrUpdateUser(String username, String password, String role) {
+                UserEntity user = userRepository.findByUsername(username).orElseGet(UserEntity::new);
+                user.setUsername(username);
+                user.setPassword(password);
+                user.setRole(role);
+                userRepository.save(user);
         }
 
         private void createUser(

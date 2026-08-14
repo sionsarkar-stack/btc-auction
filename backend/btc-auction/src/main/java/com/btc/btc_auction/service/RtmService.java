@@ -71,6 +71,10 @@ public class RtmService {
 
         }
 
+        if (auction.getLeader().equalsIgnoreCase(captainName)) {
+            return "The current highest bidder cannot use RTM on this player.";
+        }
+
         if (repository.findByPlayerName(
                 auction.getCurrentPlayer()).isPresent()) {
 

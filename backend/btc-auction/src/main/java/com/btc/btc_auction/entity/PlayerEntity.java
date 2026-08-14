@@ -14,6 +14,9 @@ public class PlayerEntity {
 
     private String seed;
 
+    /** Opening price announced for this player before the auction starts. */
+    private int basePrice;
+
     private boolean sold;
 
     private int soldPrice;
@@ -45,6 +48,14 @@ public class PlayerEntity {
 
     public void setSeed(String seed) {
         this.seed = seed;
+    }
+
+    public int getBasePrice() {
+        return basePrice;
+    }
+
+    public void setBasePrice(int basePrice) {
+        this.basePrice = basePrice;
     }
 
     public boolean isSold() {

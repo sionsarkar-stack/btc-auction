@@ -44,19 +44,20 @@ public class AuctionConfigService {
         AuctionConfigEntity config = new AuctionConfigEntity();
 
         config.setSeasonName(
-                "BTC Season X RELOADED");
+                "BTC Season 11");
 
-        config.setShowSpecialFeatures(true);
-
+        // The captain occupies one of the ten squad places, leaving nine purchases.
         config.setSquadSize(10);
+
+        config.setTargetBonus(150);
+
+        config.setTargetCompletionBonus(400);
 
         config.setBountyBonus(100);
 
         config.setGoldenBountyBonus(200);
 
         config.setStealPenalty(200);
-
-        config.setTribunalLocked(false);
 
         config.setAuctionStarted(false);
 

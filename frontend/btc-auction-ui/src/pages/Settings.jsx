@@ -25,7 +25,10 @@ function Settings() {
     const [playerFour, setPlayerFour] =
         useState("");
 
-    const [goldenPlayer, setGoldenPlayer] =
+    const [goldenPlayerOne, setGoldenPlayerOne] =
+        useState("");
+
+    const [goldenPlayerTwo, setGoldenPlayerTwo] =
         useState("");
 
     const resetAuction = async () => {
@@ -90,17 +93,9 @@ function Settings() {
                         data[3]?.playerName || ""
                     );
 
-                    const golden =
-                        data.find(
-                            p => p.golden
-                        );
-
-                    if (golden) {
-
-                        setGoldenPlayer(
-                            golden.playerName
-                        );
-                    }
+                    const goldenPlayers = data.filter(p => p.golden);
+                    setGoldenPlayerOne(goldenPlayers[0]?.playerName || "");
+                    setGoldenPlayerTwo(goldenPlayers[1]?.playerName || "");
                 }
             });
 
@@ -147,7 +142,8 @@ function Settings() {
                                 playerTwo,
                                 playerThree,
                                 playerFour,
-                                goldenPlayer
+                                goldenPlayerOne,
+                                goldenPlayerTwo
                             })
                     }
                 );
@@ -188,33 +184,6 @@ function Settings() {
                                 e.target.value
                         })
                     }
-                />
-
-            </div>
-
-            <div className="form-field">
-
-                <label>
-                    Show Joker & Tribunal Features
-                </label>
-
-                <input
-                    type="checkbox"
-                    checked={
-                        config.showSpecialFeatures !== false
-                    }
-                    onChange={(e) =>
-                        setConfig({
-                            ...config,
-                            showSpecialFeatures:
-                                e.target.checked
-                        })
-                    }
-                    style={{
-                        width: "18px",
-                        height: "18px",
-                        marginTop: "8px"
-                    }}
                 />
 
             </div>
@@ -372,42 +341,53 @@ function Settings() {
             <div className="form-field">
 
                 <label>
-                    Golden Bounty
+                Golden Bounty Player 1
                 </label>
 
                 <select
                     className="input"
-                    value={goldenPlayer}
+                    value={goldenPlayerOne}
                     onChange={(e) =>
-                        setGoldenPlayer(
+                        setGoldenPlayerOne(
                             e.target.value
                         )
                     }
                 >
 
                     <option value="">
-                        Select Golden
-                        Bounty
+                        Select Golden Bounty
                     </option>
 
-                    {[
-                        playerOne,
-                        playerTwo,
-                        playerThree,
-                        playerFour
-                    ]
-                        .filter(Boolean)
-                        .map(player => (
+                    {players.map(player => (
 
                             <option
-                                key={player}
-                                value={player}
+                                key={player.id}
+                                value={player.name}
                             >
-                                {player}
+                                {player.name}
                             </option>
 
                         ))}
 
+                </select>
+
+            </div>
+
+            <div className="form-field">
+
+                <label>Golden Bounty Player 2</label>
+
+                <select
+                    className="input"
+                    value={goldenPlayerTwo}
+                    onChange={(e) => setGoldenPlayerTwo(e.target.value)}
+                >
+                    <option value="">Select Golden Bounty</option>
+                    {players.map(player => (
+                        <option key={player.id} value={player.name}>
+                            {player.name}
+                        </option>
+                    ))}
                 </select>
 
             </div>

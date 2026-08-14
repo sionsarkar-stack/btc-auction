@@ -1,6 +1,6 @@
-# 🏏 BTC Auction Manager – Season X
+# 🏏 BTC Auction Manager – Season 11
 
-A full-featured web-based cricket auction management platform built for **BTC Reloaded – Season X**.
+A web-based cricket auction management platform built for **Belgharia Turf Cricket – Season 11**.
 
 ---
 
@@ -27,25 +27,17 @@ A full-featured web-based cricket auction management platform built for **BTC Re
 - Silent Bid Winner Reveal
 - Silent Bid Winner Overlay
 
-## Joker System
-
-Each captain receives one random secret Joker.
-
-- 🛑 VETO
-- ⚡ LAST STRIKE
-- 🚫 BID BLOCK (Manual)
-- 🎯 STEAL BID (Manual)
-
 ## Tournament Rules
 
-- Forbidden Pick
-- Trusted Captain
-- Tribunal Vote
-- Bounty Player
-- Golden Bounty
-- Squad Tracking
-- Remaining Purse
-- Maximum Bid Calculation
+- Four captains: Sen (₹5,000), Gappu (₹5,300), Anirban (₹5,300), and Joy (₹5,300)
+- 10-player squads including each captain (nine auction purchases per team)
+- Nominator must open at the announced player base price
+- Bid increments: ₹50 through ₹1,000; ₹100 thereafter
+- Dynamic max bid: `purse − (vacant slots × ₹100)`
+- Four normal bounty players (+₹100) and two golden bounty players (+₹200)
+- Two secret targets per captain: +₹400 for both, +₹50 net for one, −₹200 for neither
+- One reverse target per captain: selected rival's purchase deducts ₹200 from that rival's purse
+- RTM+ challenge flow after SOLD
 
 ## Admin Tools
 
@@ -77,14 +69,14 @@ Each captain receives one random secret Joker.
 
 ---
 
-# 🏆 Season X Captains
+# 🏆 Season 11 Captains
 
 | Captain | Starting Purse |
 |---------|---------------:|
-| Joy | 10000 |
-| Rimo | 10000 |
-| Sujay | 9400 |
-| Asgorath Monarch Dragleeo | 9200 |
+| Sen | 5000 |
+| Gappu | 5300 |
+| Anirban | 5300 |
+| Joy | 5300 |
 
 ---
 
@@ -92,17 +84,11 @@ Each captain receives one random secret Joker.
 
 ## Squad Size
 
-10 Players per Team (including Captain)
+10 Players per Team (including Captain); each captain purchases 9 players.
 
 ## Max Bid Formula
 
-### ICON
-
-Remaining Purse − (200 × Remaining ICON Slots)
-
-### STAR / CHALLENGER / PRO / FOUNDATION / EMERGING
-
-Remaining Purse − (100 × Remaining Player Slots)
+Remaining Purse − (100 × remaining vacant slots after this purchase)
 
 ---
 

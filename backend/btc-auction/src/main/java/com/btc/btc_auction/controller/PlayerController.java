@@ -50,7 +50,8 @@ public class PlayerController {
 
         playerService.addPlayer(
                 request.getName(),
-                request.getSeed());
+                request.getSeed(),
+                request.getBasePrice());
 
         return "Player Added Successfully";
     }

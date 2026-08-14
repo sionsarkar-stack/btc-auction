@@ -1,6 +1,4 @@
-import { useEffect, useState } from "react";
-
-import { API_URL } from "./config";
+import { useState } from "react";
 import Dashboard from "./pages/Dashboard";
 import AuctionManager from "./pages/AuctionManager";
 import NominatePlayer from "./pages/NominatePlayer";
@@ -11,11 +9,8 @@ import AdminLogs from "./pages/AdminLogs";
 import Login from "./pages/Login";
 import Settings from "./pages/Settings";
 import PlayersImport from "./pages/PlayersImport";
-import CaptainTribunal from "./pages/CaptainTribunal";
-import MyJoker from "./pages/MyJoker";
-import SilentBidManager from "./pages/SilentBidManager";
-import SilentBid from "./pages/SilentBid";
 import ReverseTarget from "./pages/ReverseTarget";
+import SecretTargets from "./pages/SecretTargets";
 
 function App() {
 
@@ -26,18 +21,6 @@ function App() {
     useState(
       localStorage.getItem("role")
     );
-
-  const [config, setConfig] =
-    useState(null);
-
-  useEffect(() => {
-    fetch(`${API_URL}/api/config`)
-      .then(res => res.json())
-      .then(data => setConfig(data));
-  }, []);
-
-  const showSpecialFeatures =
-    config?.showSpecialFeatures ?? true;
 
   if (!role) {
 
@@ -184,47 +167,17 @@ function App() {
 
 
 
-          {role !== "VIEWER" && showSpecialFeatures && (
-
-            <button
-              className={
-                screen === "tribunal"
-                  ? "button button-active"
-                  : "button-secondary"
-              }
-              onClick={() =>
-                setScreen("tribunal")}
-            >
-              Captain Tribunal
-            </button>
-
-          )}
-
-          {role === "CAPTAIN" && (
+          {role !== "VIEWER" && (
 
             <button
               className="button-secondary"
-              onClick={() =>
-                setScreen("silent-bid")}
+              onClick={() => setScreen("secret-targets")}
             >
-
-              🔒 Silent Bid
-
+              🎯 Secret Targets
             </button>
 
           )}
 
-          {showSpecialFeatures && (
-            <button
-              className="button-secondary"
-              onClick={() =>
-                setScreen("joker")}
-            >
-
-              My Joker
-
-            </button>
-          )}
           {role !== "VIEWER" && (
 
             <button
@@ -235,18 +188,6 @@ function App() {
 
               🎯 Reverse Target
 
-            </button>
-
-          )}
-
-          {role === "ADMIN" && (
-
-            <button
-              className="button-secondary"
-              onClick={() =>
-                setScreen("silent-bid")}
-            >
-              🔒 Silent Bid
             </button>
 
           )}
@@ -300,17 +241,6 @@ function App() {
 
 
 
-        {screen === "tribunal" &&
-          role !== "VIEWER" &&
-          showSpecialFeatures &&
-          <CaptainTribunal />}
-        {screen === "joker" &&
-
-          role !== "VIEWER" &&
-          showSpecialFeatures &&
-
-          <MyJoker />}
-
         {screen === "settings" &&
           role === "ADMIN" &&
           <Settings />}
@@ -318,16 +248,12 @@ function App() {
           role === "ADMIN" &&
           <PlayersImport />}
 
-        {screen === "silent-bid" &&
-          role === "ADMIN" &&
-          <SilentBidManager />}
-
-        {screen === "silent-bid" &&
-          role === "CAPTAIN" &&
-          <SilentBid />}
         {screen === "reverse-target" &&
           role !== "VIEWER" &&
           <ReverseTarget />}
+        {screen === "secret-targets" &&
+          role === "CAPTAIN" &&
+          <SecretTargets />}
 
       </div>
 

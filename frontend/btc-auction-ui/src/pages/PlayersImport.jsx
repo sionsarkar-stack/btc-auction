@@ -126,11 +126,13 @@ function PlayersImport() {
 
                 <pre>
                     {`name,seed
-Virat,Z
-Rohit,Z
-Rahul,A
+Virat,A
+Rohit,A
+Rahul,B
 Pant,B
-Rinku,C`}
+Rinku,C
+
+# Optional per-player override: name,seed,basePrice`}
                 </pre>
 
             </div>

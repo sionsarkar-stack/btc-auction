@@ -131,9 +131,9 @@ public class JokerService {
         repository.deleteAll();
 
         List<String> captains = List.of(
-                "Rimo",
-                "Sujay",
-                "Nantu",
+                "Anirban",
+                "Gappu",
+                "Sen",
                 "Joy");
 
         List<JokerType> jokers = new ArrayList<>(

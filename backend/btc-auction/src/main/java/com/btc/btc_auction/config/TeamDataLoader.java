@@ -21,55 +21,55 @@ public class TeamDataLoader implements CommandLineRunner {
 
         if (teamRepository.count() == 0) {
 
-            TeamEntity rimo = new TeamEntity();
+            TeamEntity sen = new TeamEntity();
 
-            rimo.setCaptainName("Rimo");
+            sen.setCaptainName("Sen");
 
-            rimo.setPurse(10000);
+            sen.setPurse(5000);
 
-            rimo.setPlayersBought(0);
+            sen.setPlayersBought(0);
 
-            rimo.setPlayersLeft(10);
+            sen.setPlayersLeft(9);
 
-            TeamEntity sujay = new TeamEntity();
+            TeamEntity gappu = new TeamEntity();
 
-            sujay.setCaptainName("Sujay");
+            gappu.setCaptainName("Gappu");
 
-            sujay.setPurse(9400);
+            gappu.setPurse(5300);
 
-            sujay.setPlayersBought(0);
+            gappu.setPlayersBought(0);
 
-            sujay.setPlayersLeft(10);
+            gappu.setPlayersLeft(9);
 
-            TeamEntity nantu = new TeamEntity();
+            TeamEntity anirban = new TeamEntity();
 
-            nantu.setCaptainName("Nantu");
+            anirban.setCaptainName("Anirban");
 
-            nantu.setPurse(9300);
+            anirban.setPurse(5300);
 
-            nantu.setPlayersBought(0);
+            anirban.setPlayersBought(0);
 
-            nantu.setPlayersLeft(10);
+            anirban.setPlayersLeft(9);
 
             TeamEntity joy = new TeamEntity();
 
             joy.setCaptainName("Joy");
 
-            joy.setPurse(10000);
+            joy.setPurse(5300);
 
             joy.setPlayersBought(0);
 
-            joy.setPlayersLeft(10);
+            joy.setPlayersLeft(9);
 
-            teamRepository.save(rimo);
+            teamRepository.save(sen);
 
-            teamRepository.save(sujay);
+            teamRepository.save(gappu);
 
-            teamRepository.save(nantu);
+            teamRepository.save(anirban);
 
             teamRepository.save(joy);
 
-            System.out.println("Season X Teams Loaded");
+            System.out.println("BTC Season 11 Teams Loaded");
         }
     }
 }

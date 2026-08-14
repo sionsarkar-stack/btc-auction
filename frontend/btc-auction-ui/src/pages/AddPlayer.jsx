@@ -1,9 +1,11 @@
 import { useState } from "react";
+import { API_URL } from "../config";
 
 function AddPlayer() {
 
     const [name, setName] = useState("");
-    const [seed, setSeed] = useState("EMERGING");
+    const [seed, setSeed] = useState("");
+    const [basePrice, setBasePrice] = useState("");
     const [message, setMessage] = useState("");
 
     const addPlayer = async () => {
@@ -17,7 +19,8 @@ function AddPlayer() {
                 },
                 body: JSON.stringify({
                     name,
-                    seed
+                    seed,
+                    basePrice: Number(basePrice)
                 })
             }
         );
@@ -26,7 +29,8 @@ function AddPlayer() {
 
         setMessage(result);
         setName("");
-        setSeed("EMERGING");
+        setSeed("");
+        setBasePrice("");
     };
 
     return (
@@ -55,37 +59,27 @@ function AddPlayer() {
                 <div className="form-field">
                     <label>Seed</label>
 
-                    <select
+                    <input
                         className="select"
                         value={seed}
                         onChange={(e) =>
                             setSeed(e.target.value)
                         }
-                    >
-                        <option value="ICON">
-                            ICON
-                        </option>
+                        placeholder="e.g. Seed A"
+                    />
+                </div>
 
-                        <option value="STAR">
-                            STAR
-                        </option>
+                <div className="form-field">
+                    <label>Base Price (optional override)</label>
 
-                        <option value="CHALLENGER">
-                            CHALLENGER
-                        </option>
-
-                        <option value="PRO">
-                            PRO
-                        </option>
-
-                        <option value="FOUNDATION">
-                            FOUNDATION
-                        </option>
-
-                        <option value="EMERGING">
-                            EMERGING
-                        </option>
-                    </select>
+                    <input
+                        className="input"
+                        type="number"
+                        min="1"
+                        value={basePrice}
+                        onChange={(e) => setBasePrice(e.target.value)}
+                        placeholder="Uses the seed default if blank"
+                    />
                 </div>
 
                 <button

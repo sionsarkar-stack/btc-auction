@@ -13,7 +13,6 @@ import java.util.List;
 
 import org.springframework.stereotype.Service;
 import com.btc.btc_auction.entity.BountyPlayerEntity;
-import com.btc.btc_auction.entity.ForbiddenPickEntity;
 
 @Service
 public class AuctionService {
@@ -26,12 +25,10 @@ public class AuctionService {
         private final AuctionEventService auctionEventService;
         private final AuctionConfigService auctionConfigService;
         private final BountyPlayerService bountyPlayerService;
-        private final ForbiddenPickService forbiddenPickService;
-        private final TribunalVoteService tribunalVoteService;
         private final ReverseTargetService reverseTargetService;
         private final RtmService rtmService;
-        private final TrustedCaptainService trustedCaptainService;
         private final AuctionSocketService auctionSocketService;
+        private final SecretTargetService secretTargetService;
 
         private final JokerService jokerService;
 
@@ -43,12 +40,9 @@ public class AuctionService {
                         AuctionEventService auctionEventService,
                         AuctionConfigService auctionConfigService,
                         BountyPlayerService bountyPlayerService,
-                        ForbiddenPickService forbiddenPickService,
-                        TribunalVoteService tribunalVoteService,
-                        TrustedCaptainService trustedCaptainService,
                         JokerService jokerService, ReverseTargetService reverseTargetService,
                         RtmService rtmService, AuctionSocketService auctionSocketService,
-                        CurrentAuctionService currentAuctionService) {
+                        CurrentAuctionService currentAuctionService, SecretTargetService secretTargetService) {
 
                 this.teamService = teamService;
                 this.playerService = playerService;
@@ -57,14 +51,12 @@ public class AuctionService {
                 this.auctionEventService = auctionEventService;
                 this.auctionConfigService = auctionConfigService;
                 this.bountyPlayerService = bountyPlayerService;
-                this.forbiddenPickService = forbiddenPickService;
-                this.tribunalVoteService = tribunalVoteService;
-                this.trustedCaptainService = trustedCaptainService;
                 this.reverseTargetService = reverseTargetService;
                 this.jokerService = jokerService;
                 this.rtmService = rtmService;
                 this.currentAuctionService = currentAuctionService;
                 this.auctionSocketService = auctionSocketService;
+                this.secretTargetService = secretTargetService;
                 currentAuctionService.setCurrentAuction(
                                 new Auction(
                                                 "",
@@ -87,7 +79,7 @@ public class AuctionService {
 
         }
 
-        public String nominatePlayer(
+        public synchronized String nominatePlayer(
                         String playerName,
                         String seed,
 
@@ -100,18 +92,10 @@ public class AuctionService {
                         return "Auction already in progress";
                 }
 
-                int basePrice = switch (seed.trim().toLowerCase()) {
-
-                        case "hackers" -> 800;
-
-                        case "developers" -> 600;
-
-                        case "new joiners" -> 100;
-
-                        case "interns" -> 50;
-
-                        default -> 100;
-                };
+                AuctionConfigEntity config = auctionConfigService.getConfig();
+                if (!config.isAuctionStarted()) {
+                        return "Auction has not started";
+                }
 
                 PlayerEntity player = playerService.getPlayer(
                                 playerName);
@@ -124,14 +108,25 @@ public class AuctionService {
                         return "Player already sold";
                 }
 
+                TeamEntity nominatingTeam = teamService.getTeam(nominatedBy);
+                if (nominatingTeam == null) {
+                        return "Nominating captain not found";
+                }
+
+                if (nominatingTeam.getPlayersLeft() <= 0) {
+                        return "Your squad is already complete";
+                }
+
+                if (player.getBasePrice() <= 0) {
+                        return "Player has no valid base price";
+                }
+
                 currentAuctionService.setCurrentAuction(new Auction(
                                 playerName,
                                 seed,
-                                basePrice,
+                                player.getBasePrice(),
                                 "None",
-                                basePrice, nominatedBy));
-                AuctionConfigEntity config = auctionConfigService.getConfig();
-
+                                player.getBasePrice(), nominatedBy));
                 config.setAuctionPhase(
                                 AuctionPhase.NOMINATION);
 
@@ -148,30 +143,41 @@ public class AuctionService {
                 return "Player nominated";
         }
 
-        public String sellPlayer(
+        public synchronized String sellPlayer(
                         String playerName,
                         String captainName,
                         int soldPrice) {
 
-                TeamEntity team = teamService.getTeam(captainName);
-                ForbiddenPickEntity forbidden = forbiddenPickService.getByCaptain(
-                                captainName);
+                Auction auction = currentAuctionService.getCurrentAuction();
+                AuctionConfigEntity config = auctionConfigService.getConfig();
 
-                if (forbidden != null &&
-                                forbidden.getPlayerName()
-                                                .equalsIgnoreCase(
-                                                                playerName)) {
-
-                        return captainName +
-                                        " cannot purchase " +
-                                        playerName +
-                                        " (Forbidden Pick)";
+                if (auction == null || auction.getCurrentPlayer().isBlank()) {
+                        return "No active auction";
                 }
 
+                if (config.getAuctionPhase() != AuctionPhase.SOLD) {
+                        return "Call SOLD before confirming the sale";
+                }
+
+                if (!auction.getCurrentPlayer().equalsIgnoreCase(playerName)
+                                || !auction.getLeader().equalsIgnoreCase(captainName)
+                                || auction.getCurrentBid() != soldPrice) {
+                        return "Sale must match the current SOLD player, leader, and bid";
+                }
+
+                TeamEntity team = teamService.getTeam(captainName);
                 int penalty = 0;
 
                 if (team == null) {
                         return "Team not found";
+                }
+
+                if (team.getPlayersLeft() <= 0) {
+                        return "Squad is already complete";
+                }
+
+                if (soldPrice > teamService.getMaxBid(team)) {
+                        return "Sold price exceeds the team's maximum bid";
                 }
 
                 PlayerEntity player = playerService.getPlayer(playerName);
@@ -205,37 +211,21 @@ public class AuctionService {
                         if (target.getRivalCaptain().equalsIgnoreCase(captainName)
                                         && target.getPlayerName().equalsIgnoreCase(playerName)) {
 
-                                TeamEntity predictingTeam = teamService.getTeam(
-                                                target.getCaptainName());
-
-                                if (predictingTeam != null) {
-
-                                        predictingTeam.setPurse(
-                                                        predictingTeam.getPurse() + 300);
-
-                                        teamService.saveTeam(predictingTeam);
+                                team.setPurse(team.getPurse() - 200);
+                                teamService.saveTeam(team);
 
                                         auctionEventService.logEvent(
                                                         "REVERSE_TARGET_TRIGGERED",
                                                         playerName,
                                                         captainName,
-                                                        300,
-                                                        target.getCaptainName()
-                                                                        + " predicted "
-                                                                        + captainName
-                                                                        + " buying "
-                                                                        + playerName
-                                                                        + " so "
+                                                        -200,
+                                                        "Reverse target set by "
                                                                         + target.getCaptainName()
-                                                                        + " gains ₹300");
-
-                                }
+                                                                        + " triggered; ₹200 deducted");
 
                         }
 
                 }
-                AuctionConfigEntity config = auctionConfigService.getConfig();
-
                 BountyPlayerEntity bounty = bountyPlayerService
                                 .getByPlayer(
                                                 playerName);
@@ -434,6 +424,13 @@ public class AuctionService {
 
                 AuctionConfigEntity config = auctionConfigService.getConfig();
                 config.setAuctionStarted(false);
+                config.setSeasonName("BTC Season 11");
+                config.setSquadSize(10);
+                config.setTargetBonus(150);
+                config.setTargetCompletionBonus(400);
+                config.setBountyBonus(100);
+                config.setGoldenBountyBonus(200);
+                config.setStealPenalty(200);
                 config.setAuctionPhase(
                                 AuctionPhase.NO_AUCTION);
 
@@ -458,35 +455,7 @@ public class AuctionService {
                                         playerService.savePlayer(player);
                                 });
 
-                teamService.getAllTeams()
-                                .forEach(team -> {
-
-                                        switch (team.getCaptainName()) {
-
-                                                case "Rimo":
-                                                        team.setPurse(10000);
-                                                        break;
-
-                                                case "Sujay":
-                                                        team.setPurse(9400);
-                                                        break;
-
-                                                case "Nantu":
-                                                        team.setPurse(9300);
-                                                        break;
-
-                                                case "Joy":
-                                                        team.setPurse(10000);
-                                                        break;
-                                        }
-
-                                        team.setPlayersBought(0);
-
-                                        team.setPlayersLeft(
-                                                        config.getSquadSize());
-
-                                        teamService.saveTeam(team);
-                                });
+                teamService.resetSeasonElevenTeams();
 
                 bountyPlayerService.getAll()
                                 .forEach(bounty -> {
@@ -503,21 +472,27 @@ public class AuctionService {
 
                 bountyPlayerService.deleteAll();
 
-                tribunalVoteService.deleteAll();
-
-                trustedCaptainService.deleteAll();
-
-                forbiddenPickService.deleteAll();
-
                 jokerService.deleteAll();
 
                 reverseTargetService.deleteAll();
+
+                secretTargetService.deleteAll();
 
                 rtmService.clear();
 
                 auctionSocketService.broadcastRefresh();
 
                 return "Auction Reset Successfully";
+        }
+
+        public String endAuction() {
+                AuctionConfigEntity config = auctionConfigService.getConfig();
+                config.setAuctionStarted(false);
+                config.setAuctionPhase(AuctionPhase.NO_AUCTION);
+                auctionConfigService.save(config);
+                secretTargetService.settleAll();
+                auctionSocketService.broadcastRefresh();
+                return "Auction ended and secret targets settled.";
         }
 
         public String vetoCurrentAuction() {
@@ -615,8 +590,15 @@ public class AuctionService {
                         return "No active auction.";
                 }
                 if ("None".equals(currentAuctionService.getCurrentAuction().getLeader())) {
+                        Auction auction = currentAuctionService.getCurrentAuction();
+                        auction.setLeader(auction.getNominatedBy());
+                        auction.setCurrentBid(auction.getBasePrice());
 
-                        return "Cannot call SOLD before any captain has bid.";
+                        AuctionConfigEntity config = auctionConfigService.getConfig();
+                        config.setAuctionPhase(AuctionPhase.SOLD);
+                        auctionConfigService.save(config);
+
+                        return sellPlayer(auction.getCurrentPlayer(), auction.getNominatedBy(), auction.getBasePrice());
 
                 }
                 rtmService.clearCurrentAuctionClaim(); // <-- ADD THIS
@@ -728,7 +710,7 @@ public class AuctionService {
 
         }
 
-        public String updateCurrentAuction(
+        public synchronized String updateCurrentAuction(
                         String captainName,
                         Integer currentBid) {
 
@@ -738,6 +720,39 @@ public class AuctionService {
                                 auction.getCurrentPlayer().isBlank()) {
 
                         return "No active auction.";
+                }
+
+                if (currentBid == null || currentBid <= 0) {
+                        return "A positive bid is required.";
+                }
+
+                TeamEntity team = teamService.getTeam(captainName);
+                if (team == null) {
+                        return "Captain not found.";
+                }
+
+                if (team.getPlayersLeft() <= 0) {
+                        return "Squad is already complete.";
+                }
+
+                if ("None".equals(auction.getLeader())) {
+                        if (!auction.getNominatedBy().equalsIgnoreCase(captainName)) {
+                                return "Only the nominating captain can place the opening bid.";
+                        }
+                        if (currentBid != auction.getBasePrice()) {
+                                return "The opening bid must equal the base price (₹"
+                                                + auction.getBasePrice() + ").";
+                        }
+                } else {
+                        int minimumIncrement = auction.getCurrentBid() <= 1000 ? 50 : 100;
+                        if (currentBid < auction.getCurrentBid() + minimumIncrement) {
+                                return "Minimum bid is ₹" + (auction.getCurrentBid() + minimumIncrement) + ".";
+                        }
+                }
+
+                int maxBid = teamService.getMaxBid(team);
+                if (currentBid > maxBid) {
+                        return "Bid exceeds maximum bid (₹" + maxBid + ").";
                 }
 
                 auction.setLeader(captainName);

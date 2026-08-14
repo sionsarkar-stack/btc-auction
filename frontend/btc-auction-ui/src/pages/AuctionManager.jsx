@@ -265,7 +265,7 @@ function AuctionManager() {
                                         {player.name}
                                         {" "}
                                         (
-                                        {player.seed}
+                                        ₹{player.basePrice}
                                         )
                                     </option>
 

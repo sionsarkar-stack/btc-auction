@@ -20,8 +20,6 @@ public class AuctionConfigEntity {
 
     private String seasonName;
 
-    private boolean showSpecialFeatures = true;
-
     private int squadSize;
 
     private int targetBonus;
@@ -33,8 +31,6 @@ public class AuctionConfigEntity {
     private int goldenBountyBonus;
 
     private int stealPenalty;
-
-    private boolean tribunalLocked;
 
     private boolean auctionStarted;
 
@@ -51,14 +47,6 @@ public class AuctionConfigEntity {
 
     public void setSeasonName(String seasonName) {
         this.seasonName = seasonName;
-    }
-
-    public boolean isShowSpecialFeatures() {
-        return showSpecialFeatures;
-    }
-
-    public void setShowSpecialFeatures(boolean showSpecialFeatures) {
-        this.showSpecialFeatures = showSpecialFeatures;
     }
 
     public int getSquadSize() {
@@ -109,14 +97,6 @@ public class AuctionConfigEntity {
 
     public void setStealPenalty(int stealPenalty) {
         this.stealPenalty = stealPenalty;
-    }
-
-    public boolean isTribunalLocked() {
-        return tribunalLocked;
-    }
-
-    public void setTribunalLocked(boolean tribunalLocked) {
-        this.tribunalLocked = tribunalLocked;
     }
 
     public boolean isAuctionStarted() {

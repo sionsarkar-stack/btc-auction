@@ -7,7 +7,8 @@ public class BountyConfigRequest {
     private String playerThree;
     private String playerFour;
 
-    private String goldenPlayer;
+    private String goldenPlayerOne;
+    private String goldenPlayerTwo;
 
     public String getPlayerOne() {
         return playerOne;
@@ -49,13 +50,19 @@ public class BountyConfigRequest {
         this.playerFour = playerFour;
     }
 
-    public String getGoldenPlayer() {
-        return goldenPlayer;
+    public String getGoldenPlayerOne() {
+        return goldenPlayerOne;
     }
 
-    public void setGoldenPlayer(
-            String goldenPlayer) {
+    public void setGoldenPlayerOne(String goldenPlayerOne) {
+        this.goldenPlayerOne = goldenPlayerOne;
+    }
 
-        this.goldenPlayer = goldenPlayer;
+    public String getGoldenPlayerTwo() {
+        return goldenPlayerTwo;
+    }
+
+    public void setGoldenPlayerTwo(String goldenPlayerTwo) {
+        this.goldenPlayerTwo = goldenPlayerTwo;
     }
 }

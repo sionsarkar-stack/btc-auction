@@ -10,16 +10,22 @@ import java.util.List;
 public class ReverseTargetService {
 
     private final ReverseTargetRepository repository;
+    private final AuctionConfigService configService;
 
     public ReverseTargetService(
-            ReverseTargetRepository repository) {
+            ReverseTargetRepository repository, AuctionConfigService configService) {
 
         this.repository = repository;
+        this.configService = configService;
 
     }
 
     public String save(
             ReverseTargetEntity target) {
+
+        if (configService.getConfig().isAuctionStarted()) {
+            return "Reverse targets must be selected before the auction starts.";
+        }
 
         if (target.getCaptainName() == null ||
                 target.getCaptainName().isBlank() ||

@@ -8,7 +8,6 @@ import com.btc.btc_auction.model.SellPlayerRequest;
 import com.btc.btc_auction.model.UpdateAuctionRequest;
 import com.btc.btc_auction.service.AuctionConfigService;
 import com.btc.btc_auction.service.AuctionService;
-import com.btc.btc_auction.service.JokerService;
 
 import org.springframework.web.bind.annotation.*;
 
@@ -26,13 +25,9 @@ public class AuctionController {
 
     private final AuctionConfigService auctionConfigService;
 
-    private final JokerService jokerService;
-
-    public AuctionController(AuctionService auctionService, AuctionConfigService auctionConfigService,
-            JokerService jokerService) {
+    public AuctionController(AuctionService auctionService, AuctionConfigService auctionConfigService) {
         this.auctionService = auctionService;
         this.auctionConfigService = auctionConfigService;
-        this.jokerService = jokerService;
     }
 
     @GetMapping("/api/auction/current")
@@ -97,21 +92,12 @@ public class AuctionController {
 
         auctionConfigService.save(config);
 
-        jokerService.assignRandomJokers();
-
         return "Auction Started Successfully";
     }
 
     @PostMapping("/api/auction/end")
     public String endAuction() {
-
-        AuctionConfigEntity config = auctionConfigService.getConfig();
-
-        config.setAuctionStarted(false);
-
-        auctionConfigService.save(config);
-
-        return "Auction Ended";
+        return auctionService.endAuction();
     }
 
     @GetMapping("/api/auction/status")
