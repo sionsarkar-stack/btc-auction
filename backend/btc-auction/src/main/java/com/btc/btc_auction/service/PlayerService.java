@@ -5,12 +5,13 @@ import com.btc.btc_auction.repository.PlayerRepository;
 
 import org.springframework.lang.NonNull;
 import org.springframework.stereotype.Service;
-
-import java.util.List;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.BufferedReader;
+import java.io.IOException;
 import java.io.InputStreamReader;
+import java.util.ArrayList;
+import java.util.List;
 
 @Service
 public class PlayerService {
@@ -39,6 +40,10 @@ public class PlayerService {
     }
 
     public void addPlayer(String name, String seed, Integer basePrice) {
+        addPlayer(name, seed, basePrice, null);
+    }
+
+    public void addPlayer(String name, String seed, Integer basePrice, String category) {
 
         if (name == null || name.isBlank()) {
             throw new IllegalArgumentException("Player name is required.");
@@ -48,6 +53,7 @@ public class PlayerService {
 
         player.setName(name);
         player.setSeed(seed);
+        player.setCategory(category == null || category.isBlank() ? seed : category.trim());
         // CSV imports remain compatible with the original name,seed format.
         // A third basePrice column is optional and overrides the seed default.
         player.setBasePrice(basePrice != null && basePrice > 0
@@ -55,6 +61,7 @@ public class PlayerService {
                 : getSeedBasePrice(seed));
         player.setSold(false);
         player.setSoldPrice(0);
+        player.setFinalPrice(0);
         player.setTeam("");
 
         playerRepository.save(player);
@@ -84,45 +91,82 @@ public class PlayerService {
 
     public void importCsv(
             MultipartFile file)
-            throws Exception {
+            throws IOException {
 
-        BufferedReader reader = new BufferedReader(
-                new InputStreamReader(
-                        file.getInputStream()));
+        try (BufferedReader reader = new BufferedReader(
+                new InputStreamReader(file.getInputStream()))) {
 
-        String line;
+            String line;
+            boolean header = true;
 
-        boolean header = true;
+            while ((line = reader.readLine()) != null) {
 
-        while ((line = reader.readLine()) != null) {
+                if (header) {
+                    header = false;
+                    continue;
+                }
 
-            if (header) {
+                String[] parts = parseCsvLine(line);
 
-                header = false;
-                continue;
+                if (parts.length < 2) {
+                    continue;
+                }
+
+                String name = parts[0].trim();
+                String seed = parts[1].trim();
+
+                if (name.isBlank() || seed.isBlank()) {
+                    continue;
+                }
+
+                Integer basePrice = null;
+                if (parts.length >= 3 && !parts[2].trim().isBlank()) {
+                    try {
+                        basePrice = Integer.valueOf(parts[2].trim());
+                    } catch (NumberFormatException ignored) {
+                        basePrice = null;
+                    }
+                }
+
+                String category = parts.length >= 4 ? parts[3].trim() : seed;
+
+                if (getPlayer(name) != null) {
+                    continue;
+                }
+
+                addPlayer(name, seed, basePrice, category);
             }
-
-            String[] parts = line.split(",");
-
-            if (parts.length < 2) {
-                continue;
-            }
-
-            String name = parts[0].trim();
-
-            String seed = parts[1].trim();
-            Integer basePrice = parts.length >= 3 && !parts[2].trim().isBlank()
-                    ? Integer.valueOf(parts[2].trim())
-                    : null;
-
-            if (getPlayer(name) != null) {
-                continue;
-            }
-
-            addPlayer(
-                    name,
-                    seed,
-                    basePrice);
         }
+    }
+
+    private String[] parseCsvLine(String line) {
+        List<String> values = new ArrayList<>();
+        StringBuilder current = new StringBuilder();
+        boolean inQuotes = false;
+
+        for (int i = 0; i < line.length(); i++) {
+            char ch = line.charAt(i);
+
+            if (ch == '"') {
+                if (inQuotes && i + 1 < line.length() && line.charAt(i + 1) == '"') {
+                    current.append('"');
+                    i++;
+                } else {
+                    inQuotes = !inQuotes;
+                }
+                continue;
+            }
+
+            if (ch == ',' && !inQuotes) {
+                values.add(current.toString());
+                current.setLength(0);
+                continue;
+            }
+
+            current.append(ch);
+        }
+
+        values.add(current.toString());
+        return values.toArray(new String[0]);
     }
 }

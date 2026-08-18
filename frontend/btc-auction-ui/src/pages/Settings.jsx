@@ -192,6 +192,7 @@ function Settings() {
                 "squadSize",
                 "targetBonus",
                 "targetCompletionBonus",
+                "targetMissPenalty",
                 "bountyBonus",
                 "goldenBountyBonus",
                 "stealPenalty"
@@ -341,7 +342,7 @@ function Settings() {
             <div className="form-field">
 
                 <label>
-                Golden Bounty Player 1
+                    Golden Bounty Player 1
                 </label>
 
                 <select
@@ -360,14 +361,14 @@ function Settings() {
 
                     {players.map(player => (
 
-                            <option
-                                key={player.id}
-                                value={player.name}
-                            >
-                                {player.name}
-                            </option>
+                        <option
+                            key={player.id}
+                            value={player.name}
+                        >
+                            {player.name}
+                        </option>
 
-                        ))}
+                    ))}
 
                 </select>
 

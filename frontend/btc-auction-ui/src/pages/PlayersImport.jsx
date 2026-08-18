@@ -125,14 +125,14 @@ function PlayersImport() {
                 </h2>
 
                 <pre>
-                    {`name,seed
-Virat,A
-Rohit,A
-Rahul,B
-Pant,B
-Rinku,C
+                    {`name,seed,basePrice,category
+Virat,A,600,Batter
+Rohit,A,600,All-rounder
+Rahul,B,300,Bowler
+Pant,B,300,Wicketkeeper
+Rinku,C,100,Batter
 
-# Optional per-player override: name,seed,basePrice`}
+Category is optional. Existing files using name,seed or name,seed,basePrice remain supported.`}
                 </pre>
 
             </div>

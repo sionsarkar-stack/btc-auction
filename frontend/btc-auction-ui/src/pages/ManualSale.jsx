@@ -6,6 +6,7 @@ function ManualSale() {
 
     const [players, setPlayers] = useState([]);
     const [teams, setTeams] = useState([]);
+    const [currentAuction, setCurrentAuction] = useState(null);
 
     const [playerName, setPlayerName] = useState("");
     const [newCaptain, setNewCaptain] = useState("");
@@ -23,7 +24,38 @@ function ManualSale() {
             .then(response => response.json())
             .then(data => setTeams(data));
 
+        fetch(`${API_URL}/api/auction/current`)
+            .then(response => response.json())
+            .then(data => setCurrentAuction(data));
+
     }, []);
+
+    const cancelSelectedBid = async () => {
+        if (!playerName) {
+            setMessage("Select a player first.");
+            return;
+        }
+
+        if (currentAuction?.currentPlayer?.toLowerCase() !== playerName.toLowerCase()) {
+            setMessage("Selected player is not the active bid or nomination.");
+            return;
+        }
+
+        if (!window.confirm(`Cancel the active bid/nomination for ${playerName}?`)) {
+            return;
+        }
+
+        const response = await fetch(
+            `${API_URL}/api/auction/veto-player?playerName=${encodeURIComponent(playerName)}`,
+            { method: "POST" }
+        );
+
+        const result = await response.text();
+        setMessage(result);
+
+        const currentAuctionResponse = await fetch(`${API_URL}/api/auction/current`);
+        setCurrentAuction(await currentAuctionResponse.json());
+    };
 
     const applyManualSale = async () => {
 
@@ -129,6 +161,16 @@ function ManualSale() {
                     onClick={applyManualSale}
                 >
                     APPLY ADJUSTMENT
+                </button>
+
+                <button
+                    className="button-secondary"
+                    type="button"
+                    onClick={cancelSelectedBid}
+                    disabled={!playerName}
+                    style={{ marginTop: "12px" }}
+                >
+                    ❌ CANCEL SELECTED ACTIVE BID
                 </button>
 
                 {message && (

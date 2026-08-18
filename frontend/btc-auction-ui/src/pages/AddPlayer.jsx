@@ -6,6 +6,7 @@ function AddPlayer() {
     const [name, setName] = useState("");
     const [seed, setSeed] = useState("");
     const [basePrice, setBasePrice] = useState("");
+    const [category, setCategory] = useState("");
     const [message, setMessage] = useState("");
 
     const addPlayer = async () => {
@@ -21,6 +22,7 @@ function AddPlayer() {
                     name,
                     seed,
                     basePrice: Number(basePrice)
+                    , category
                 })
             }
         );
@@ -66,6 +68,17 @@ function AddPlayer() {
                             setSeed(e.target.value)
                         }
                         placeholder="e.g. Seed A"
+                    />
+                </div>
+
+                <div className="form-field">
+                    <label>Category</label>
+
+                    <input
+                        className="input"
+                        value={category}
+                        onChange={(e) => setCategory(e.target.value)}
+                        placeholder="e.g. Batter, Bowler, All-rounder"
                     />
                 </div>
 

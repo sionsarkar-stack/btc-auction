@@ -51,7 +51,9 @@ public class AuctionConfigService {
 
         config.setTargetBonus(150);
 
-        config.setTargetCompletionBonus(400);
+        config.setTargetCompletionBonus(250);
+
+        config.setTargetMissPenalty(100);
 
         config.setBountyBonus(100);
 

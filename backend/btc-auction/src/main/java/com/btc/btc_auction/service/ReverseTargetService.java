@@ -11,12 +11,15 @@ public class ReverseTargetService {
 
     private final ReverseTargetRepository repository;
     private final AuctionConfigService configService;
+    private final AdminActionLogService adminActionLogService;
 
     public ReverseTargetService(
-            ReverseTargetRepository repository, AuctionConfigService configService) {
+            ReverseTargetRepository repository, AuctionConfigService configService,
+            AdminActionLogService adminActionLogService) {
 
         this.repository = repository;
         this.configService = configService;
+        this.adminActionLogService = adminActionLogService;
 
     }
 
@@ -50,6 +53,11 @@ public class ReverseTargetService {
         }
 
         repository.save(target);
+
+        adminActionLogService.addLog("REVERSE_TARGET_SUBMITTED",
+                target.getPlayerName(),
+                target.getCaptainName(),
+                "Reverse target on " + target.getRivalCaptain());
 
         return "Reverse Target saved.";
     }

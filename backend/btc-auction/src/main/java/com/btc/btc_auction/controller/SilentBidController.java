@@ -112,4 +112,11 @@ public class SilentBidController {
 
     }
 
+    @PostMapping("/call-sold")
+    public String callSoldWinner() {
+
+        return silentBidService.callSoldWinner();
+
+    }
+
 }

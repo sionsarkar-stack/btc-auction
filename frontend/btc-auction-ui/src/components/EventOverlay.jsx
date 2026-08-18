@@ -2,8 +2,8 @@ import { useEffect } from "react";
 
 function EventOverlay({ event }) {
 
-    let icon = "🃏";
-    let title = "JOKER";
+    let icon = "📣";
+    let title = "AUCTION UPDATE";
     let message = "";
     let captain = event?.captainName
         ? `🔥 ${event.captainName.toUpperCase()} 🔥`
@@ -27,11 +27,33 @@ function EventOverlay({ event }) {
             message = "NOMINATION CANCELLED";
             break;
 
+        case "PLAYER_SOLD":
+
+            icon = "🏆";
+            title = "PLAYER SOLD";
+            message = `${event.playerName} · FINAL ₹${event.amount}${event.details ? ` · ${event.details}` : ""}`;
+            break;
+
         case "RTM_CLAIMED":
+        case "RTM_TRIGGERED":
 
             icon = "🔄";
-            title = "RIGHT TO MATCH";
-            message = "Waiting for Auctioneer Approval";
+            title = "RTM PRESSED";
+            message = `Offer ₹${event.amount} · Waiting for decision`;
+            break;
+
+        case "RTM_ACCEPTED":
+
+            icon = "✅";
+            title = "RTM ACCEPTED";
+            message = `Player sold at upgraded price ₹${event.amount}`;
+            break;
+
+        case "RTM_DECLINED":
+
+            icon = "❌";
+            title = "RTM DECLINED";
+            message = `Player sold at upgraded price ₹${event.amount}`;
             break;
 
         case "BOUNTY":
@@ -55,18 +77,8 @@ function EventOverlay({ event }) {
             message = "AUCTION REOPENED AT +₹100";
             break;
 
-        case "JOKER_USED":
-
-            icon = "🃏";
-            title = "JOKER";
-            message = event.details || "";
-            break;
-
         default:
-
-            icon = "🃏";
-            title = "JOKER";
-            message = "";
+            message = event?.details || event?.eventType || "";
 
     }
 
@@ -76,11 +88,11 @@ function EventOverlay({ event }) {
             return;
         }
 
-        document.body.classList.add("joker-flash");
+        document.body.classList.add("auction-flash");
 
         const flashTimeout = setTimeout(() => {
 
-            document.body.classList.remove("joker-flash");
+            document.body.classList.remove("auction-flash");
 
         }, 350);
 
@@ -98,6 +110,9 @@ function EventOverlay({ event }) {
 
         switch (event.eventType) {
             case "RTM_CLAIMED":
+            case "RTM_TRIGGERED":
+            case "RTM_ACCEPTED":
+            case "RTM_DECLINED":
                 sound = "/sounds/veto.mp3";
                 break;
 
@@ -109,7 +124,7 @@ function EventOverlay({ event }) {
                 sound = "/sounds/last-strike.mp3";
                 break;
 
-            case "JOKER_USED":
+            case "PLAYER_SOLD":
                 sound = "/sounds/bid-steal.mp3";
                 break;
 
@@ -144,29 +159,29 @@ function EventOverlay({ event }) {
 
     return (
 
-        <div className={`joker-overlay ${event.eventType.toLowerCase()}`}>
+        <div className={`event-overlay ${event.eventType.toLowerCase()}`}>
 
-            <div className="joker-card">
+            <div className="event-card">
 
-                <div className="joker-icon">
+                <div className="event-icon">
 
                     {icon}
 
                 </div>
 
-                <div className="joker-title">
+                <div className="event-title">
 
                     {title}
 
                 </div>
 
-                <div className="joker-captain">
+                <div className="event-captain">
 
                     {captain}
 
                 </div>
 
-                <div className="joker-type">
+                <div className="event-message">
 
                     {message}
 

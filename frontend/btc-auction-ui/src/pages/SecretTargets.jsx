@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+import { Client } from "@stomp/stompjs";
+import SockJS from "sockjs-client";
 import { API_URL } from "../config";
 
 function SecretTargets() {
@@ -8,15 +10,37 @@ function SecretTargets() {
     const [submitted, setSubmitted] = useState(null);
     const [targets, setTargets] = useState({ captainName: username, playerOne: "", playerTwo: "" });
     const [message, setMessage] = useState("");
+    const [auctionStarted, setAuctionStarted] = useState(false);
 
-    useEffect(() => {
+    const loadData = () => {
         fetch(`${API_URL}/api/players`).then(response => response.json()).then(setPlayers);
+        fetch(`${API_URL}/api/auction/status`)
+            .then(response => response.json())
+            .then(data => setAuctionStarted(data.auctionStarted))
+            .catch(() => { });
         if (role === "CAPTAIN") {
             fetch(`${API_URL}/api/secret-targets/${username}`)
                 .then(response => response.ok ? response.json() : null)
                 .then(setSubmitted)
-                .catch(() => {});
+                .catch(() => { });
         }
+    };
+
+    useEffect(() => {
+        loadData();
+        const client = new Client({
+            webSocketFactory: () => new SockJS(`${API_URL}/ws`),
+            reconnectDelay: 5000,
+        });
+        client.onConnect = () => {
+            client.subscribe("/topic/auction", () => {
+                loadData();
+            });
+        };
+        client.activate();
+        return () => {
+            client.deactivate();
+        };
     }, [role, username]);
 
     const submit = async () => {
@@ -36,9 +60,17 @@ function SecretTargets() {
         <div className="app-container">
             <div className="form-card" style={{ maxWidth: "700px", margin: "40px auto" }}>
                 <h1>🎯 Secret Targets — Double Down</h1>
-                <p>Choose two players before the auction. Both bought: +₹400; one: +₹50 net; neither: −₹200.</p>
+                {auctionStarted ? (
+                    <div className="message-error" style={{ padding: "15px", marginBottom: "20px" }}>
+                        🔒 Auction has started. Target selection is now locked.
+                    </div>
+                ) : (
+                    <p>First target bought: +₹150; second target bought: +₹250; each missed target: −₹100.</p>
+                )}
                 {submitted ? (
                     <div className="message-success">Targets locked: {submitted.playerOne} and {submitted.playerTwo}</div>
+                ) : auctionStarted ? (
+                    <div className="message-error">Targets not submitted before auction started.</div>
                 ) : (
                     <>
                         {["playerOne", "playerTwo"].map((field, index) => (
@@ -54,7 +86,7 @@ function SecretTargets() {
                         <button className="button" onClick={submit}>Lock Secret Targets</button>
                     </>
                 )}
-                {message && <div className="message-success">{message}</div>}
+                {message && <div className={message.includes("saved") ? "message-success" : "message-error"} style={{ marginTop: "15px" }}>{message}</div>}
             </div>
         </div>
     );

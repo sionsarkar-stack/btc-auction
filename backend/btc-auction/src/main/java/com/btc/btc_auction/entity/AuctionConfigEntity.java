@@ -26,6 +26,8 @@ public class AuctionConfigEntity {
 
     private int targetCompletionBonus;
 
+    private Integer targetMissPenalty;
+
     private int bountyBonus;
 
     private int goldenBountyBonus;
@@ -72,6 +74,14 @@ public class AuctionConfigEntity {
     public void setTargetCompletionBonus(
             int targetCompletionBonus) {
         this.targetCompletionBonus = targetCompletionBonus;
+    }
+
+    public int getTargetMissPenalty() {
+        return targetMissPenalty == null ? 100 : targetMissPenalty;
+    }
+
+    public void setTargetMissPenalty(int targetMissPenalty) {
+        this.targetMissPenalty = targetMissPenalty;
     }
 
     public int getBountyBonus() {

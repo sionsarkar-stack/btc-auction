@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Dashboard from "./pages/Dashboard";
 import AuctionManager from "./pages/AuctionManager";
 import NominatePlayer from "./pages/NominatePlayer";
@@ -11,6 +11,8 @@ import Settings from "./pages/Settings";
 import PlayersImport from "./pages/PlayersImport";
 import ReverseTarget from "./pages/ReverseTarget";
 import SecretTargets from "./pages/SecretTargets";
+import SilentBid from "./pages/SilentBid";
+import SilentBidManager from "./pages/SilentBidManager";
 
 function App() {
 
@@ -21,6 +23,18 @@ function App() {
     useState(
       localStorage.getItem("role")
     );
+
+  const [toast, setToast] = useState(null);
+
+  useEffect(() => {
+    const handleToast = (event) => {
+      setToast(event.detail);
+      window.setTimeout(() => setToast(null), 4000);
+    };
+
+    window.addEventListener("auction-toast", handleToast);
+    return () => window.removeEventListener("auction-toast", handleToast);
+  }, []);
 
   if (!role) {
 
@@ -35,24 +49,34 @@ function App() {
 
     <div className="app-shell">
 
+      {toast && (
+        <div className={`toast toast-${toast.type}`} role="status">
+          <span>{toast.message}</span>
+          <button type="button" onClick={() => setToast(null)} aria-label="Dismiss notification">
+            ×
+          </button>
+        </div>
+      )}
+
       <div className="app-container">
 
-        <div
-          style={{
-            marginBottom: "15px",
-            fontWeight: "bold"
-          }}
-        >
-          Logged in as:
-          {" "}
-          {localStorage.getItem("username")}
-          {" "}
-          (
-          {role}
-          )
-        </div>
+        <header className="auction-masthead">
+          <div className="auction-brand">
+            <span className="auction-brand-mark">🏏</span>
+            <div>
+              <p className="auction-kicker">Belgharia Turf Cricket</p>
+              <h1>BTC SEASON 11 AUCTION</h1>
+            </div>
+          </div>
 
-        <div className="button-group">
+          <div className="auction-user">
+            <span className="auction-live-dot" />
+            <span>{localStorage.getItem("username")}</span>
+            <strong>{role}</strong>
+          </div>
+        </header>
+
+        <nav className="button-group app-nav" aria-label="Auction navigation">
 
           <button
             className="button"
@@ -74,6 +98,17 @@ function App() {
 
           )}
 
+          {role === "CAPTAIN" && (
+
+            <button
+              className={screen === "silent-bid" ? "button button-active" : "button-secondary"}
+              onClick={() => setScreen("silent-bid")}
+            >
+              Silent Bid
+            </button>
+
+          )}
+
           {role === "ADMIN" && (
 
             <button
@@ -82,6 +117,17 @@ function App() {
                 setScreen("auction")}
             >
               Sell Player
+            </button>
+
+          )}
+
+          {role === "ADMIN" && (
+
+            <button
+              className={screen === "silent-manager" ? "button button-active" : "button-secondary"}
+              onClick={() => setScreen("silent-manager")}
+            >
+              Silent Manager
             </button>
 
           )}
@@ -167,30 +213,7 @@ function App() {
 
 
 
-          {role !== "VIEWER" && (
 
-            <button
-              className="button-secondary"
-              onClick={() => setScreen("secret-targets")}
-            >
-              🎯 Secret Targets
-            </button>
-
-          )}
-
-          {role !== "VIEWER" && (
-
-            <button
-              className="button-secondary"
-              onClick={() =>
-                setScreen("reverse-target")}
-            >
-
-              🎯 Reverse Target
-
-            </button>
-
-          )}
 
           <button
             className="button-secondary"
@@ -211,49 +234,65 @@ function App() {
             Logout
           </button>
 
+        </nav>
+
+        <main className="app-content">
+          {screen === "dashboard" &&
+            <Dashboard />}
+
+          {screen === "nominate" &&
+            role === "CAPTAIN" &&
+            <NominatePlayer />}
+
+          {screen === "silent-bid" &&
+            role === "CAPTAIN" &&
+            <SilentBid />}
+
+          {screen === "auction" &&
+            role === "ADMIN" &&
+            <AuctionManager />}
+
+          {screen === "silent-manager" &&
+            role === "ADMIN" &&
+            <SilentBidManager />}
+
+          {screen === "live" &&
+            <AuctionScreen />}
+
+          {screen === "add-player" &&
+            role === "ADMIN" &&
+            <AddPlayer />}
+
+          {screen === "manual-sale" &&
+            role === "ADMIN" &&
+            <ManualSale />}
+
+          {screen === "admin-logs" &&
+            role === "ADMIN" &&
+            <AdminLogs />}
+
+
+
+          {screen === "settings" &&
+            role === "ADMIN" &&
+            <Settings />}
+          {screen === "import-players" &&
+            role === "ADMIN" &&
+            <PlayersImport />}
+
+          {screen === "reverse-target" &&
+            role !== "VIEWER" &&
+            <ReverseTarget />}
+          {screen === "secret-targets" &&
+            role === "CAPTAIN" &&
+            <SecretTargets />}
+        </main>
+
+        <div className="dinda-watermark" aria-label="Designed by Dinda">
+          <span className="dinda-watermark-line" />
+          <span>DESIGNED BY</span>
+          <strong>DINDA</strong>
         </div>
-
-        {screen === "dashboard" &&
-          <Dashboard />}
-
-        {screen === "nominate" &&
-          role === "CAPTAIN" &&
-          <NominatePlayer />}
-
-        {screen === "auction" &&
-          role === "ADMIN" &&
-          <AuctionManager />}
-
-        {screen === "live" &&
-          <AuctionScreen />}
-
-        {screen === "add-player" &&
-          role === "ADMIN" &&
-          <AddPlayer />}
-
-        {screen === "manual-sale" &&
-          role === "ADMIN" &&
-          <ManualSale />}
-
-        {screen === "admin-logs" &&
-          role === "ADMIN" &&
-          <AdminLogs />}
-
-
-
-        {screen === "settings" &&
-          role === "ADMIN" &&
-          <Settings />}
-        {screen === "import-players" &&
-          role === "ADMIN" &&
-          <PlayersImport />}
-
-        {screen === "reverse-target" &&
-          role !== "VIEWER" &&
-          <ReverseTarget />}
-        {screen === "secret-targets" &&
-          role === "CAPTAIN" &&
-          <SecretTargets />}
 
       </div>
 

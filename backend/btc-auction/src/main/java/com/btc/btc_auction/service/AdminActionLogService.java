@@ -41,8 +41,22 @@ public class AdminActionLogService {
         adminActionLogRepository.save(log);
     }
 
+    public void addLog(String actionType, String details, String captainName, String reason) {
+        AdminActionLogEntity log = new AdminActionLogEntity();
+        log.setActionType(actionType);
+        log.setPlayerName(details);
+        log.setNewCaptain(captainName);
+        log.setReason(reason);
+        log.setTimestamp(LocalDateTime.now());
+        adminActionLogRepository.save(log);
+    }
+
     public List<AdminActionLogEntity> getLogs() {
 
         return adminActionLogRepository.findAll();
+    }
+
+    public void clearLogs() {
+        adminActionLogRepository.deleteAll();
     }
 }

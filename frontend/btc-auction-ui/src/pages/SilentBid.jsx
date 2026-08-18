@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+import { API_URL } from "../config";
+import { showToast } from "../services/toast";
 
 function SilentBid() {
 
@@ -63,7 +65,7 @@ function SilentBid() {
 
         if (!bid) {
 
-            alert("Enter bid amount.");
+            showToast("Enter bid amount.", "error");
 
             return;
 
@@ -100,7 +102,12 @@ function SilentBid() {
 
         const result = await response.text();
 
-        alert(result);
+        const bidAccepted = result === "Bid submitted.";
+        showToast(result, bidAccepted ? "success" : "error");
+
+        if (!bidAccepted) {
+            return;
+        }
 
         setSubmitted(true);
 

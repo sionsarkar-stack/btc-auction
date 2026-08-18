@@ -1,6 +1,7 @@
 import { useState } from "react";
 
 import { API_URL } from "../config";
+import heroImage from "../assets/hero.png";
 
 function Login({ onLogin }) {
 
@@ -67,68 +68,82 @@ function Login({ onLogin }) {
 
     return (
 
-        <div className="form-card">
+        <div className="login-page">
 
-            <h1>
-                BTC Auction Login
-            </h1>
+            <section className="login-visual">
+                <div className="login-visual-copy">
+                    <p className="login-eyebrow">BELGHARIA TURF CRICKET</p>
+                    <h1>BTC SEASON 11<br />AUCTION</h1>
+                    <p className="login-tagline">Four teams. One champion.<br />The bidding starts here.</p>
+                </div>
+                <img src={heroImage} alt="BTC auction visual" className="login-visual-art" />
+                <span className="login-season-mark">11</span>
+            </section>
 
-            <div className="form-field">
-
-                <label>
-                    Username
-                </label>
-
-                <input
-                    className="input"
-                    value={username}
-                    onChange={(e) =>
-                        setUsername(
-                            e.target.value)}
-                />
-
-            </div>
-
-            <div className="form-field">
-
-                <label>
-                    Password
-                </label>
-
-                <input
-                    type="password"
-                    className="input"
-                    value={password}
-                    onChange={(e) =>
-                        setPassword(
-                            e.target.value)}
-                />
-
-            </div>
-
-            <button
-                className="button"
-                onClick={login}
-            >
-                Login
-            </button>
-
-            {error && (
-
-                <div
-                    className="message-success"
-                    style={{
-                        background:
-                            "#fee2e2",
-                        color:
-                            "#991b1b",
-                        marginTop: "10px"
-                    }}
-                >
-                    {error}
+            <section className="login-panel">
+                <div className="login-panel-topline">
+                    <span className="login-live-dot" />
+                    SEASON CONTROL ROOM
                 </div>
 
-            )}
+                <div className="login-heading">
+                    <span className="login-bat">🏏</span>
+                    <div>
+                        <p>Welcome back</p>
+                        <h2>Sign in to enter</h2>
+                    </div>
+                </div>
+
+                <form onSubmit={(event) => {
+                    event.preventDefault();
+                    login();
+                }}>
+                    <div className="form-field">
+
+                        <label>
+                            Username
+                        </label>
+
+                        <input
+                            className="input"
+                            value={username}
+                            autoComplete="username"
+                            onChange={(e) => setUsername(e.target.value)}
+                        />
+
+                    </div>
+
+                    <div className="form-field">
+
+                        <label>
+                            Password
+                        </label>
+
+                        <input
+                            type="password"
+                            className="input"
+                            value={password}
+                            autoComplete="current-password"
+                            onChange={(e) => setPassword(e.target.value)}
+                        />
+
+                    </div>
+
+                    <button className="button login-submit" type="submit">
+                        ENTER AUCTION ROOM <span>↗</span>
+                    </button>
+                </form>
+
+                {error && (
+
+                    <div className="login-error">
+                        {error}
+                    </div>
+
+                )}
+
+                <p className="login-footer">Authorized access · BTC Season 11</p>
+            </section>
 
         </div>
     );

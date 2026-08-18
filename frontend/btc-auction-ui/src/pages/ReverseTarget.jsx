@@ -1,6 +1,9 @@
 import { useEffect, useState } from "react";
+import { Client } from "@stomp/stompjs";
+import SockJS from "sockjs-client";
 
 import { API_URL } from "../config";
+import { showToast } from "../services/toast";
 
 function ReverseTarget() {
 
@@ -34,8 +37,10 @@ function ReverseTarget() {
     const [allTargets, setAllTargets] =
         useState([]);
 
-    useEffect(() => {
+    const [auctionStarted, setAuctionStarted] =
+        useState(false);
 
+    const loadData = () => {
         fetch(`${API_URL}/api/players`)
             .then(response => response.json())
             .then(setPlayers);
@@ -43,6 +48,11 @@ function ReverseTarget() {
         fetch(`${API_URL}/api/teams`)
             .then(response => response.json())
             .then(setCaptains);
+
+        fetch(`${API_URL}/api/auction/status`)
+            .then(response => response.json())
+            .then(data => setAuctionStarted(data.auctionStarted))
+            .catch(() => { });
 
         if (isAdmin) {
 
@@ -78,6 +88,23 @@ function ReverseTarget() {
                 .catch(() => { });
 
         }
+    };
+
+    useEffect(() => {
+        loadData();
+        const client = new Client({
+            webSocketFactory: () => new SockJS(`${API_URL}/ws`),
+            reconnectDelay: 5000,
+        });
+        client.onConnect = () => {
+            client.subscribe("/topic/auction", () => {
+                loadData();
+            });
+        };
+        client.activate();
+        return () => {
+            client.deactivate();
+        };
 
     }, []);
 
@@ -101,9 +128,7 @@ function ReverseTarget() {
 
                 });
 
-        alert(
-            await response.text()
-        );
+        showToast(await response.text());
 
         window.location.reload();
 
@@ -122,6 +147,12 @@ function ReverseTarget() {
                         🎯 Reverse Targets
 
                     </h1>
+
+                    {auctionStarted && (
+                        <div className="message-error" style={{ padding: "15px", marginBottom: "20px" }}>
+                            🔒 Target selection locked — auction in progress.
+                        </div>
+                    )}
 
                     <table className="table">
 
@@ -199,6 +230,12 @@ function ReverseTarget() {
 
                 </h1>
 
+                {auctionStarted && (
+                    <div className="message-error" style={{ padding: "15px", marginBottom: "20px" }}>
+                        🔒 Auction has started. Target selection is now locked.
+                    </div>
+                )}
+
                 <p style={{ marginBottom: "20px" }}>
 
                     If the selected rival captain buys this player,
@@ -257,9 +294,11 @@ function ReverseTarget() {
                         </label>
 
                         <select
+                            className="input"
                             value={
                                 target.rivalCaptain
                             }
+                            disabled={auctionStarted || submitted}
                             onChange={event =>
                                 setTarget({
                                     ...target,
@@ -310,9 +349,11 @@ function ReverseTarget() {
                         </label>
 
                         <select
+                            className="input"
                             value={
                                 target.playerName
                             }
+                            disabled={auctionStarted || submitted}
                             onChange={event =>
                                 setTarget({
                                     ...target,
@@ -350,6 +391,7 @@ function ReverseTarget() {
                         <button
                             className="button"
                             onClick={submit}
+                            disabled={auctionStarted || submitted}
                         >
 
                             🎯 Submit Reverse Target

@@ -4,6 +4,7 @@ import com.btc.btc_auction.entity.AdminActionLogEntity;
 import com.btc.btc_auction.service.AdminActionLogService;
 import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
@@ -30,5 +31,12 @@ public class AdminActionLogController {
     public List<AdminActionLogEntity> getLogs() {
 
         return adminActionLogService.getLogs();
+    }
+
+    @PostMapping("/api/admin/logs/clear")
+    public String clearLogs() {
+
+        adminActionLogService.clearLogs();
+        return "Admin logs cleared.";
     }
 }

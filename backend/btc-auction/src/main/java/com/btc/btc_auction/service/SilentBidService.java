@@ -1,6 +1,7 @@
 package com.btc.btc_auction.service;
 
 import com.btc.btc_auction.entity.SilentBidEntity;
+import com.btc.btc_auction.entity.TeamEntity;
 import com.btc.btc_auction.model.SilentBidResult;
 import com.btc.btc_auction.repository.SilentBidRepository;
 import org.springframework.stereotype.Service;
@@ -19,17 +20,21 @@ public class SilentBidService {
 
     private final AuctionEventService auctionEventService;
 
+    private final AuctionSocketService auctionSocketService;
+
     public SilentBidService(
             SilentBidRepository repository,
             TeamService teamService, AuctionService auctionService,
 
-            AuctionEventService auctionEventService) {
+            AuctionEventService auctionEventService,
+            AuctionSocketService auctionSocketService) {
 
         this.repository = repository;
         this.teamService = teamService;
         this.auctionService = auctionService;
 
         this.auctionEventService = auctionEventService;
+        this.auctionSocketService = auctionSocketService;
 
     }
 
@@ -59,12 +64,18 @@ public class SilentBidService {
 
                 });
 
+        auctionSocketService.broadcastRefresh();
+
     }
 
     public String submitBid(
             String playerName,
             String captainName,
             int amount) {
+
+        if (amount <= 0) {
+            return "Bid must be greater than zero.";
+        }
 
         SilentBidEntity bid = repository.findByPlayerNameAndCaptainName(
                 playerName,
@@ -89,10 +100,21 @@ public class SilentBidService {
 
         }
 
+        TeamEntity team = teamService.getTeam(captainName);
+        if (team == null) {
+            return "Captain not found.";
+        }
+
+        if (amount > teamService.getMaxBid(team)) {
+            return "Bid exceeds the captain's maximum bid.";
+        }
+
         bid.setBidAmount(amount);
         bid.setSubmitted(true);
 
         repository.save(bid);
+
+        auctionSocketService.broadcastRefresh();
 
         return "Bid submitted.";
 
@@ -139,6 +161,7 @@ public class SilentBidService {
     public void clearRound() {
 
         repository.deleteAll();
+        auctionSocketService.broadcastRefresh();
 
     }
 
@@ -174,10 +197,11 @@ public class SilentBidService {
 
         }
 
-        String saleResult = auctionService.sellPlayer(
-                winner.getPlayerName(),
-                winner.getCaptainName(),
-                winner.getBidAmount());
+        String saleResult = auctionService.finalizeSilentBidWinner();
+
+        if (!saleResult.contains(" sold to ")) {
+            return saleResult;
+        }
 
         auctionEventService.logEvent(
                 "SILENT_BID_SOLD",
@@ -187,8 +211,28 @@ public class SilentBidService {
                 "Silent Bid Winner");
 
         repository.deleteAll();
+        auctionSocketService.broadcastRefresh();
 
         return saleResult;
+    }
+
+    public String callSoldWinner() {
+
+        SilentBidResult bidResult = getResult();
+
+        if (bidResult.isTie()) {
+            return "Tie still exists.";
+        }
+
+        SilentBidEntity winner = bidResult.getWinner();
+        if (winner == null) {
+            return "Winner not available.";
+        }
+
+        return auctionService.callSilentBidWinner(
+                winner.getPlayerName(),
+                winner.getCaptainName(),
+                winner.getBidAmount());
     }
 
     @SuppressWarnings("null")

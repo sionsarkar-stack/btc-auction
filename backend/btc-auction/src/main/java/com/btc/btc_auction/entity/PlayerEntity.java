@@ -14,12 +14,19 @@ public class PlayerEntity {
 
     private String seed;
 
+    private String category;
+
     /** Opening price announced for this player before the auction starts. */
     private int basePrice;
 
     private boolean sold;
 
     private int soldPrice;
+
+    /**
+     * Winning bid after all sale bonuses and penalties are applied to purse impact.
+     */
+    private int finalPrice;
 
     private String team;
 
@@ -50,6 +57,14 @@ public class PlayerEntity {
         this.seed = seed;
     }
 
+    public String getCategory() {
+        return category;
+    }
+
+    public void setCategory(String category) {
+        this.category = category;
+    }
+
     public int getBasePrice() {
         return basePrice;
     }
@@ -72,6 +87,14 @@ public class PlayerEntity {
 
     public void setSoldPrice(int soldPrice) {
         this.soldPrice = soldPrice;
+    }
+
+    public int getFinalPrice() {
+        return finalPrice > 0 ? finalPrice : soldPrice;
+    }
+
+    public void setFinalPrice(int finalPrice) {
+        this.finalPrice = finalPrice;
     }
 
     public String getTeam() {

@@ -28,8 +28,17 @@ function AuctionScreen() {
     const lastProcessedEventId =
         useRef(null);
 
+    const lastScreenEventId =
+        useRef(null);
+
     const [auctionStatus, setAuctionStatus] =
         useState(null);
+
+    const [isConnected, setIsConnected] =
+        useState(false);
+
+    const [eventPulse, setEventPulse] =
+        useState(false);
 
 
 
@@ -86,6 +95,16 @@ function AuctionScreen() {
 
                         setLatestEvent(latest);
 
+                        if (latest.id !== lastScreenEventId.current) {
+                            lastScreenEventId.current = latest.id;
+                            setEventPulse(true);
+                            window.setTimeout(() => setEventPulse(false), 700);
+
+                            if (["SOLD", "PLAYER_SOLD", "LAST_STRIKE"].includes(latest.eventType)) {
+                                new Audio("/sounds/last-strike.mp3").play().catch(() => { });
+                            }
+                        }
+
                         if (
                             latest &&
                             latest.eventType === "SILENT_BID_SOLD" &&
@@ -136,6 +155,8 @@ function AuctionScreen() {
 
         client.onConnect = () => {
 
+            setIsConnected(true);
+
             client.subscribe(
                 "/topic/auction",
                 () => {
@@ -146,6 +167,9 @@ function AuctionScreen() {
             );
 
         };
+
+        client.onDisconnect = () => setIsConnected(false);
+        client.onWebSocketClose = () => setIsConnected(false);
 
         client.activate();
 
@@ -180,9 +204,9 @@ function AuctionScreen() {
             {showSilentWinner &&
                 silentWinner && (
 
-                    <div className="joker-overlay silent">
+                    <div className="event-overlay silent">
 
-                        <div className="joker-card">
+                        <div className="event-card">
 
                             <div
                                 style={{
@@ -195,7 +219,7 @@ function AuctionScreen() {
                             </div>
 
                             <div
-                                className="joker-title"
+                                className="event-title"
                             >
 
                                 SILENT BID COMPLETE
@@ -226,7 +250,7 @@ function AuctionScreen() {
                             </div>
 
                             <div
-                                className="joker-captain"
+                                className="event-captain"
                             >
 
                                 {silentWinner.captainName}
@@ -263,6 +287,16 @@ function AuctionScreen() {
 
                     </h1>
 
+                    <div className={isConnected ? "connection-status connected" : "connection-status"}>
+                        <span className="connection-dot" />
+                        {isConnected ? "Live scoreboard connected" : "Reconnecting to scoreboard..."}
+                    </div>
+
+                </div>
+
+                <div className="auction-phase-bar">
+                    <span className="auction-phase-label">{auctionStatus?.auctionPhase || "WAITING"}</span>
+                    <span>{silentBidActive ? "Confidential bids in progress" : waitingForLastStrike ? "RTM / last-strike decision window" : "Bidding is open"}</span>
                 </div>
 
                 {!silentBidActive &&
@@ -295,9 +329,6 @@ function AuctionScreen() {
                                     "🥇 ALL TARGETS ACHIEVED"}
                                 {latestEvent.eventType === "REVERSE_TARGET_TRIGGERED" &&
                                     "🎯 Reverse Target"}
-                                {latestEvent.eventType === "JOKER_USED" &&
-                                    "🃏 JOKER ACTIVATED"}
-
                                 {latestEvent.eventType === "PLAYER_VETOED" &&
                                     "❌ NOMINATION VETOED"}
 
@@ -350,6 +381,13 @@ function AuctionScreen() {
 
                                 )}
 
+                                {(latestEvent.eventType === "SOLD" || latestEvent.eventType === "PLAYER_SOLD") && (
+                                    <>
+                                        Final price: ₹{latestEvent.amount}
+                                        <br />
+                                    </>
+                                )}
+
                                 {latestEvent.eventType !== "REVERSE_TARGET_TRIGGERED" &&
                                     latestEvent.details}
 
@@ -359,7 +397,22 @@ function AuctionScreen() {
 
                     )}
 
-                <div className="current-auction-card">
+                <div className={`current-auction-card ${eventPulse ? "event-pulse" : ""}`}>
+
+                    <div className="auction-metrics" aria-label="Current auction metrics">
+                        <div>
+                            <span>Base price</span>
+                            <strong>₹{auction.basePrice}</strong>
+                        </div>
+                        <div>
+                            <span>Current bid</span>
+                            <strong>₹{auction.currentBid}</strong>
+                        </div>
+                        <div>
+                            <span>Leader</span>
+                            <strong>{auction.leader || "No bids"}</strong>
+                        </div>
+                    </div>
 
                     <div
                         className="current-player-name"
@@ -386,13 +439,6 @@ function AuctionScreen() {
                         {auction.seed || "-"}
 
                     </div>
-
-                    <p>
-
-                        Base Price:
-                        ₹{auction.basePrice}
-
-                    </p>
 
                     {!silentBidActive && (
 
@@ -477,20 +523,6 @@ function AuctionScreen() {
 
                                 <>
 
-                                    <p>
-
-                                        Current Bid:
-                                        ₹{auction.currentBid}
-
-                                    </p>
-
-                                    <p>
-
-                                        Leader:
-                                        {auction.leader}
-
-                                    </p>
-
                                 </>
 
                             )}
@@ -544,7 +576,7 @@ function AuctionScreen() {
 
                             <h2>
 
-                                Recent Events
+                                Bid & Event History
 
                             </h2>
 
@@ -576,23 +608,20 @@ function AuctionScreen() {
                                         {event.eventType === "TARGET_ACHIEVED" && "🎯 "}
                                         {event.eventType === "ALL_TARGETS_ACHIEVED" && "🥇 "}
                                         {event.eventType === "REVERSE_TARGET_TRIGGERED" && "🎯 "}
-                                        {event.eventType === "JOKER_USED" && "🃏 "}
                                         {event.eventType === "PLAYER_VETOED" && "❌ "}
                                         {event.eventType === "LAST_STRIKE" && "⚡ "}
                                         {event.eventType === "SOLD" && "🔨 "}
 
                                         {
-                                            event.eventType === "JOKER_USED"
-                                                ? "JOKER ACTIVATED"
-                                                : event.eventType === "PLAYER_VETOED"
-                                                    ? "NOMINATION VETOED"
-                                                    : event.eventType === "LAST_STRIKE"
-                                                        ? "LAST STRIKE"
-                                                        : event.eventType === "SOLD"
-                                                            ? "SOLD"
-                                                            : event.eventType === "REVERSE_TARGET_TRIGGERED"
-                                                                ? "Reverse Target"
-                                                                : event.eventType
+                                            event.eventType === "PLAYER_VETOED"
+                                                ? "NOMINATION VETOED"
+                                                : event.eventType === "LAST_STRIKE"
+                                                    ? "LAST STRIKE"
+                                                    : event.eventType === "SOLD"
+                                                        ? "SOLD"
+                                                        : event.eventType === "REVERSE_TARGET_TRIGGERED"
+                                                            ? "Reverse Target"
+                                                            : event.eventType
                                         }
 
                                     </strong>
@@ -617,6 +646,10 @@ function AuctionScreen() {
                                                 {" → "}
                                                 {event.captainName}
                                             </div>
+
+                                            {(event.eventType === "SOLD" || event.eventType === "PLAYER_SOLD") && (
+                                                <div>Final price: ₹{event.amount}</div>
+                                            )}
 
                                             <div>{event.details}</div>
                                         </>

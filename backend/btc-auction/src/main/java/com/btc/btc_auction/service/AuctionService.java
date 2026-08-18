@@ -11,6 +11,7 @@ import com.btc.btc_auction.model.Auction;
 
 import java.util.List;
 
+import jakarta.transaction.Transactional;
 import org.springframework.stereotype.Service;
 import com.btc.btc_auction.entity.BountyPlayerEntity;
 
@@ -30,8 +31,6 @@ public class AuctionService {
         private final AuctionSocketService auctionSocketService;
         private final SecretTargetService secretTargetService;
 
-        private final JokerService jokerService;
-
         public AuctionService(
                         TeamService teamService,
                         PlayerService playerService,
@@ -40,7 +39,7 @@ public class AuctionService {
                         AuctionEventService auctionEventService,
                         AuctionConfigService auctionConfigService,
                         BountyPlayerService bountyPlayerService,
-                        JokerService jokerService, ReverseTargetService reverseTargetService,
+                        ReverseTargetService reverseTargetService,
                         RtmService rtmService, AuctionSocketService auctionSocketService,
                         CurrentAuctionService currentAuctionService, SecretTargetService secretTargetService) {
 
@@ -52,7 +51,6 @@ public class AuctionService {
                 this.auctionConfigService = auctionConfigService;
                 this.bountyPlayerService = bountyPlayerService;
                 this.reverseTargetService = reverseTargetService;
-                this.jokerService = jokerService;
                 this.rtmService = rtmService;
                 this.currentAuctionService = currentAuctionService;
                 this.auctionSocketService = auctionSocketService;
@@ -75,7 +73,16 @@ public class AuctionService {
 
         public Auction getCurrentAuction() {
 
-                return currentAuctionService.getCurrentAuction();
+                Auction auction = currentAuctionService.getCurrentAuction();
+                if (auction != null && !auction.getCurrentPlayer().isBlank()) {
+                        PlayerEntity player = playerService.getPlayer(auction.getCurrentPlayer());
+                        if (player != null && player.isSold()) {
+                                currentAuctionService.setCurrentAuction(
+                                                new Auction("", "", 0, "None", 0, ""));
+                                return currentAuctionService.getCurrentAuction();
+                        }
+                }
+                return auction;
 
         }
 
@@ -143,6 +150,7 @@ public class AuctionService {
                 return "Player nominated";
         }
 
+        @Transactional
         public synchronized String sellPlayer(
                         String playerName,
                         String captainName,
@@ -188,9 +196,12 @@ public class AuctionService {
 
                 player.setSold(true);
                 player.setSoldPrice(soldPrice);
+                player.setFinalPrice(soldPrice);
                 player.setTeam(captainName);
 
                 playerService.savePlayer(player);
+                int secretTargetAdjustment = secretTargetService.applyPurchaseReward(playerName, captainName);
+                int reverseTargetPenaltyTotal = 0;
 
                 team.setPurse(
                                 team.getPurse()
@@ -205,27 +216,39 @@ public class AuctionService {
 
                 teamService.saveTeam(team);
                 List<ReverseTargetEntity> targets = reverseTargetService.getAll();
+                int reverseTargetPenalty = config.getStealPenalty();
 
                 for (ReverseTargetEntity target : targets) {
 
                         if (target.getRivalCaptain().equalsIgnoreCase(captainName)
                                         && target.getPlayerName().equalsIgnoreCase(playerName)) {
 
-                                team.setPurse(team.getPurse() - 200);
+                                team.setPurse(team.getPurse() - reverseTargetPenalty);
                                 teamService.saveTeam(team);
+                                reverseTargetPenaltyTotal += reverseTargetPenalty;
 
-                                        auctionEventService.logEvent(
-                                                        "REVERSE_TARGET_TRIGGERED",
-                                                        playerName,
-                                                        captainName,
-                                                        -200,
-                                                        "Reverse target set by "
-                                                                        + target.getCaptainName()
-                                                                        + " triggered; ₹200 deducted");
+                                auctionEventService.logEvent(
+                                                "REVERSE_TARGET_TRIGGERED",
+                                                playerName,
+                                                captainName,
+                                                -reverseTargetPenalty,
+                                                "Reverse target set by "
+                                                                + target.getCaptainName()
+                                                                + " triggered; ₹200 deducted");
+                                adminActionLogService.addLog(
+                                                "REVERSE_TARGET_TRIGGERED",
+                                                playerName,
+                                                captainName,
+                                                "Reverse target set by "
+                                                                + target.getCaptainName()
+                                                                + " triggered; ₹"
+                                                                + reverseTargetPenalty
+                                                                + " deducted");
 
                         }
 
                 }
+                int bountyReward = 0;
                 BountyPlayerEntity bounty = bountyPlayerService
                                 .getByPlayer(
                                                 playerName);
@@ -236,6 +259,7 @@ public class AuctionService {
                         int reward = bounty.isGolden()
                                         ? config.getGoldenBountyBonus()
                                         : config.getBountyBonus();
+                        bountyReward = reward;
 
                         team.setPurse(
                                         team.getPurse()
@@ -266,12 +290,26 @@ public class AuctionService {
                 log.setSoldPrice(soldPrice);
 
                 auctionLogService.addLog(log);
+                int netPurseImpact = soldPrice
+                                + reverseTargetPenaltyTotal
+                                - secretTargetAdjustment
+                                - bountyReward;
+                player.setFinalPrice(netPurseImpact);
+                playerService.savePlayer(player);
                 auctionEventService.logEvent(
                                 "PLAYER_SOLD",
                                 playerName,
                                 captainName,
-                                soldPrice,
-                                "Player sold in auction");
+                                netPurseImpact,
+                                "Bid ₹" + soldPrice
+                                                + " | Secret target "
+                                                + formatAdjustment(secretTargetAdjustment)
+                                                + " | Bounty "
+                                                + formatAdjustment(bountyReward)
+                                                + " | Penalty -₹"
+                                                + reverseTargetPenaltyTotal
+                                                + " | Net purse impact ₹"
+                                                + netPurseImpact);
                 rtmService.clearCurrentAuctionClaim();
                 currentAuctionService.setCurrentAuction(
                                 new Auction(
@@ -291,8 +329,74 @@ public class AuctionService {
                 return playerName
                                 + " sold to "
                                 + captainName
-                                + " for ₹"
-                                + soldPrice;
+                                + " for bid ₹"
+                                + soldPrice
+                                + " (final ₹"
+                                + netPurseImpact
+                                + ")";
+        }
+
+        private String formatAdjustment(int amount) {
+                return amount >= 0 ? "+₹" + amount : "-₹" + Math.abs(amount);
+        }
+
+        private synchronized String prepareSilentBidWinner(
+                        String playerName,
+                        String captainName,
+                        int bidAmount) {
+
+                PlayerEntity player = playerService.getPlayer(playerName);
+
+                if (player == null || player.isSold()) {
+                        return "Player is not available for silent bidding";
+                }
+
+                currentAuctionService.setCurrentAuction(new Auction(
+                                playerName,
+                                player.getSeed(),
+                                bidAmount,
+                                captainName,
+                                player.getBasePrice(),
+                                "Silent Bid"));
+
+                return "Silent bid winner prepared.";
+        }
+
+        @Transactional
+        public synchronized String callSilentBidWinner(
+                        String playerName,
+                        String captainName,
+                        int bidAmount) {
+
+                String prepared = prepareSilentBidWinner(
+                                playerName,
+                                captainName,
+                                bidAmount);
+
+                if (!prepared.equals("Silent bid winner prepared.")) {
+                        return prepared;
+                }
+
+                return callSold(captainName, bidAmount);
+        }
+
+        @Transactional
+        public synchronized String finalizeSilentBidWinner() {
+
+                Auction auction = currentAuctionService.getCurrentAuction();
+
+                if (auction == null || auction.getCurrentPlayer().isBlank()) {
+                        return "No active silent bid auction.";
+                }
+
+                if (rtmService.getCurrentRtm() != null) {
+                        return "Resolve RTM before confirming the sale.";
+                }
+
+                return sellPlayer(
+                                auction.getCurrentPlayer(),
+                                auction.getLeader(),
+                                auction.getCurrentBid());
         }
 
         public String undoLastSale() {
@@ -313,6 +417,7 @@ public class AuctionService {
 
                         player.setSold(false);
                         player.setSoldPrice(0);
+                        player.setFinalPrice(0);
                         player.setTeam("");
 
                         playerService.savePlayer(player);
@@ -346,12 +451,14 @@ public class AuctionService {
                 return "Last sale undone";
         }
 
+        @Transactional
         public String manualSale(
                         String playerName,
                         String newCaptain,
                         int newPrice,
                         String reason) {
 
+                AuctionConfigEntity config = auctionConfigService.getConfig();
                 PlayerEntity player = playerService.getPlayer(playerName);
 
                 if (player == null) {
@@ -370,6 +477,14 @@ public class AuctionService {
                         return "New team not found";
                 }
 
+                if (newPrice < 0) {
+                        return "New price cannot be negative";
+                }
+
+                if (newTeam.getPlayersLeft() <= 0 && !newCaptain.equalsIgnoreCase(oldCaptain)) {
+                        return "New team squad is already complete";
+                }
+
                 if (oldTeam != null) {
 
                         oldTeam.setPurse(
@@ -384,8 +499,32 @@ public class AuctionService {
                         teamService.saveTeam(oldTeam);
                 }
 
+                int secretTargetAdjustment = secretTargetService.applyPurchaseReward(playerName, newCaptain);
+                int reverseTargetPenaltyTotal = 0;
+                int reverseTargetPenalty = config.getStealPenalty();
+
+                for (ReverseTargetEntity target : reverseTargetService.getAll()) {
+                        if (target.getRivalCaptain().equalsIgnoreCase(newCaptain)
+                                        && target.getPlayerName().equalsIgnoreCase(playerName)) {
+                                reverseTargetPenaltyTotal += reverseTargetPenalty;
+                        }
+                }
+
+                int bountyReward = 0;
+                BountyPlayerEntity bounty = bountyPlayerService.getByPlayer(playerName);
+                if (bounty != null && !bounty.isRevealed()) {
+                        bountyReward = bounty.isGolden()
+                                        ? config.getGoldenBountyBonus()
+                                        : config.getBountyBonus();
+                        bounty.setRevealed(true);
+                        bountyPlayerService.save(bounty);
+                }
+
                 newTeam.setPurse(
-                                newTeam.getPurse() - newPrice);
+                                newTeam.getPurse()
+                                                - newPrice
+                                                - reverseTargetPenaltyTotal
+                                                + bountyReward);
 
                 newTeam.setPlayersBought(
                                 newTeam.getPlayersBought() + 1);
@@ -411,7 +550,13 @@ public class AuctionService {
                                 reason);
 
                 player.setTeam(newCaptain);
+                player.setSold(true);
                 player.setSoldPrice(newPrice);
+                player.setFinalPrice(
+                                newPrice
+                                                + reverseTargetPenaltyTotal
+                                                - secretTargetAdjustment
+                                                - bountyReward);
 
                 playerService.savePlayer(player);
 
@@ -427,7 +572,8 @@ public class AuctionService {
                 config.setSeasonName("BTC Season 11");
                 config.setSquadSize(10);
                 config.setTargetBonus(150);
-                config.setTargetCompletionBonus(400);
+                config.setTargetCompletionBonus(250);
+                config.setTargetMissPenalty(100);
                 config.setBountyBonus(100);
                 config.setGoldenBountyBonus(200);
                 config.setStealPenalty(200);
@@ -450,6 +596,7 @@ public class AuctionService {
 
                                         player.setSold(false);
                                         player.setSoldPrice(0);
+                                        player.setFinalPrice(0);
                                         player.setTeam("");
 
                                         playerService.savePlayer(player);
@@ -468,11 +615,11 @@ public class AuctionService {
 
                 auctionLogService.clearLogs();
 
+                adminActionLogService.clearLogs();
+
                 auctionEventService.clearEvents();
 
                 bountyPlayerService.deleteAll();
-
-                jokerService.deleteAll();
 
                 reverseTargetService.deleteAll();
 
@@ -537,6 +684,38 @@ public class AuctionService {
 
         }
 
+        public String vetoCurrentAuction(String playerName) {
+
+                Auction auction = currentAuctionService.getCurrentAuction();
+
+                if (auction == null || auction.getCurrentPlayer().isBlank()) {
+                        return "No active bid or nomination.";
+                }
+
+                if (playerName == null || playerName.isBlank()
+                                || !auction.getCurrentPlayer().equalsIgnoreCase(playerName)) {
+                        return "Selected player is not the active bid or nomination.";
+                }
+
+                return vetoCurrentAuction();
+        }
+
+        public String cancelOwnNomination(String captainName) {
+
+                Auction auction = currentAuctionService.getCurrentAuction();
+
+                if (auction == null || auction.getCurrentPlayer().isBlank()) {
+                        return "No active nomination.";
+                }
+
+                if (captainName == null || captainName.isBlank()
+                                || !captainName.equalsIgnoreCase(auction.getNominatedBy())) {
+                        return "Only the nominating captain can cancel this nomination.";
+                }
+
+                return vetoCurrentAuction();
+        }
+
         public String applyLastStrike(
 
                         String captainName) {
@@ -585,23 +764,49 @@ public class AuctionService {
         }
 
         public String callSold() {
+                return callSold(null, null);
+        }
 
-                if (currentAuctionService.getCurrentAuction().getCurrentPlayer().isBlank()) {
+        public String callSold(
+                        String captainName,
+                        Integer soldPrice) {
+
+                Auction auction = currentAuctionService.getCurrentAuction();
+
+                if (auction.getCurrentPlayer().isBlank()) {
                         return "No active auction.";
                 }
-                if ("None".equals(currentAuctionService.getCurrentAuction().getLeader())) {
-                        Auction auction = currentAuctionService.getCurrentAuction();
-                        auction.setLeader(auction.getNominatedBy());
-                        auction.setCurrentBid(auction.getBasePrice());
 
-                        AuctionConfigEntity config = auctionConfigService.getConfig();
-                        config.setAuctionPhase(AuctionPhase.SOLD);
-                        auctionConfigService.save(config);
+                if (captainName != null && !captainName.isBlank() && soldPrice != null && soldPrice > 0) {
+                        TeamEntity team = teamService.getTeam(captainName);
 
-                        return sellPlayer(auction.getCurrentPlayer(), auction.getNominatedBy(), auction.getBasePrice());
+                        if (team == null) {
+                                return "Captain not found.";
+                        }
 
+                        if (team.getPlayersLeft() <= 0) {
+                                return "Squad is already complete.";
+                        }
+
+                        int maxBid = teamService.getMaxBid(team);
+                        if (soldPrice > maxBid) {
+                                return "Sold price exceeds maximum bid (₹" + maxBid + ").";
+                        }
+
+                        if (soldPrice < auction.getBasePrice()) {
+                                return "Sold price cannot be lower than base price (₹" + auction.getBasePrice() + ").";
+                        }
+
+                        auction.setLeader(captainName);
+                        auction.setCurrentBid(soldPrice);
                 }
-                rtmService.clearCurrentAuctionClaim(); // <-- ADD THIS
+
+                if (auction.getLeader().isBlank()
+                                || "None".equalsIgnoreCase(auction.getLeader())) {
+                        return "No bids placed yet.";
+                }
+
+                rtmService.clearCurrentAuctionClaim();
 
                 AuctionConfigEntity config = auctionConfigService.getConfig();
 
@@ -611,15 +816,16 @@ public class AuctionService {
 
                 auctionEventService.logEvent(
                                 "SOLD",
-                                currentAuctionService.getCurrentAuction().getCurrentPlayer(),
-                                currentAuctionService.getCurrentAuction().getLeader(),
-                                currentAuctionService.getCurrentAuction().getCurrentBid(),
+                                auction.getCurrentPlayer(),
+                                auction.getLeader(),
+                                auction.getCurrentBid(),
                                 "Waiting for RTM / Last Strike");
                 auctionSocketService.broadcastRefresh();
 
                 return "Waiting for RTM / Last Strike.";
         }
 
+        @Transactional
         public String acceptRtm(
                         String captainName) {
 
@@ -649,25 +855,32 @@ public class AuctionService {
                 String rtmCaptain = claim.getCaptainName();
                 int bid = claim.getBidAmount();
 
-                claim.setUsed(true);
-                rtmService.save(claim);
+                Auction auction = currentAuctionService.getCurrentAuction();
+                auction.setCurrentBid(bid);
 
                 String result = sellPlayer(
                                 player,
                                 winner,
                                 bid);
 
-                auctionEventService.logEvent(
-                                "RTM_ACCEPTED",
-                                player,
-                                winner,
-                                bid,
-                                "Matched RTM bid from " + rtmCaptain);
+                if (result.startsWith(player + " sold to ")) {
+                        claim.setUsed(true);
+                        rtmService.save(claim);
+
+                        auctionEventService.logEvent(
+                                        "RTM_ACCEPTED",
+                                        player,
+                                        winner,
+                                        bid,
+                                        "Matched RTM bid from " + rtmCaptain);
+                        auctionSocketService.broadcastRefresh();
+                }
 
                 return result;
 
         }
 
+        @Transactional
         public String declineRtm(
                         String captainName) {
 
@@ -692,19 +905,27 @@ public class AuctionService {
                         return "Only the original winning captain can decline.";
 
                 }
-                claim.setUsed(true);
-                rtmService.save(claim);
+                Auction auction = currentAuctionService.getCurrentAuction();
+                auction.setLeader(claim.getCaptainName());
+                auction.setCurrentBid(claim.getBidAmount());
+
                 String result = sellPlayer(
                                 claim.getPlayerName(),
                                 claim.getCaptainName(), // RTM captain ✅
                                 claim.getBidAmount());
 
-                auctionEventService.logEvent(
-                                "RTM_DECLINED",
-                                claim.getPlayerName(),
-                                claim.getCaptainName(),
-                                claim.getBidAmount(),
-                                "Original captain declined to match");
+                if (result.startsWith(claim.getPlayerName() + " sold to ")) {
+                        claim.setUsed(true);
+                        rtmService.save(claim);
+
+                        auctionEventService.logEvent(
+                                        "RTM_DECLINED",
+                                        claim.getPlayerName(),
+                                        claim.getCaptainName(),
+                                        claim.getBidAmount(),
+                                        "Original captain declined to match");
+                        auctionSocketService.broadcastRefresh();
+                }
 
                 return result;
 

@@ -51,7 +51,8 @@ public class PlayerController {
         playerService.addPlayer(
                 request.getName(),
                 request.getSeed(),
-                request.getBasePrice());
+                request.getBasePrice(),
+                request.getCategory());
 
         return "Player Added Successfully";
     }

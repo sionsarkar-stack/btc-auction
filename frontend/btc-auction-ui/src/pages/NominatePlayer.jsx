@@ -7,6 +7,11 @@ function NominatePlayer() {
     const [players, setPlayers] = useState([]);
     const [selectedPlayer, setSelectedPlayer] = useState("");
     const [message, setMessage] = useState(null);
+    const [nominationAnnouncement, setNominationAnnouncement] = useState(null);
+    const [isNominating, setIsNominating] = useState(false);
+    const [currentAuction, setCurrentAuction] = useState(null);
+
+    const username = localStorage.getItem("username");
 
     const loadPlayers = async () => {
 
@@ -31,19 +36,29 @@ function NominatePlayer() {
         }
     };
 
+    const loadCurrentAuction = async () => {
+        try {
+            const response = await fetch(`${API_URL}/api/auction/current`);
+            setCurrentAuction(await response.json());
+        } catch (error) {
+            console.error(error);
+        }
+    };
+
     useEffect(() => {
 
         loadPlayers();
+        loadCurrentAuction();
 
     }, []);
 
 
 
 
-    const nominatePlayer = async () => {
+    const nominatePlayer = async (selectedPlayerName = selectedPlayer) => {
 
         const player = players.find(
-            (p) => p.name === selectedPlayer
+            (p) => p.name === selectedPlayerName
         );
 
         if (!player) {
@@ -56,6 +71,8 @@ function NominatePlayer() {
         }
 
         try {
+            setSelectedPlayer(selectedPlayerName);
+            setIsNominating(true);
 
             const response = await fetch(
 
@@ -77,7 +94,7 @@ function NominatePlayer() {
 
                         seed: player.seed,
 
-                        captainName: localStorage.getItem("username")
+                        captainName: username
 
                     }),
 
@@ -91,10 +108,19 @@ function NominatePlayer() {
             setMessage(result);
 
             if (result === "Player nominated") {
+                const nominatedBy = localStorage.getItem("username") || "Unknown captain";
+                setNominationAnnouncement({
+                    playerName: player.name,
+                    basePrice: player.basePrice,
+                    nominatedBy
+                });
+                navigator.vibrate?.([120, 80, 220]);
+                window.setTimeout(() => setNominationAnnouncement(null), 4500);
 
                 setSelectedPlayer("");
 
                 await loadPlayers();
+                await loadCurrentAuction();
             }
 
         } catch (error) {
@@ -105,6 +131,29 @@ function NominatePlayer() {
                 "Unable to nominate player."
             );
 
+        } finally {
+            setIsNominating(false);
+
+        }
+    };
+
+    const cancelNomination = async () => {
+        if (!window.confirm(`Cancel your nomination for ${currentAuction.currentPlayer}?`)) {
+            return;
+        }
+
+        try {
+            const response = await fetch(
+                `${API_URL}/api/auction/cancel-nomination?captainName=${encodeURIComponent(username)}`,
+                { method: "POST" }
+            );
+
+            setMessage(await response.text());
+            await loadCurrentAuction();
+            await loadPlayers();
+        } catch (error) {
+            console.error(error);
+            setMessage("Unable to cancel nomination.");
         }
     };
 
@@ -119,7 +168,22 @@ function NominatePlayer() {
 
             <div className="form-card">
 
-                <h2>Select Player</h2>
+                <div className="nomination-board-heading">
+                    <div>
+                        <p className="nomination-eyebrow">LIVE NOMINATION BOARD</p>
+                        <h2>Select Player</h2>
+                    </div>
+                    <div className="nomination-count">
+                        <strong>{players.length}</strong>
+                        <span>available</span>
+                    </div>
+                </div>
+
+                <div className="nomination-instruction">
+                    <span>01</span>
+                    <p>Choose a player card to nominate them instantly into the auction.</p>
+                    <span className="nomination-pulse" />
+                </div>
 
                 <form
                     onSubmit={(event) => {
@@ -145,10 +209,24 @@ function NominatePlayer() {
                                         key={player.name}
                                         className={`player-card ${selectedPlayer === player.name
                                             ? "selected"
-                                            : ""
-                                            }`}
-                                        onClick={() => setSelectedPlayer(player.name)}
+                                            : ""} ${isNominating && selectedPlayer === player.name
+                                                ? "nominating"
+                                                : ""}`}
+                                        role="button"
+                                        tabIndex={0}
+                                        aria-label={`Nominate ${player.name} for base price ${player.basePrice}`}
+                                        onKeyDown={(event) => {
+                                            if (event.key === "Enter" || event.key === " ") {
+                                                event.preventDefault();
+                                                nominatePlayer(player.name);
+                                            }
+                                        }}
+                                        onClick={() => nominatePlayer(player.name)}
                                     >
+
+                                        <span className="player-card-index">
+                                            {String(players.indexOf(player) + 1).padStart(2, "0")}
+                                        </span>
 
                                         <div className="player-name">
 
@@ -161,11 +239,11 @@ function NominatePlayer() {
                                             {player.seed || "Unseeded"} · Base ₹{player.basePrice}
 
                                         </div>
-                                        {selectedPlayer === player.name && (
+                                        {isNominating && selectedPlayer === player.name && (
 
                                             <div className="selected-tag">
 
-                                                ✅ Selected
+                                                ◌ NOMINATING...
 
                                             </div>
 
@@ -190,14 +268,18 @@ function NominatePlayer() {
 
                         )}
 
-                    </div>
+                        {nominationAnnouncement && (
+                            <div className="nomination-announcement" role="status">
+                                <div className="nomination-announcement-title">
+                                    ✅ PLAYER NOMINATED
+                                </div>
+                                <strong>{nominationAnnouncement.playerName}</strong>
+                                <span>Base Price: ₹{nominationAnnouncement.basePrice}</span>
+                                <span>Nominated by: {nominationAnnouncement.nominatedBy}</span>
+                            </div>
+                        )}
 
-                    <button
-                        className="button"
-                        type="submit"
-                    >
-                        NOMINATE
-                    </button>
+                    </div>
 
                 </form>
 
@@ -218,6 +300,22 @@ function NominatePlayer() {
                     </div>
 
                 )}
+
+                {currentAuction?.currentPlayer &&
+                    currentAuction.nominatedBy?.toLowerCase() === username?.toLowerCase() && (
+
+                        <div style={{ marginTop: "18px" }}>
+                            <button
+                                className="button-secondary"
+                                type="button"
+                                onClick={cancelNomination}
+                                disabled={isNominating}
+                            >
+                                ❌ CANCEL MY NOMINATION
+                            </button>
+                        </div>
+
+                    )}
 
             </div>
 

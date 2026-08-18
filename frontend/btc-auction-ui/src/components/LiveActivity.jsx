@@ -64,17 +64,6 @@ function LiveActivity() {
                     if (overlayEvents[latest.eventType]) {
                         switch (latest.eventType) {
 
-                            case "JOKER_USED":
-
-                                if ("vibrate" in navigator) {
-
-                                    navigator.vibrate([300, 150, 300]);
-
-                                }
-                                new Audio("/sounds/joker.mp3").play().catch(() => { });
-
-                                break;
-
                             case "BOUNTY":
 
                                 navigator.vibrate?.(200);
@@ -126,19 +115,27 @@ function LiveActivity() {
     };
 
     const eventNames = {
-        JOKER_USED: "🃏 Joker Activated",
         RTM_CLAIMED: "🔄 RTM Claimed",
+        RTM_TRIGGERED: "🔄 RTM Pressed",
+        RTM_ACCEPTED: "✅ RTM Accepted",
+        RTM_DECLINED: "❌ RTM Declined",
+        PLAYER_SOLD: "🏆 Player Sold",
         LAST_STRIKE: "⚡ Last Strike",
         PLAYER_VETOED: "❌ Nomination Vetoed",
         BOUNTY: "🎁 Bounty",
-        GOLDEN_BOUNTY: "🏆 Golden Bounty"
+        GOLDEN_BOUNTY: "🏆 Golden Bounty",
+        SECRET_TARGET_SETTLED: "🎯 Secret Target",
+        REVERSE_TARGET_TRIGGERED: "🛡️ Reverse Target"
     };
 
     const overlayEvents = {
-        JOKER_USED: true,
         BOUNTY: true,
         GOLDEN_BOUNTY: true,
         RTM_CLAIMED: true,
+        RTM_TRIGGERED: true,
+        RTM_ACCEPTED: true,
+        RTM_DECLINED: true,
+        PLAYER_SOLD: true,
         LAST_STRIKE: true,
         PLAYER_VETOED: true
     };
@@ -185,7 +182,7 @@ function LiveActivity() {
                             <div>
                                 {event.playerName}
                                 {event.captainName && ` → ${event.captainName}`}
-                                {event.amount > 0 && ` ₹${event.amount}`}
+                                {event.amount !== 0 && ` Final ₹${event.amount > 0 ? "+" : ""}${event.amount}`}
                             </div>
 
                             <br />
