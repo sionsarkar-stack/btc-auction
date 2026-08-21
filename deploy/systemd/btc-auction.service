@@ -1,0 +1,22 @@
+[Unit]
+Description=BTC Auction Spring Boot backend
+After=network.target
+
+[Service]
+Type=simple
+User=btc-auction
+Group=btc-auction
+WorkingDirectory=/opt/btc-auction
+EnvironmentFile=/etc/btc-auction/btc-auction.env
+ExecStart=/usr/bin/java -jar /opt/btc-auction/btc-auction.jar
+SuccessExitStatus=143
+Restart=on-failure
+RestartSec=5
+
+ProtectSystem=full
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/opt/btc-auction/data
+
+[Install]
+WantedBy=multi-user.target

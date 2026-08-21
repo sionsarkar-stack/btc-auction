@@ -1977,6 +1977,17 @@ body {
 }
 
 @media (max-width: 720px) {
+    .event-overlay {
+        align-items: flex-start;
+        padding: max(14px, env(safe-area-inset-top)) 10px 20px;
+    }
+
+    .event-card {
+        width: 100%;
+        max-width: 520px;
+        padding: 30px 18px;
+    }
+
     .app-container {
         width: min(100% - 20px, 1500px);
         padding-top: 12px;
