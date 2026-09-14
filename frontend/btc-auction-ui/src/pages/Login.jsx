@@ -25,6 +25,7 @@ function Login({ onLogin }) {
                         "Content-Type":
                             "application/json"
                     },
+                    credentials: "include",
                     body: JSON.stringify({
                         username,
                         password
@@ -73,11 +74,11 @@ function Login({ onLogin }) {
             <section className="login-visual">
                 <div className="login-visual-copy">
                     <p className="login-eyebrow">BELGHARIA TURF CRICKET</p>
-                    <h1>BTC SEASON 11<br />AUCTION</h1>
+                    <h1>BTC SEASON 12<br />AUCTION</h1>
                     <p className="login-tagline">Four teams. One champion.<br />The bidding starts here.</p>
                 </div>
                 <img src={heroImage} alt="BTC auction visual" className="login-visual-art" />
-                <span className="login-season-mark">11</span>
+                <span className="login-season-mark">12</span>
             </section>
 
             <section className="login-panel">
@@ -100,11 +101,12 @@ function Login({ onLogin }) {
                 }}>
                     <div className="form-field">
 
-                        <label>
+                        <label htmlFor="username">
                             Username
                         </label>
 
                         <input
+                            id="username"
                             className="input"
                             value={username}
                             autoComplete="username"
@@ -115,11 +117,12 @@ function Login({ onLogin }) {
 
                     <div className="form-field">
 
-                        <label>
+                        <label htmlFor="password">
                             Password
                         </label>
 
                         <input
+                            id="password"
                             type="password"
                             className="input"
                             value={password}
@@ -142,7 +145,7 @@ function Login({ onLogin }) {
 
                 )}
 
-                <p className="login-footer">Authorized access · BTC Season 11</p>
+                <p className="login-footer">Authorized access · BTC Season 12</p>
             </section>
 
         </div>

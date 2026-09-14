@@ -30,6 +30,8 @@ public class PlayerEntity {
 
     private String team;
 
+    private Boolean reAuctioned = false;
+
     public PlayerEntity() {
     }
 
@@ -103,5 +105,13 @@ public class PlayerEntity {
 
     public void setTeam(String team) {
         this.team = team;
+    }
+
+    public boolean isReAuctioned() {
+        return Boolean.TRUE.equals(reAuctioned);
+    }
+
+    public void setReAuctioned(boolean reAuctioned) {
+        this.reAuctioned = reAuctioned;
     }
 }

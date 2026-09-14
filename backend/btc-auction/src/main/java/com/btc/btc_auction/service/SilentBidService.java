@@ -41,6 +41,8 @@ public class SilentBidService {
     public void startRound(
             String playerName) {
 
+        auctionService.activateSilentAuctionLock(playerName);
+
         repository.deleteAll();
 
         teamService.getAllTeams()
@@ -75,6 +77,10 @@ public class SilentBidService {
 
         if (amount <= 0) {
             return "Bid must be greater than zero.";
+        }
+
+        if (!teamService.isValidBidIncrement(amount)) {
+            return "Bid must be a multiple of 50 up to ₹1000, then a multiple of 100.";
         }
 
         SilentBidEntity bid = repository.findByPlayerNameAndCaptainName(

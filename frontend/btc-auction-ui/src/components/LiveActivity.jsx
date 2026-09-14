@@ -1,11 +1,38 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useEffectEvent, useRef, useState } from "react";
 import EventOverlay from "./EventOverlay";
 import { Client } from "@stomp/stompjs";
 import SockJS from "sockjs-client";
 
 import { API_URL } from "../config";
 
-function LiveActivity() {
+const eventNames = {
+    RTM_CLAIMED: "🔄 RTM Claimed",
+    RTM_TRIGGERED: "🔄 RTM Pressed",
+    RTM_ACCEPTED: "✅ RTM Accepted",
+    RTM_DECLINED: "❌ RTM Declined",
+    PLAYER_SOLD: "🏆 Player Sold",
+    STARTING_BID_SUBMITTED: "🎯 Starting Bid Submitted",
+    STARTING_BID_WINNER: "🏆 Highest Starting Bid",
+    VALUE_BET_REWARD: "💰 Value Bet Winner",
+    PROTECTION_REVEALED: "🛡️ Protection Revealed",
+    SILENT_BID_SOLD: "🤐 Silent Auction Winner",
+    WILDCARD_TRIGGERED: "🃏 Wildcard Triggered",
+};
+
+const overlayEvents = {
+    RTM_CLAIMED: true,
+    RTM_TRIGGERED: true,
+    RTM_ACCEPTED: true,
+    RTM_DECLINED: true,
+    PLAYER_SOLD: true,
+    STARTING_BID_WINNER: true,
+    VALUE_BET_REWARD: true,
+    PROTECTION_REVEALED: true,
+    SILENT_BID_SOLD: true,
+    WILDCARD_TRIGGERED: true
+};
+
+function LiveActivity({ showActivity = true }) {
 
     const [events, setEvents] = useState([]);
 
@@ -15,43 +42,25 @@ function LiveActivity() {
 
     const overlayTimer = useRef(null);
 
-    useEffect(() => {
+    const isActive = useRef(false);
 
-        loadEvents();
+    const eventRequestControllers = useRef(new Set());
 
-        const client = new Client({
-            webSocketFactory: () =>
-                new SockJS(`${API_URL}/ws`),
-            reconnectDelay: 5000
-        });
+    const loadEvents = useEffectEvent(() => {
+        if (!isActive.current) {
+            return;
+        }
 
-        client.onConnect = () => {
+        const controller = new AbortController();
 
-            client.subscribe("/topic/auction", () => {
+        eventRequestControllers.current.add(controller);
 
-                loadEvents();
-
-            });
-
-        };
-
-        client.activate();
-
-        return () => {
-
-            clearTimeout(overlayTimer.current);
-
-            client.deactivate();
-
-        };
-
-    }, []);
-
-    const loadEvents = () => {
-
-        fetch(`${API_URL}/api/events`)
+        fetch(`${API_URL}/api/events`, { signal: controller.signal })
             .then(response => response.json())
             .then(data => {
+                if (!isActive.current) {
+                    return;
+                }
 
                 const latest =
                     data.length > 0
@@ -63,20 +72,6 @@ function LiveActivity() {
 
                     if (overlayEvents[latest.eventType]) {
                         switch (latest.eventType) {
-
-                            case "BOUNTY":
-
-                                navigator.vibrate?.(200);
-                                new Audio("/sounds/bounty.mp3").play().catch(() => { });
-
-                                break;
-
-                            case "GOLDEN_BOUNTY":
-
-                                navigator.vibrate?.([200, 100, 200]);
-                                new Audio("/sounds/last-strike.mp3").play().catch(() => { });
-
-                                break;
 
                             case "RTM_CLAIMED":
 
@@ -109,36 +104,64 @@ function LiveActivity() {
                 );
 
             })
-            .catch(error =>
-                console.error(error));
+            .catch(error => {
+                if (isActive.current && error.name !== "AbortError") {
+                    console.error(error);
+                }
+            })
+            .finally(() => {
+                eventRequestControllers.current.delete(controller);
+            });
 
-    };
+    });
 
-    const eventNames = {
-        RTM_CLAIMED: "🔄 RTM Claimed",
-        RTM_TRIGGERED: "🔄 RTM Pressed",
-        RTM_ACCEPTED: "✅ RTM Accepted",
-        RTM_DECLINED: "❌ RTM Declined",
-        PLAYER_SOLD: "🏆 Player Sold",
-        LAST_STRIKE: "⚡ Last Strike",
-        PLAYER_VETOED: "❌ Nomination Vetoed",
-        BOUNTY: "🎁 Bounty",
-        GOLDEN_BOUNTY: "🏆 Golden Bounty",
-        SECRET_TARGET_SETTLED: "🎯 Secret Target",
-        REVERSE_TARGET_TRIGGERED: "🛡️ Reverse Target"
-    };
+    useEffect(() => {
 
-    const overlayEvents = {
-        BOUNTY: true,
-        GOLDEN_BOUNTY: true,
-        RTM_CLAIMED: true,
-        RTM_TRIGGERED: true,
-        RTM_ACCEPTED: true,
-        RTM_DECLINED: true,
-        PLAYER_SOLD: true,
-        LAST_STRIKE: true,
-        PLAYER_VETOED: true
-    };
+        isActive.current = true;
+
+        const stopLiveUpdates = () => {
+
+            isActive.current = false;
+
+            eventRequestControllers.current.forEach(controller => controller.abort());
+
+            eventRequestControllers.current.clear();
+
+        };
+
+        window.addEventListener("pagehide", stopLiveUpdates);
+
+        loadEvents();
+
+        const client = new Client({
+            webSocketFactory: () =>
+                new SockJS(`${API_URL}/ws`),
+            reconnectDelay: 5000
+        });
+
+        client.onConnect = () => {
+
+            client.subscribe("/topic/auction", () => {
+
+                loadEvents();
+
+            });
+
+        };
+
+        client.activate();
+
+        return () => {
+
+            window.removeEventListener("pagehide", stopLiveUpdates);
+            stopLiveUpdates();
+            clearTimeout(overlayTimer.current);
+
+            void client.deactivate({ force: true });
+
+        };
+
+    }, []);
 
     return (
 
@@ -146,7 +169,7 @@ function LiveActivity() {
 
             <EventOverlay event={overlayEvent} />
 
-            <div className="section-card">
+            {showActivity && <div className="section-card">
 
                 <h2>
 
@@ -199,7 +222,7 @@ function LiveActivity() {
 
                 )}
 
-            </div>
+            </div>}
 
         </>
 

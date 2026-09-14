@@ -4,7 +4,7 @@ function EventOverlay({ event }) {
 
     let icon = "📣";
     let title = "AUCTION UPDATE";
-    let message = "";
+    let message;
     let captain = event?.captainName
         ? `🔥 ${event.captainName.toUpperCase()} 🔥`
         : "";
@@ -20,18 +20,47 @@ function EventOverlay({ event }) {
 
             break;
 
-        case "PLAYER_VETOED":
-
-            icon = "🚫";
-            title = "VETO";
-            message = "NOMINATION CANCELLED";
-            break;
-
         case "PLAYER_SOLD":
 
             icon = "🏆";
             title = "PLAYER SOLD";
             message = `${event.playerName} · FINAL ₹${event.amount}${event.details ? ` · ${event.details}` : ""}`;
+            break;
+
+        case "PROTECTION_REVEALED":
+
+            icon = "🛡️";
+            title = "PROTECTION REVEALED";
+            message = `${event.playerName} · ${event.details || "Protection reward settled"}`;
+            break;
+
+        case "STARTING_BID_WINNER":
+
+            icon = "🎯";
+            title = "HIGHEST STARTING BID";
+            message = `${event.captainName} · ₹${event.amount}`;
+            break;
+
+        case "VALUE_BET_REWARD":
+
+            icon = "💰";
+            title = "VALUE BET WINNER";
+            message = `${event.captainName} · +₹${event.amount}`;
+            break;
+
+        case "VALUE_BET":
+
+            icon = "💰";
+            title = "VALUE BET ENABLED";
+            message = `${event.playerName || "Next player"} · Submit your prediction`;
+            break;
+
+        case "WILDCARD_TRIGGERED":
+
+            icon = "🃏";
+            title = "WILDCARD TRIGGERED";
+            captain = `👑 ${event.captainName?.toUpperCase() || "CAPTAIN"} 👑`;
+            message = `${event.playerName} returned to the nomination lot. Admin, spin the wheel again.`;
             break;
 
         case "RTM_CLAIMED":
@@ -56,27 +85,6 @@ function EventOverlay({ event }) {
             message = `Player sold at upgraded price ₹${event.amount}`;
             break;
 
-        case "BOUNTY":
-
-            icon = "🎁";
-            title = "BOUNTY";
-            message = "BONUS AWARDED";
-            break;
-
-        case "GOLDEN_BOUNTY":
-
-            icon = "🏆";
-            title = "GOLDEN BOUNTY";
-            message = "MEGA BONUS AWARDED";
-            break;
-
-        case "LAST_STRIKE":
-
-            icon = "⚡";
-            title = "LAST STRIKE";
-            message = "AUCTION REOPENED AT +₹100";
-            break;
-
         default:
             message = event?.details || event?.eventType || "";
 
@@ -98,7 +106,7 @@ function EventOverlay({ event }) {
 
         return () => clearTimeout(flashTimeout);
 
-    }, []);
+    }, [event]);
 
     // Play sound + vibrate
     useEffect(() => {
@@ -114,14 +122,6 @@ function EventOverlay({ event }) {
             case "RTM_ACCEPTED":
             case "RTM_DECLINED":
                 sound = "/sounds/veto.mp3";
-                break;
-
-            case "BOUNTY":
-                sound = "/sounds/bid-block.mp3";
-                break;
-
-            case "GOLDEN_BOUNTY":
-                sound = "/sounds/last-strike.mp3";
                 break;
 
             case "PLAYER_SOLD":

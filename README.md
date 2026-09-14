@@ -1,14 +1,13 @@
-# 🏏 BTC Auction Manager – Season 11
+# 🏏 BTC Auction Manager – Season 12
 
-A web-based cricket auction management platform built for **Belgharia Turf Cricket – Season 11**.
+A web-based cricket auction management platform built for **Belgharia Turf Cricket – Season 12**.
 
----
 
 # ✨ Features
 
 ## Auction Management
 
-- Player Nomination
+- Spinning Wheel Player Selection
 - Live Auction Dashboard
 - Live Bid Tracking
 - Call SOLD Workflow
@@ -33,8 +32,7 @@ A web-based cricket auction management platform built for **Belgharia Turf Crick
 - 10-player squads including each captain (nine auction purchases per team)
 - Nominator must open at the announced player base price
 - Bid increments: ₹50 through ₹1,000; ₹100 thereafter
-- Dynamic max bid: `purse − (vacant slots × ₹100)`
-- Four normal bounty players (+₹100) and two golden bounty players (+₹200)
+- Dynamic max bid: `total points − ((players to buy − 2) × ₹100)`
 - Two secret targets per captain: +₹400 for both, +₹50 net for one, −₹200 for neither
 - One reverse target per captain: selected rival's purchase deducts ₹200 from that rival's purse
 - RTM+ challenge flow after SOLD
@@ -49,7 +47,6 @@ A web-based cricket auction management platform built for **Belgharia Turf Crick
 - Joker Assignment
 - Silent Bid Manager
 
----
 
 # 🛠 Tech Stack
 
@@ -67,9 +64,8 @@ A web-based cricket auction management platform built for **Belgharia Turf Crick
 - Maven
 - Spring Data JPA
 
----
 
-# 🏆 Season 11 Captains
+# 🏆 Season 12 Captains
 
 | Captain | Starting Purse |
 |---------|---------------:|
@@ -78,7 +74,6 @@ A web-based cricket auction management platform built for **Belgharia Turf Crick
 | Anirban | 5300 |
 | Joy | 5300 |
 
----
 
 # 📐 Auction Rules
 
@@ -88,9 +83,8 @@ A web-based cricket auction management platform built for **Belgharia Turf Crick
 
 ## Max Bid Formula
 
-Remaining Purse − (100 × remaining vacant slots after this purchase)
+Total Points − ((Players to Buy − 2) × ₹100)
 
----
 
 # ▶ Running Locally
 
@@ -119,7 +113,17 @@ Runs on:
 http://localhost:5173
 ```
 
----
+## Browser E2E Tests
+
+From `frontend/btc-auction-ui`:
+
+```bash
+npx playwright install chromium
+npm run test:e2e
+```
+
+The test command starts the frontend and an isolated in-memory H2 backend profile automatically.
+
 
 # 🚀 Current Status
 
@@ -131,8 +135,6 @@ http://localhost:5173
 - Joker System
 - Last Strike
 - Call SOLD
-- Bounty
-- Golden Bounty
 - Forbidden Pick
 - Trusted Captain
 - Tribunal Vote
@@ -145,7 +147,6 @@ http://localhost:5173
 - Squad Tracking
 - Max Bid Calculation
 
----
 
 # 🔮 Future Enhancements
 

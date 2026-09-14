@@ -1,18 +1,20 @@
 package com.btc.btc_auction.entity;
 
-import jakarta.persistence.*;
+import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
 
 @Entity
-@Table(name = "reverse_targets")
-public class ReverseTargetEntity {
+@Table(name = "protection_players")
+public class ProtectionPlayerEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
     private String captainName;
-
-    private String rivalCaptain;
 
     private String playerName;
 
@@ -26,14 +28,6 @@ public class ReverseTargetEntity {
 
     public void setCaptainName(String captainName) {
         this.captainName = captainName;
-    }
-
-    public String getRivalCaptain() {
-        return rivalCaptain;
-    }
-
-    public void setRivalCaptain(String rivalCaptain) {
-        this.rivalCaptain = rivalCaptain;
     }
 
     public String getPlayerName() {

@@ -7,22 +7,29 @@ public class Auction {
     private int currentBid;
     private String leader;
     private int basePrice;
-    private String nominatedBy;
+
+    public Auction(String currentPlayer,
+            String seed,
+            int currentBid,
+            String leader,
+            int basePrice) {
+
+        this.currentPlayer = currentPlayer;
+        this.seed = seed;
+        this.currentBid = currentBid;
+        this.leader = leader;
+        this.basePrice = basePrice;
+
+    }
 
     public Auction(String currentPlayer,
             String seed,
             int currentBid,
             String leader,
             int basePrice,
-            String nominatedBy) {
+            String ignored) {
 
-        this.currentPlayer = currentPlayer;
-        this.seed = seed;
-        this.currentBid = currentBid;
-        this.leader = leader;
-        this.nominatedBy = nominatedBy;
-        this.basePrice = basePrice;
-
+        this(currentPlayer, seed, currentBid, leader, basePrice);
     }
 
     public String getCurrentPlayer() {
@@ -43,10 +50,6 @@ public class Auction {
 
     public int getBasePrice() {
         return basePrice;
-    }
-
-    public String getNominatedBy() {
-        return nominatedBy;
     }
 
     public void setCurrentPlayer(
@@ -84,10 +87,4 @@ public class Auction {
 
     }
 
-    public void setNominatedBy(
-            String nominatedBy) {
-
-        this.nominatedBy = nominatedBy;
-
-    }
 }

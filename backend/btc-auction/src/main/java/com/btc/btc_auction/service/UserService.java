@@ -6,6 +6,8 @@ import com.btc.btc_auction.repository.UserRepository;
 import org.springframework.lang.NonNull;
 import org.springframework.stereotype.Service;
 
+import java.util.List;
+
 @Service
 public class UserService {
 
@@ -32,5 +34,19 @@ public class UserService {
             @NonNull UserEntity user) {
 
         userRepository.save(user);
+    }
+
+    public List<UserEntity> getCaptains() {
+        return userRepository.findAll().stream()
+                .filter(user -> "CAPTAIN".equalsIgnoreCase(user.getRole()))
+                .toList();
+    }
+
+    public UserEntity getUser(String username) {
+        return userRepository.findByUsername(username).orElse(null);
+    }
+
+    public void deleteUser(String username) {
+        userRepository.findByUsername(username).ifPresent(userRepository::delete);
     }
 }

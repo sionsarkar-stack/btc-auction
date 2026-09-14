@@ -6,7 +6,6 @@ function ManualSale() {
 
     const [players, setPlayers] = useState([]);
     const [teams, setTeams] = useState([]);
-    const [currentAuction, setCurrentAuction] = useState(null);
 
     const [playerName, setPlayerName] = useState("");
     const [newCaptain, setNewCaptain] = useState("");
@@ -24,38 +23,7 @@ function ManualSale() {
             .then(response => response.json())
             .then(data => setTeams(data));
 
-        fetch(`${API_URL}/api/auction/current`)
-            .then(response => response.json())
-            .then(data => setCurrentAuction(data));
-
     }, []);
-
-    const cancelSelectedBid = async () => {
-        if (!playerName) {
-            setMessage("Select a player first.");
-            return;
-        }
-
-        if (currentAuction?.currentPlayer?.toLowerCase() !== playerName.toLowerCase()) {
-            setMessage("Selected player is not the active bid or nomination.");
-            return;
-        }
-
-        if (!window.confirm(`Cancel the active bid/nomination for ${playerName}?`)) {
-            return;
-        }
-
-        const response = await fetch(
-            `${API_URL}/api/auction/veto-player?playerName=${encodeURIComponent(playerName)}`,
-            { method: "POST" }
-        );
-
-        const result = await response.text();
-        setMessage(result);
-
-        const currentAuctionResponse = await fetch(`${API_URL}/api/auction/current`);
-        setCurrentAuction(await currentAuctionResponse.json());
-    };
 
     const applyManualSale = async () => {
 
@@ -78,6 +46,24 @@ function ManualSale() {
         const result = await response.text();
 
         setMessage(result);
+    };
+
+    const cancelSale = async () => {
+        if (!playerName || !window.confirm(`Cancel the sale for ${playerName}?`)) {
+            return;
+        }
+
+        const response = await fetch(`${API_URL}/api/auction/cancel-sale`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ playerName })
+        });
+        setMessage(await response.text());
+        if (response.ok) {
+            const refreshed = await fetch(`${API_URL}/api/players`);
+            setPlayers(await refreshed.json());
+            setPlayerName("");
+        }
     };
 
     return (
@@ -159,6 +145,7 @@ function ManualSale() {
                 <button
                     className="button"
                     onClick={applyManualSale}
+                    disabled={!playerName || !newCaptain || newPrice === ""}
                 >
                     APPLY ADJUSTMENT
                 </button>
@@ -166,11 +153,11 @@ function ManualSale() {
                 <button
                     className="button-secondary"
                     type="button"
-                    onClick={cancelSelectedBid}
-                    disabled={!playerName}
+                    onClick={cancelSale}
+                    disabled={!playerName || !players.find(player => player.name === playerName)?.sold}
                     style={{ marginTop: "12px" }}
                 >
-                    ❌ CANCEL SELECTED ACTIVE BID
+                    CANCEL SELECTED SALE
                 </button>
 
                 {message && (

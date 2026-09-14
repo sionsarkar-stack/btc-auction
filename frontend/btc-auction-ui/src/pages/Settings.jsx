@@ -10,27 +10,6 @@ function Settings() {
     const [message, setMessage] =
         useState("");
 
-    const [players, setPlayers] =
-        useState([]);
-
-    const [playerOne, setPlayerOne] =
-        useState("");
-
-    const [playerTwo, setPlayerTwo] =
-        useState("");
-
-    const [playerThree, setPlayerThree] =
-        useState("");
-
-    const [playerFour, setPlayerFour] =
-        useState("");
-
-    const [goldenPlayerOne, setGoldenPlayerOne] =
-        useState("");
-
-    const [goldenPlayerTwo, setGoldenPlayerTwo] =
-        useState("");
-
     const resetAuction = async () => {
 
         if (
@@ -63,42 +42,6 @@ function Settings() {
             .then(res => res.json())
             .then(data => setConfig(data));
 
-        fetch(
-            `${API_URL}/api/players`
-        )
-            .then(res => res.json())
-            .then(data => setPlayers(data));
-
-        fetch(
-            `${API_URL}/api/bounty`
-        )
-            .then(res => res.json())
-            .then(data => {
-
-                if (data.length > 0) {
-
-                    setPlayerOne(
-                        data[0]?.playerName || ""
-                    );
-
-                    setPlayerTwo(
-                        data[1]?.playerName || ""
-                    );
-
-                    setPlayerThree(
-                        data[2]?.playerName || ""
-                    );
-
-                    setPlayerFour(
-                        data[3]?.playerName || ""
-                    );
-
-                    const goldenPlayers = data.filter(p => p.golden);
-                    setGoldenPlayerOne(goldenPlayers[0]?.playerName || "");
-                    setGoldenPlayerTwo(goldenPlayers[1]?.playerName || "");
-                }
-            });
-
     }, []);
 
     const saveConfig = async () => {
@@ -124,38 +67,6 @@ function Settings() {
         }
     };
 
-    const saveBountyPlayers =
-        async () => {
-
-            const response =
-                await fetch(
-                    `${API_URL}/api/bounty`,
-                    {
-                        method: "POST",
-                        headers: {
-                            "Content-Type":
-                                "application/json"
-                        },
-                        body:
-                            JSON.stringify({
-                                playerOne,
-                                playerTwo,
-                                playerThree,
-                                playerFour,
-                                goldenPlayerOne,
-                                goldenPlayerTwo
-                            })
-                    }
-                );
-
-            if (response.ok) {
-
-                setMessage(
-                    "Bounty Players Saved"
-                );
-            }
-        };
-
     if (!config) {
         return <div>Loading...</div>;
     }
@@ -168,34 +79,17 @@ function Settings() {
                 Auction Settings
             </h2>
 
+            <h3>Protection Rules</h3>
+
             <div className="form-field">
-
-                <label>
-                    Season Name
-                </label>
-
-                <input
-                    className="input"
-                    value={config.seasonName}
-                    onChange={(e) =>
-                        setConfig({
-                            ...config,
-                            seasonName:
-                                e.target.value
-                        })
-                    }
-                />
-
+                <label>Season Name</label>
+                <input className="input" value={config.seasonName || ""}
+                    onChange={event => setConfig({ ...config, seasonName: event.target.value })} />
             </div>
 
             {[
-                "squadSize",
-                "targetBonus",
-                "targetCompletionBonus",
-                "targetMissPenalty",
-                "bountyBonus",
-                "goldenBountyBonus",
-                "stealPenalty"
+                "protectionBonus",
+                "protectionPenalty"
             ].map(field => (
 
                 <div
@@ -204,7 +98,9 @@ function Settings() {
                 >
 
                     <label>
-                        {field}
+                        {field === "protectionBonus"
+                            ? "Protection Bonus (points)"
+                            : "Protection Penalty (points)"}
                     </label>
 
                     <input
@@ -240,167 +136,7 @@ function Settings() {
                 Reset Auction
             </button>
 
-            <hr
-                style={{
-                    marginTop: "30px",
-                    marginBottom: "30px"
-                }}
-            />
-
-            <h2>
-                Bounty Players
-            </h2>
-
-            {[
-
-                {
-                    label:
-                        "Bounty Player 1",
-                    value:
-                        playerOne,
-                    setter:
-                        setPlayerOne
-                },
-
-                {
-                    label:
-                        "Bounty Player 2",
-                    value:
-                        playerTwo,
-                    setter:
-                        setPlayerTwo
-                },
-
-                {
-                    label:
-                        "Bounty Player 3",
-                    value:
-                        playerThree,
-                    setter:
-                        setPlayerThree
-                },
-
-                {
-                    label:
-                        "Bounty Player 4",
-                    value:
-                        playerFour,
-                    setter:
-                        setPlayerFour
-                }
-
-            ].map(item => (
-
-                <div
-                    key={item.label}
-                    className="form-field"
-                >
-
-                    <label>
-                        {item.label}
-                    </label>
-
-                    <select
-                        className="input"
-                        value={item.value}
-                        onChange={(e) =>
-                            item.setter(
-                                e.target.value
-                            )
-                        }
-                    >
-
-                        <option value="">
-                            Select Player
-                        </option>
-
-                        {players.map(
-                            player => (
-
-                                <option
-                                    key={
-                                        player.id
-                                    }
-                                    value={
-                                        player.name
-                                    }
-                                >
-                                    {
-                                        player.name
-                                    }
-                                </option>
-
-                            )
-                        )}
-
-                    </select>
-
-                </div>
-
-            ))}
-
-            <div className="form-field">
-
-                <label>
-                    Golden Bounty Player 1
-                </label>
-
-                <select
-                    className="input"
-                    value={goldenPlayerOne}
-                    onChange={(e) =>
-                        setGoldenPlayerOne(
-                            e.target.value
-                        )
-                    }
-                >
-
-                    <option value="">
-                        Select Golden Bounty
-                    </option>
-
-                    {players.map(player => (
-
-                        <option
-                            key={player.id}
-                            value={player.name}
-                        >
-                            {player.name}
-                        </option>
-
-                    ))}
-
-                </select>
-
-            </div>
-
-            <div className="form-field">
-
-                <label>Golden Bounty Player 2</label>
-
-                <select
-                    className="input"
-                    value={goldenPlayerTwo}
-                    onChange={(e) => setGoldenPlayerTwo(e.target.value)}
-                >
-                    <option value="">Select Golden Bounty</option>
-                    {players.map(player => (
-                        <option key={player.id} value={player.name}>
-                            {player.name}
-                        </option>
-                    ))}
-                </select>
-
-            </div>
-
-            <button
-                className="button"
-                onClick={
-                    saveBountyPlayers
-                }
-            >
-                Save Bounty Players
-            </button>
+            <hr style={{ marginTop: "30px", marginBottom: "30px" }} />
 
             {message && (
 

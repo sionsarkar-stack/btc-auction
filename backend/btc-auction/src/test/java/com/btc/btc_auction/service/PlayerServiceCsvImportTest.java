@@ -32,9 +32,9 @@ class PlayerServiceCsvImportTest {
     }
 
     @Test
+    @SuppressWarnings("null")
     void importCsv_handlesQuotedValuesAndInvalidBasePriceGracefully() throws Exception {
         when(playerRepository.findByName(anyString())).thenReturn(Optional.empty());
-        when(playerRepository.save(any(PlayerEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         String csv = """
                 name,seed,basePrice

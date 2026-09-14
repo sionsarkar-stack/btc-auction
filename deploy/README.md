@@ -1,17 +1,18 @@
 # Native Ubuntu Deployment
 
-This deployment serves the Vite build with Nginx and runs the Spring Boot backend with systemd. Nginx proxies `/api/` and `/ws/` to the backend, so the frontend can keep relative API URLs.
+This deployment serves the Vite build with Nginx and runs the Spring Boot backend with systemd. Nginx proxies `/api/` and `/ws/` to the backend, so the frontend can keep relative API URLs. These instructions target an Ubuntu 24.04 LTS EC2 instance; the backend requires Java 21.
 
 ## 1. Install packages
 
-On Ubuntu 22.04 or newer:
+On Ubuntu 24.04 LTS or newer:
 
 ```bash
 sudo apt update
-sudo apt install -y openjdk-17-jre nginx
+sudo apt install -y openjdk-21-jre-headless nginx
+java -version
 ```
 
-Build the backend with Maven on the build machine, then copy the jar to the server:
+The build machine needs JDK 21; the EC2 server only needs JRE 21. Build the backend, then copy the jar to the server:
 
 ```bash
 cd backend/btc-auction
@@ -80,7 +81,13 @@ sudo certbot --nginx -d auction.example.com
 
 ## 5. Firewall
 
-Allow only SSH from your administration IP and web traffic publicly:
+Configure the EC2 security group before connecting:
+
+- Allow inbound TCP `22` only from your administration IP.
+- Allow inbound TCP `80` and `443` from the public internet.
+- Do not add an inbound rule for TCP `8080`.
+
+Then allow the same traffic through the Ubuntu firewall:
 
 ```bash
 sudo ufw allow from YOUR_IP to any port 22 proto tcp

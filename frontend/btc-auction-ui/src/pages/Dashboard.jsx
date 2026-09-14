@@ -1,10 +1,19 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { Client } from "@stomp/stompjs";
 import SockJS from "sockjs-client";
 
 import { API_URL } from "../config";
 import LiveActivity from "../components/LiveActivity";
+import CasinoReel from "../components/CasinoReel";
 import { showToast } from "../services/toast";
+
+const RANDOM_EVENT_BANTER = {
+    MARKET_BOOM: "The price elevator has skipped the safety briefing.",
+    MARKET_CRASH: "The price has found a banana peel. Brace for the landing.",
+    RTM_LOCKDOWN: "The RTM gatekeeper has misplaced the key.",
+    SILENT_AUCTION: "Shhh. Even the calculator is whispering.",
+    VALUE_BET: "Dust off the crystal ball and trust your oddly specific hunch.",
+};
 
 function Dashboard() {
 
@@ -21,6 +30,33 @@ function Dashboard() {
     const [rtmBid, setRtmBid] =
         useState("");
 
+    const [silentBidActive, setSilentBidActive] =
+        useState(false);
+
+    const [silentRound, setSilentRound] =
+        useState(null);
+
+    const [allSilentBids, setAllSilentBids] =
+        useState([]);
+
+    const [silentBid, setSilentBid] =
+        useState("");
+
+    const [openingBid, setOpeningBid] =
+        useState("");
+
+    const [openingBidStatus, setOpeningBidStatus] =
+        useState(null);
+
+    const [liveBid, setLiveBid] =
+        useState("");
+
+    const [valueBetPrediction, setValueBetPrediction] =
+        useState("");
+
+    const [dashboardView, setDashboardView] =
+        useState("overview");
+
     const role =
         localStorage.getItem("role");
 
@@ -33,6 +69,9 @@ function Dashboard() {
     const isCaptain =
         role === "CAPTAIN";
 
+    const isViewer =
+        role === "VIEWER";
+
 
     const isRtmCaptain =
         rtm &&
@@ -41,10 +80,6 @@ function Dashboard() {
     const isOriginalCaptain =
         rtm &&
         rtm.originalCaptain === username;
-
-    const waitingForDecision =
-        rtm &&
-        rtm.status === "BID_SUBMITTED";
 
     const currentTeam =
         dashboard?.teams?.find(
@@ -64,7 +99,7 @@ function Dashboard() {
     const [players, setPlayers] =
         useState([]);
 
-    const [captains, setCaptains] =
+    const [, setCaptains] =
         useState([]);
 
     const [teamQuery, setTeamQuery] =
@@ -79,60 +114,13 @@ function Dashboard() {
     const [playerCategory, setPlayerCategory] =
         useState("ALL");
 
-    const [secretTargets, setSecretTargets] =
-        useState(null);
+    const [protectionPlayers, setProtectionPlayers] =
+        useState([]);
 
-    const [reverseTargets, setReverseTargets] =
-        useState(null);
+    const [newProtectionPlayer, setNewProtectionPlayer] =
+        useState("");
 
-    const [newSecretTargets, setNewSecretTargets] =
-        useState({ captainName: username, playerOne: "", playerTwo: "" });
-
-    const [newReverseTarget, setNewReverseTarget] =
-        useState({ captainName: username, rivalCaptain: "", playerName: "" });
-
-
-
-
-
-
-
-    useEffect(() => {
-
-        loadDashboard();
-
-        const client = new Client({
-            webSocketFactory: () =>
-                new SockJS(`${API_URL}/ws`),
-            reconnectDelay: 5000,
-        });
-
-        client.onConnect = () => {
-
-            client.subscribe(
-                "/topic/auction",
-                () => {
-
-                    loadDashboard();
-
-                }
-            );
-
-        };
-
-        client.activate();
-
-        return () => {
-
-            client.deactivate();
-
-        };
-
-    }, []);
-
-
-    const loadDashboard = () => {
-
+    const loadDashboard = useCallback(() => {
         fetch(`${API_URL}/api/dashboard`)
             .then(r => r.json())
             .then(setDashboard);
@@ -157,32 +145,101 @@ function Dashboard() {
             .then(setCaptains);
 
         if (isCaptain) {
-            fetch(`${API_URL}/api/secret-targets/${username}`)
-                .then(r => r.ok ? r.json() : null)
-                .then(setSecretTargets)
-                .catch(() => { });
-
-            fetch(`${API_URL}/api/reverse-target/${username}`)
-                .then(r => r.ok ? r.json() : null)
-                .then(setReverseTargets)
+            fetch(`${API_URL}/api/protection-players/${encodeURIComponent(username)}`)
+                .then(r => r.json())
+                .then(setProtectionPlayers)
                 .catch(() => { });
         }
 
         fetch(`${API_URL}/api/rtm/current`)
             .then(async r => {
-
                 if (!r.ok) {
-
                     setRtm(null);
-
                     return;
                 }
-
                 setRtm(await r.json());
-
             })
             .catch(() => setRtm(null));
 
+        fetch(`${API_URL}/api/silent-bid/active`)
+            .then(response => response.json())
+            .then(active => {
+                setSilentBidActive(active);
+                if (active) {
+                    fetch(`${API_URL}/api/silent-bid/all`)
+                        .then(r => r.json())
+                        .then(data => setAllSilentBids(data || []))
+                        .catch(() => setAllSilentBids([]));
+
+                    if (isCaptain) {
+                        return fetch(`${API_URL}/api/silent-bid/${encodeURIComponent(username)}`)
+                            .then(response => response.json())
+                            .then(setSilentRound);
+                    }
+                } else {
+                    setAllSilentBids([]);
+                }
+                setSilentRound(null);
+                return null;
+            })
+            .catch(() => {
+                setSilentBidActive(false);
+                setSilentRound(null);
+                setAllSilentBids([]);
+            });
+
+        fetch(`${API_URL}/api/auction/status`)
+            .then(response => response.json())
+            .then(status => {
+                if (isCaptain && status.auctionPhase === "BLIND_OPENING_BID") {
+                    return fetch(`${API_URL}/api/auction/current`)
+                        .then(response => response.json())
+                        .then(current => current?.currentPlayer
+                            ? fetch(`${API_URL}/api/auction/blind-opening-bid/${encodeURIComponent(current.currentPlayer)}/${encodeURIComponent(username)}`)
+                                .then(response => response.json())
+                                .then(setOpeningBidStatus)
+                            : setOpeningBidStatus(null));
+                }
+                setOpeningBidStatus(null);
+                return null;
+            })
+            .catch(() => setOpeningBidStatus(null));
+    }, [isCaptain, username]);
+
+    useEffect(() => {
+        loadDashboard();
+
+        const client = new Client({
+            webSocketFactory: () =>
+                new SockJS(`${API_URL}/ws`),
+            reconnectDelay: 5000,
+        });
+
+        client.onConnect = () => {
+            client.subscribe(
+                "/topic/auction",
+                () => {
+                    loadDashboard();
+                }
+            );
+        };
+
+        client.activate();
+
+        return () => {
+            client.deactivate();
+        };
+    }, [loadDashboard]);
+
+    const submitProtectionPlayer = async () => {
+        const response = await fetch(`${API_URL}/api/protection-players`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ captainName: username, playerName: newProtectionPlayer })
+        });
+        showToast(await response.text());
+        setNewProtectionPlayer("");
+        loadDashboard();
     };
 
     const claimRtm = async () => {
@@ -255,6 +312,33 @@ function Dashboard() {
 
     };
 
+    const submitLiveBid = async () => {
+        if (!liveBid || Number(liveBid) <= 0) return;
+        const response = await fetch(`${API_URL}/api/auction/update-current`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ captainName: username, currentBid: Number(liveBid) })
+        });
+        showToast(await response.text());
+        setLiveBid("");
+        loadDashboard();
+    };
+
+    const submitValueBet = async () => {
+        if (!valueBetPrediction || Number(valueBetPrediction) <= 0) return;
+        const response = await fetch(`${API_URL}/api/value-bet/submit`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                playerName: dashboard.currentAuction.currentPlayer,
+                captainName: username,
+                predictedPrice: Number(valueBetPrediction)
+            })
+        });
+        showToast(await response.text());
+        setValueBetPrediction("");
+    };
+
     const acceptRtm = async () => {
 
         const response = await fetch(
@@ -319,25 +403,58 @@ function Dashboard() {
 
     };
 
-    const submitSecretTargets = async () => {
-        const response = await fetch(`${API_URL}/api/secret-targets`, {
+    const submitSilentBid = async () => {
+        if (!silentRound || !silentBid || Number(silentBid) <= 0) return;
+        const response = await fetch(`${API_URL}/api/silent-bid/submit`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(newSecretTargets)
+            body: JSON.stringify({
+                playerName: silentRound.playerName,
+                captainName: username,
+                bidAmount: Number(silentBid)
+            })
         });
         const result = await response.text();
-        showToast(result);
+        const bidAccepted = result === "Bid submitted.";
+        showToast(result, bidAccepted ? "success" : "error");
+        if (bidAccepted) {
+            setSilentBid("");
+        }
         loadDashboard();
     };
 
-    const submitReverseTarget = async () => {
-        const response = await fetch(`${API_URL}/api/reverse-target`, {
+    const submitOpeningBid = async () => {
+        if (!openingBid || Number(openingBid) <= 0 || !dashboard.currentAuction.currentPlayer) return;
+        const response = await fetch(`${API_URL}/api/auction/blind-opening-bid/submit`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(newReverseTarget)
+            body: JSON.stringify({
+                playerName: dashboard.currentAuction.currentPlayer,
+                captainName: username,
+                bidAmount: Number(openingBid)
+            })
         });
-        const result = await response.text();
-        showToast(result);
+        showToast(await response.text());
+        setOpeningBid("");
+        loadDashboard();
+    };
+
+    const activateWildcard = async () => {
+        if (!window.confirm("Activate Wildcard? This cancels every submitted blind opening bid and returns the player to the nomination lot.")) {
+            return;
+        }
+
+        const response = await fetch(`${API_URL}/api/auction/wild-pick`, {
+            method: "POST",
+            credentials: "include"
+        });
+        const message = await response.text();
+        const activated = message.includes("activated Wildcard");
+
+        showToast(message, activated ? "success" : "error");
+        if (activated) {
+            setOpeningBid("");
+        }
         loadDashboard();
     };
 
@@ -353,15 +470,16 @@ function Dashboard() {
     const specialEvents =
         events.filter(event =>
             [
-                "BOUNTY",
-                "GOLDEN_BOUNTY",
-                "SECRET_TARGET_SETTLED",
-                "REVERSE_TARGET_TRIGGERED",
                 "CAPTAIN_TRIBUNAL",
                 "RTM_TRIGGERED",
                 "RTM_BID_SUBMITTED",
                 "RTM_ACCEPTED",
-                "RTM_DECLINED"
+                "RTM_DECLINED",
+                "PROTECTION_REVEALED",
+                "VALUE_BET_REWARD",
+                "STARTING_BID_WINNER",
+                "VALUE_BET",
+                "WILDCARD_TRIGGERED"
             ].includes(event.eventType)
         );
 
@@ -389,155 +507,187 @@ function Dashboard() {
         return matchesQuery && matchesStatus && matchesCategory;
     });
 
+    const currentAuction = dashboard.currentAuction;
+    const rtmLocked = auctionStatus?.rtmLockdownPlayer?.toLowerCase()
+        === currentAuction.currentPlayer?.toLowerCase();
+    const effectiveMaxBid = currentTeam?.maxBid || 0;
+    const isBidding = ["OPENING_BID", "BIDDING"].includes(auctionStatus?.auctionPhase);
+    const activeRandomEventType = auctionStatus?.pendingRandomEventType;
+    const activeRandomEventDescription = auctionStatus?.pendingRandomEventDescription
+        || "A surprise auction rule is in play.";
+
     return (
 
         <div>
 
-            <div className="section-card current-auction">
+            {isCaptain && (
+                <div className="button-group captain-tabs" style={{ marginBottom: "18px" }}>
+                    <button className={dashboardView === "overview" ? "button button-active" : "button-secondary"}
+                        onClick={() => setDashboardView("overview")}>Current Auction</button>
+                    <button className={dashboardView === "standings" ? "button button-active" : "button-secondary"}
+                        onClick={() => setDashboardView("standings")}>Team Standing</button>
+                    <button className={dashboardView === "players" ? "button button-active" : "button-secondary"}
+                        onClick={() => setDashboardView("players")}>Player Intelligence</button>
+                </div>
+            )}
+
+            {activeRandomEventType && (
+                <section className="live-random-event-banner" role="status" aria-live="polite">
+                    <span className="live-random-event-live">LIVE</span>
+                    <div className="live-random-event-copy">
+                        <p className="live-random-event-kicker">Random event in play</p>
+                        <h2>{activeRandomEventType.replaceAll("_", " ")} is live</h2>
+                        <p className="live-random-event-description">{activeRandomEventDescription}</p>
+                        <p className="live-random-event-banter">
+                            Event desk: {RANDOM_EVENT_BANTER[activeRandomEventType]
+                                || "The auction rulebook has started improvising."}
+                        </p>
+                        {auctionStatus?.pendingRandomEventPlayer && (
+                            <p className="live-random-event-player">
+                                Affecting: <strong>{auctionStatus.pendingRandomEventPlayer}</strong>
+                            </p>
+                        )}
+                    </div>
+                </section>
+            )}
+
+            {isCaptain && dashboardView === "overview" && (
+                <div className="section-card captain-actions" style={{ marginBottom: "18px" }}>
+                    <h2>Auction Actions</h2>
+                    {silentBidActive && silentRound && !silentRound.submitted && (
+                        <div className="captain-action-row silent-action-row" style={{ display: "flex", gap: "8px", marginBottom: "12px" }}>
+                            <input className="input" type="number" min="1"
+                                step={Number(silentBid) > 1000 ? 100 : 50}
+                                placeholder="Secret silent bid"
+                                value={silentBid} onChange={event => setSilentBid(event.target.value)} />
+                            <button className="button" onClick={submitSilentBid}>Submit Silent Bid</button>
+                        </div>
+                    )}
+                    {silentBidActive && silentRound?.submitted && (
+                        <p className="message-success">Silent bid submitted. Waiting for the other captains.</p>
+                    )}
+                    {isBidding && auctionStatus?.auctionPhase !== "SOLD" && (
+                        <div className="captain-action-row" style={{ display: "flex", gap: "8px", marginBottom: "12px" }}>
+                            <input className="input" type="number" min="1" max={effectiveMaxBid}
+                                step={Number(liveBid) > 1000 ? 100 : 50}
+                                placeholder={`Start bid (max ₹${effectiveMaxBid})`}
+                                value={liveBid} onChange={event => setLiveBid(event.target.value)} />
+                            <button className="button" onClick={submitLiveBid}>Place Bid</button>
+                        </div>
+                    )}
+                    {auctionStatus?.auctionPhase === "BLIND_OPENING_BID" && (
+                        <div className="captain-action-row" style={{ display: "flex", gap: "8px", marginBottom: "12px" }}>
+                            {openingBidStatus && !openingBidStatus.submitted && (
+                                <>
+                                    <input className="input" type="number" min="1"
+                                        data-testid="blind-opening-bid"
+                                        step={Number(openingBid) > 1000 ? 100 : 50}
+                                        placeholder="Opening bid"
+                                        value={openingBid}
+                                        onChange={event => setOpeningBid(event.target.value)} />
+                                    <button className="button" data-testid="place-blind-opening-bid" onClick={submitOpeningBid}>Place Blind Opening Bid</button>
+                                </>
+                            )}
+                            {currentTeam && !currentTeam.wildPickUsed && (
+                                <button className="button-secondary" type="button" data-testid="activate-wildcard" onClick={activateWildcard}>
+                                    Activate Wildcard
+                                </button>
+                            )}
+                        </div>
+                    )}
+                    {auctionStatus?.auctionPhase === "BLIND_OPENING_BID"
+                        && openingBidStatus?.submitted && (
+                            <p className="message-success">Opening bid submitted. Waiting for all captains.</p>
+                        )}
+                    {auctionStatus?.auctionPhase === "OPENING_BID"
+                        && auctionStatus?.valueBetPlayer?.toLowerCase() === currentAuction.currentPlayer?.toLowerCase()
+                        && currentAuction.currentPlayer && (
+                            <div className="captain-action-row" style={{ display: "flex", gap: "8px", marginBottom: "12px" }}>
+                                <input className="input" type="number" min="1"
+                                    step={Number(valueBetPrediction) > 1000 ? 100 : 50}
+                                    placeholder="Predict final price"
+                                    value={valueBetPrediction}
+                                    onChange={event => setValueBetPrediction(event.target.value)} />
+                                <button className="button-secondary" onClick={submitValueBet}>Submit Value Bet</button>
+                            </div>
+                        )}
+                    {auctionStatus?.auctionPhase === "SOLD" && !isCurrentHighestBidder && !rtmLocked && !rtm && !rtmAlreadyUsed && (
+                        <button className="button" onClick={claimRtm}>Claim RTM</button>
+                    )}
+                    {rtmLocked && <p>RTM is locked for this player.</p>}
+                    {isRtmCaptain && rtm?.status === "CLAIMED" && (
+                        <div className="captain-action-row" style={{ display: "flex", gap: "8px" }}>
+                            <input className="input" type="number" min={currentAuction.currentBid + 100}
+                                max={effectiveMaxBid} value={rtmBid}
+                                onChange={event => setRtmBid(event.target.value)} placeholder="RTM price" />
+                            <button className="button" onClick={submitRtmBid}>Submit RTM Price</button>
+                        </div>
+                    )}
+                    {isOriginalCaptain && rtm?.status === "BID_SUBMITTED" && (
+                        <div>
+                            <p>RTM price: <strong>₹{rtm.bidAmount}</strong></p>
+                            <button className="button" onClick={acceptRtm}>Accept</button>
+                            <button className="button-secondary" onClick={declineRtm} style={{ marginLeft: "8px" }}>Reject</button>
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {silentBidActive && allSilentBids.length > 0 && (
+                <div className="section-card silent-incoming-card" style={{ marginBottom: "18px" }}>
+                    <h2>🔒 Silent Bid Incoming Bids — {allSilentBids[0]?.playerName || currentAuction.currentPlayer}</h2>
+                    <div className="silent-bid-matrix-wrap">
+                        <table className="standings-table silent-bid-matrix">
+                            <thead>
+                                <tr>
+                                    <th scope="col">Player</th>
+                                    {allSilentBids.map(bid => (
+                                        <th key={bid.id || bid.captainName} scope="col">{bid.captainName}</th>
+                                    ))}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td className="silent-bid-player">
+                                        {allSilentBids[0]?.playerName || currentAuction.currentPlayer}
+                                    </td>
+                                    {allSilentBids.map(bid => (
+                                        <td key={bid.id || bid.captainName} className="silent-bid-cell">
+                                            <span className={bid.submitted ? "silent-bid-status submitted" : "silent-bid-status"}>
+                                                {bid.submitted ? "Submitted" : "Waiting"}
+                                            </span>
+                                        </td>
+                                    ))}
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            )}
+
+            {(dashboardView === "overview" || (!isCaptain && !isAdmin)) && <div className="section-card current-auction">
 
                 <h2>
                     🎤 Current Auction
                 </h2>
 
-                <p>
-                    <strong>Player:</strong>{" "}
-                    {dashboard.currentAuction.currentPlayer || "None"}
-                </p>
+                <CasinoReel
+                    players={players.filter(player => !player.sold)}
+                    selectedPlayer={currentAuction.currentPlayer}
+                    spinStartedAt={auctionStatus?.wheelSpinStartedAt}
+                    spinEndsAt={auctionStatus?.wheelSpinEndsAt}
+                    className="captain-casino-reel"
+                    seasonName={auctionStatus?.seasonName}
+                />
 
-                <p>
-                    <strong>Seed:</strong>{" "}
-                    {dashboard.currentAuction.seed || "-"}
-                </p>
-
-                <p>
+                <p style={{ marginTop: "16px" }}>
                     <strong>Current Bid:</strong>{" "}
                     ₹{dashboard.currentAuction.currentBid}
                 </p>
 
-                <p>
-                    <strong>Nominated By:</strong>{" "}
-                    {dashboard.currentAuction.nominatedBy || "None"}
-                </p>
+            </div>}
 
-            </div>
-
-            {isCaptain &&
-                (rtm ||
-                    (auctionStatus?.auctionPhase === "SOLD" &&
-                        !isCurrentHighestBidder)) && (
-
-                    <div className="section-card">
-
-                        <h2>
-                            🔄 Right To Match
-                        </h2>
-
-                        <p>
-                            {auctionStatus?.auctionPhase === "SOLD"
-                                ? "🟢 RTM Window Open"
-                                : "🔒 Waiting for Auctioneer to call SOLD"}
-                        </p>
-
-                        {!rtm && !isCurrentHighestBidder && (
-
-                            <button
-                                className={
-                                    auctionStatus?.auctionPhase === "SOLD"
-                                        ? "button"
-                                        : "button-secondary"
-                                }
-                                disabled={
-                                    auctionStatus?.auctionPhase !== "SOLD" ||
-                                    rtmAlreadyUsed
-                                }
-                                onClick={claimRtm}
-                            >
-                                {rtmAlreadyUsed ? "RTM ALREADY USED" : "CLAIM RTM"}
-                            </button>
-
-                        )}
-
-                        {isRtmCaptain && rtm?.status === "CLAIMED" && (
-
-                            <div style={{ marginTop: 20 }}>
-
-                                <h3>Enter RTM Bid</h3>
-
-                                <input
-                                    className="input"
-                                    type="number"
-                                    min={dashboard.currentAuction.currentBid + 100}
-                                    max={dashboard.teams.find(
-                                        team => team.captainName === username
-                                    )?.maxBid}
-                                    value={rtmBid}
-                                    onChange={event => setRtmBid(event.target.value)}
-                                />
-
-                                <button
-                                    className="button"
-                                    disabled={
-                                        !rtmBid ||
-                                        Number(rtmBid) <= dashboard.currentAuction.currentBid ||
-                                        Number(rtmBid) > dashboard.teams.find(
-                                            team => team.captainName === username
-                                        )?.maxBid
-                                    }
-                                    style={{ marginTop: 15 }}
-                                    onClick={submitRtmBid}
-                                >
-                                    Submit RTM Bid
-                                </button>
-
-                            </div>
-
-                        )}
-
-                        {isOriginalCaptain && rtm?.status === "BID_SUBMITTED" && (
-
-                            <div style={{ marginTop: 20 }}>
-
-                                <h3>🔄 RTM Decision</h3>
-
-                                <p>
-                                    Original Bid:
-                                    <strong> ₹{dashboard.currentAuction.currentBid}</strong>
-                                </p>
-
-                                <p>
-                                    RTM Bid:
-                                    <strong> ₹{rtm.bidAmount}</strong>
-                                </p>
-
-                                <button
-                                    className="button"
-                                    style={{ marginRight: 10 }}
-                                    onClick={acceptRtm}
-                                >
-                                    ✅ Accept
-                                </button>
-
-                                <button className="button-secondary" onClick={declineRtm}>
-                                    ❌ Decline
-                                </button>
-
-                            </div>
-
-                        )}
-
-                        {waitingForDecision && !isOriginalCaptain && !isRtmCaptain && (
-
-                            <div className="message-success" style={{ marginTop: 20 }}>
-                                ⏳ Waiting for <strong>{rtm.originalCaptain}</strong> to accept or decline the RTM bid.
-                            </div>
-
-                        )}
-
-                    </div>
-
-                )}
-
-            <div className="section-card">
+            {(dashboardView === "standings" || !isCaptain) && <div className="section-card">
 
                 <h2>
                     🏆 Team Standings
@@ -651,9 +801,9 @@ function Dashboard() {
                     </table>
                 </div>
 
-            </div>
+            </div>}
 
-            <div className="section-card">
+            {(dashboardView === "players" || (!isCaptain && !isViewer)) && <div className="section-card">
                 <h2>🧭 Player Intelligence</h2>
                 <div className="intelligence-toolbar player-toolbar">
                     <input
@@ -709,97 +859,64 @@ function Dashboard() {
                     {filteredPlayers.length === 0 && <p className="table-empty">No players match these filters.</p>}
                     {filteredPlayers.length > 24 && <p className="table-caption">Showing 24 of {filteredPlayers.length} players</p>}
                 </div>
-            </div>
-            {isCaptain && !auctionStatus?.auctionStarted && (
-
+            </div>}
+            {auctionStatus?.auctionRound === 3 && (
                 <div className="section-card">
-
-                    <h2>🎯 Secret Targets — Double Down</h2>
-
-                    {secretTargets ? (
-                        <div>
-                            <div className="message-success">
-                                ✅ Targets locked: <strong>{secretTargets.playerOne}</strong> and <strong>{secretTargets.playerTwo}</strong>
-                            </div>
-                            <p style={{ marginTop: "15px", fontSize: "0.95em" }}>
-                                ℹ️ Your targets will be settled at the end of the auction.
-                                <br />First target bought: +₹150 | Second target bought: +₹250
-                                <br />Each missed target: −₹100
-                            </p>
-                        </div>
-                    ) : (
-                        <div>
-                            <p style={{ marginBottom: "15px" }}>First target bought: +₹150; second target bought: +₹250; each missed target: −₹100.</p>
-                            {["playerOne", "playerTwo"].map((field, index) => (
-                                <div className="form-field" key={field}>
-                                    <label>Target Player {index + 1}</label>
-                                    <select className="input" value={newSecretTargets[field]}
-                                        onChange={event => setNewSecretTargets({ ...newSecretTargets, [field]: event.target.value })}>
-                                        <option value="">Select Player</option>
-                                        {players.map(player => <option key={player.id} value={player.name}>{player.name}</option>)}
-                                    </select>
-                                </div>
-                            ))}
-                            <button className="button" onClick={submitSecretTargets}
-                                disabled={!newSecretTargets.playerOne || !newSecretTargets.playerTwo}>
-                                Lock Secret Targets
-                            </button>
-                        </div>
-                    )}
-
-                </div>
-
-            )}
-
-            {isCaptain && !auctionStatus?.auctionStarted && (
-
-                <div className="section-card">
-
-                    <h2>🎯 Reverse Target</h2>
-
-                    {reverseTargets ? (
-                        <div>
-                            <div className="message-success">
-                                ✅ Target submitted: <strong>{reverseTargets.playerName}</strong>
-                                <br />Rival Captain: <strong>{reverseTargets.rivalCaptain}</strong>
-                            </div>
-                            <p style={{ marginTop: "15px", fontSize: "0.95em" }}>
-                                ℹ️ If {reverseTargets.rivalCaptain} buys {reverseTargets.playerName}, they lose ₹200.
-                            </p>
-                        </div>
-                    ) : (
-                        <div>
-                            <p style={{ marginBottom: "15px" }}>If the selected rival captain buys this player, ₹200 is immediately deducted from their purse.</p>
-                            <div className="form-field">
-                                <label>Rival Captain</label>
-                                <select className="input" value={newReverseTarget.rivalCaptain}
-                                    onChange={event => setNewReverseTarget({ ...newReverseTarget, rivalCaptain: event.target.value })}>
-                                    <option value="">Select Rival</option>
-                                    {captains.filter(c => c.captainName !== username).map(captain => (
-                                        <option key={captain.captainName} value={captain.captainName}>{captain.captainName}</option>
+                    <h2>🔄 Unsold Players After Re-auction</h2>
+                    <p>These players remain unsold. Admin can sell them manually.</p>
+                    {players.filter(player => !player.sold).length > 0 ? (
+                        <div className="player-directory-wrap">
+                            <table className="standings-table player-directory-table">
+                                <thead>
+                                    <tr>
+                                        <th>Player</th>
+                                        <th>Category</th>
+                                        <th>Original Base Price</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {players.filter(player => !player.sold).map(player => (
+                                        <tr key={`unsold-${player.id || player.name}`}>
+                                            <td><strong>{player.name}</strong></td>
+                                            <td>{player.category || player.seed || "Uncategorized"}</td>
+                                            <td>₹{player.basePrice}</td>
+                                        </tr>
                                     ))}
-                                </select>
-                            </div>
-                            <div className="form-field">
-                                <label>Targeted Player</label>
-                                <select className="input" value={newReverseTarget.playerName}
-                                    onChange={event => setNewReverseTarget({ ...newReverseTarget, playerName: event.target.value })}>
-                                    <option value="">Select Player</option>
-                                    {players.map(player => <option key={player.id} value={player.name}>{player.name}</option>)}
-                                </select>
-                            </div>
-                            <button className="button" onClick={submitReverseTarget}
-                                disabled={!newReverseTarget.rivalCaptain || !newReverseTarget.playerName}>
-                                🎯 Submit Reverse Target
-                            </button>
+                                </tbody>
+                            </table>
                         </div>
+                    ) : (
+                        <p className="table-empty">No players remain unsold.</p>
                     )}
+                </div>
+            )}
+            {isCaptain && auctionStatus?.protectionSelectionEnabled && !auctionStatus?.auctionStarted && (
 
+                <div className="section-card">
+                    <h2>Player Protection</h2>
+                    <p>Select exactly 2 protection players before the auction starts.</p>
+                    {protectionPlayers.map(protection => (
+                        <div key={protection.id}>{protection.playerName}</div>
+                    ))}
+                    {protectionPlayers.length < 2 && (
+                        <>
+                            <select className="input" value={newProtectionPlayer}
+                                onChange={event => setNewProtectionPlayer(event.target.value)}>
+                                <option value="">Select protection player</option>
+                                {players.filter(player => !protectionPlayers.some(item => item.playerName === player.name))
+                                    .map(player => <option key={player.id} value={player.name}>{player.name}</option>)}
+                            </select>
+                            <button className="button" onClick={submitProtectionPlayer}
+                                disabled={!newProtectionPlayer}>
+                                Save Protection Player
+                            </button>
+                        </>
+                    )}
                 </div>
 
             )}
 
-            <div className="event-columns">
+            {(dashboardView === "overview" || !isCaptain) && <div className="event-columns">
                 <div className="section-card event-panel">
 
                     <h2>
@@ -832,14 +949,6 @@ function Dashboard() {
                                     "🏆 GOLDEN BOUNTY"}
 
                                 {event.eventType ===
-                                    "REVERSE_TARGET_TRIGGERED" &&
-                                    "🎯 Reverse Target"}
-
-                                {event.eventType ===
-                                    "SECRET_TARGET_SETTLED" &&
-                                    "🎯 Secret Target"}
-
-                                {event.eventType ===
                                     "CAPTAIN_TRIBUNAL" &&
                                     "⚖️ CAPTAIN TRIBUNAL"}
 
@@ -855,20 +964,15 @@ function Dashboard() {
                                 {event.eventType === "RTM_DECLINED" &&
                                     "❌ RTM DECLINED"}
 
+                                {event.eventType === "WILDCARD_TRIGGERED" &&
+                                    "🃏 WILDCARD TRIGGERED"}
+
                             </strong>
 
                             <div>
 
-                                {event.eventType === "REVERSE_TARGET_TRIGGERED"
-                                    ? event.playerName
-                                    : (
-                                        <>
-                                            {event.playerName}
-                                            {event.captainName &&
-                                                ` → ${event.captainName}`}
-                                        </>
-                                    )
-                                }
+                                {event.playerName}
+                                {event.captainName && ` → ${event.captainName}`}
 
                             </div>
 
@@ -893,7 +997,7 @@ function Dashboard() {
                 <div className="event-panel">
                     <LiveActivity />
                 </div>
-            </div>
+            </div>}
 
         </div>
 

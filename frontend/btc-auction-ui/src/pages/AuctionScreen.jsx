@@ -4,6 +4,7 @@ import SockJS from "sockjs-client";
 import axios from "axios";
 
 import { API_URL } from "../config";
+import CasinoReel from "../components/CasinoReel";
 
 function AuctionScreen() {
 
@@ -15,6 +16,9 @@ function AuctionScreen() {
 
     const [silentBidActive, setSilentBidActive] =
         useState(false);
+
+    const [silentBids, setSilentBids] =
+        useState([]);
 
     const [latestEvent, setLatestEvent] =
         useState(null);
@@ -39,6 +43,21 @@ function AuctionScreen() {
 
     const [eventPulse, setEventPulse] =
         useState(false);
+
+    const [valueBetPrediction, setValueBetPrediction] =
+        useState("");
+
+    const [team, setTeam] =
+        useState(null);
+
+    const [availablePlayers, setAvailablePlayers] =
+        useState([]);
+
+    const role =
+        localStorage.getItem("role");
+
+    const username =
+        localStorage.getItem("username");
 
 
 
@@ -69,6 +88,16 @@ function AuctionScreen() {
                     );
 
                 });
+
+            axios
+                .get(`${API_URL}/api/teams`)
+                .then(response => {
+                    setTeam(response.data.find(item => item.captainName === username) || null);
+                });
+
+            axios
+                .get(`${API_URL}/api/players/available`)
+                .then(response => setAvailablePlayers(response.data));
 
             axios
                 .get(
@@ -136,11 +165,19 @@ function AuctionScreen() {
                     `${API_URL}/api/silent-bid/active`
                 )
                 .then(response => {
-
-                    setSilentBidActive(
-                        response.data
-                    );
-
+                    const active = response.data;
+                    setSilentBidActive(active);
+                    if (active) {
+                        axios.get(`${API_URL}/api/silent-bid/all`)
+                            .then(res => setSilentBids(res.data || []))
+                            .catch(() => setSilentBids([]));
+                    } else {
+                        setSilentBids([]);
+                    }
+                })
+                .catch(() => {
+                    setSilentBidActive(false);
+                    setSilentBids([]);
                 });
 
         };
@@ -179,7 +216,36 @@ function AuctionScreen() {
 
         };
 
-    }, []);
+    }, [username]);
+
+    const useWildPick = async () => {
+        if (!window.confirm("Activate Wildcard? This cancels every submitted blind opening bid and returns the player to the nomination lot.")) {
+            return;
+        }
+
+        const response = await axios.post(`${API_URL}/api/auction/wild-pick`, null, {
+            withCredentials: true
+        });
+        window.dispatchEvent(new CustomEvent("auction-toast", {
+            detail: { type: "success", message: response.data }
+        }));
+    };
+
+    const submitValueBet = async () => {
+        if (!valueBetPrediction || Number(valueBetPrediction) <= 0) {
+            return;
+        }
+
+        const response = await axios.post(`${API_URL}/api/value-bet/submit`, {
+            playerName: auction?.currentPlayer,
+            captainName: username,
+            predictedPrice: Number(valueBetPrediction)
+        });
+        window.dispatchEvent(new CustomEvent("auction-toast", {
+            detail: { type: "success", message: response.data }
+        }));
+        setValueBetPrediction("");
+    };
 
     if (!auction) {
 
@@ -198,6 +264,10 @@ function AuctionScreen() {
     const waitingForLastStrike =
         auctionStatus &&
         auctionStatus.auctionPhase === "SOLD";
+    const isWheelSpinning =
+        auctionStatus?.auctionPhase === "SPINNING";
+
+    const reelPlayers = availablePlayers.filter(player => !player.sold);
 
     return (
         <>
@@ -296,7 +366,7 @@ function AuctionScreen() {
 
                 <div className="auction-phase-bar">
                     <span className="auction-phase-label">{auctionStatus?.auctionPhase || "WAITING"}</span>
-                    <span>{silentBidActive ? "Confidential bids in progress" : waitingForLastStrike ? "RTM / last-strike decision window" : "Bidding is open"}</span>
+                    <span>{isWheelSpinning ? "Reel spinning" : silentBidActive ? "Confidential bids in progress" : waitingForLastStrike ? "RTM / last-strike decision window" : "Bidding is open"}</span>
                 </div>
 
                 {!silentBidActive &&
@@ -313,28 +383,12 @@ function AuctionScreen() {
                             <h2>
 
                                 {latestEvent.eventType ===
-                                    "BOUNTY" &&
-                                    "🎁 BOUNTY REVEALED"}
-
-                                {latestEvent.eventType ===
-                                    "GOLDEN_BOUNTY" &&
-                                    "🏆 GOLDEN BOUNTY"}
-
-                                {latestEvent.eventType ===
                                     "TARGET_ACHIEVED" &&
                                     "🎯 TARGET ACHIEVED"}
 
                                 {latestEvent.eventType ===
                                     "ALL_TARGETS_ACHIEVED" &&
                                     "🥇 ALL TARGETS ACHIEVED"}
-                                {latestEvent.eventType === "REVERSE_TARGET_TRIGGERED" &&
-                                    "🎯 Reverse Target"}
-                                {latestEvent.eventType === "PLAYER_VETOED" &&
-                                    "❌ NOMINATION VETOED"}
-
-                                {latestEvent.eventType === "LAST_STRIKE" &&
-                                    "⚡ LAST STRIKE"}
-
                                 {latestEvent.eventType === "SOLD" &&
                                     "🔨 SOLD"}
 
@@ -343,43 +397,10 @@ function AuctionScreen() {
                             </h2>
 
                             <p>
-                                {latestEvent.eventType === "REVERSE_TARGET_TRIGGERED"
-                                    ? latestEvent.details
-                                    : latestEvent.playerName}
+                                {latestEvent.playerName}
                             </p>
 
                             <p>
-
-                                {latestEvent.eventType === "BOUNTY" &&
-                                    latestEvent.amount > 0 && (
-
-                                        <>
-                                            Reward : ₹{latestEvent.amount}
-                                            <br />
-                                        </>
-
-                                    )}
-
-                                {latestEvent.eventType === "GOLDEN_BOUNTY" &&
-                                    latestEvent.amount > 0 && (
-
-                                        <>
-                                            Reward : ₹{latestEvent.amount}
-                                            <br />
-                                        </>
-
-                                    )}
-
-                                {latestEvent.eventType === "REVERSE_TARGET_TRIGGERED" && (
-
-                                    <>
-                                        {latestEvent.amount < 0
-                                            ? `Penalty : ₹${Math.abs(latestEvent.amount)}`
-                                            : `Reward : ₹${latestEvent.amount}`}
-                                        <br />
-                                    </>
-
-                                )}
 
                                 {(latestEvent.eventType === "SOLD" || latestEvent.eventType === "PLAYER_SOLD") && (
                                     <>
@@ -388,8 +409,7 @@ function AuctionScreen() {
                                     </>
                                 )}
 
-                                {latestEvent.eventType !== "REVERSE_TARGET_TRIGGERED" &&
-                                    latestEvent.details}
+                                {latestEvent.details}
 
                             </p>
 
@@ -429,16 +449,56 @@ function AuctionScreen() {
                         }}
                     >
 
-                        {auction.currentPlayer ||
+                        {isWheelSpinning
+                            ? "REEL SPINNING..."
+                            : auction.currentPlayer ||
                             "No Player Nominated"}
 
                     </div>
 
                     <div className="current-player-seed">
 
-                        {auction.seed || "-"}
+                        {isWheelSpinning ? "-" : auction.seed || "-"}
 
                     </div>
+
+                    <CasinoReel
+                        players={reelPlayers}
+                        selectedPlayer={auction.currentPlayer}
+                        spinStartedAt={auctionStatus?.wheelSpinStartedAt}
+                        spinEndsAt={auctionStatus?.wheelSpinEndsAt}
+                        className="viewer-casino-reel"
+                        seasonName={auctionStatus?.seasonName}
+                    />
+
+                    {role === "CAPTAIN" &&
+                        auctionStatus?.auctionPhase === "OPENING_BID" &&
+                        auction.currentPlayer && (
+                            <div style={{ marginTop: "20px", display: "grid", gap: "10px", justifyItems: "center" }}>
+                                <button
+                                    className="button-secondary"
+                                    type="button"
+                                    onClick={useWildPick}
+                                    disabled={team?.wildPickUsed}
+                                >
+                                    {team?.wildPickUsed ? "Wild Pick Used" : "Return Player with Wild Pick"}
+                                </button>
+                                <div style={{ display: "flex", gap: "8px", maxWidth: "320px", width: "100%" }}>
+                                    <input
+                                        className="input"
+                                        type="number"
+                                        min="1"
+                                        step={Number(valueBetPrediction) > 1000 ? 100 : 50}
+                                        placeholder="Predict final price"
+                                        value={valueBetPrediction}
+                                        onChange={event => setValueBetPrediction(event.target.value)}
+                                    />
+                                    <button className="button" type="button" onClick={submitValueBet}>
+                                        Submit Value Bet
+                                    </button>
+                                </div>
+                            </div>
+                        )}
 
                     {!silentBidActive && (
 
@@ -537,26 +597,45 @@ function AuctionScreen() {
                             className="message-success"
                             style={{
                                 marginTop: "30px",
-                                fontSize: "30px",
-                                fontWeight: "bold",
+                                fontSize: "20px",
                                 textAlign: "center",
-                                lineHeight: "1.8"
+                                lineHeight: "1.6"
                             }}
                         >
 
-                            🔒 SECRET BIDDING IN PROGRESS
+                            <div style={{ fontSize: "28px", fontWeight: "bold", marginBottom: "12px" }}>
+                                🔒 SECRET BIDDING IN PROGRESS
+                            </div>
 
-                            <br /><br />
+                            <p style={{ margin: "8px 0 16px 0", fontSize: "18px" }}>
+                                Confidential bids for <strong>{silentBids[0]?.playerName || auction.currentPlayer}</strong>
+                            </p>
 
-                            All Captains are placing
-
-                            <br />
-
-                            their confidential bids.
-
-                            <br /><br />
-
-                            ⏳ Please Wait...
+                            <table className="standings-table" style={{ width: "100%", margin: "0 auto", textAlign: "left" }}>
+                                <thead>
+                                    <tr>
+                                        <th>Player</th>
+                                        <th>Captain</th>
+                                        <th>Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {silentBids.map(bid => (
+                                        <tr key={bid.id || bid.captainName}>
+                                            <td>{bid.playerName || silentBids[0]?.playerName || auction.currentPlayer}</td>
+                                            <td>{bid.captainName}</td>
+                                            <td>{bid.submitted ? "✅ Submitted" : "⌛ Waiting"}</td>
+                                        </tr>
+                                    ))}
+                                    {silentBids.length === 0 && (
+                                        <tr>
+                                            <td colSpan="3" style={{ textAlign: "center", padding: "10px" }}>
+                                                Waiting for captains to submit bids...
+                                            </td>
+                                        </tr>
+                                    )}
+                                </tbody>
+                            </table>
 
                         </div>
 
@@ -607,39 +686,17 @@ function AuctionScreen() {
                                         {event.eventType === "GOLDEN_BOUNTY" && "🏆 "}
                                         {event.eventType === "TARGET_ACHIEVED" && "🎯 "}
                                         {event.eventType === "ALL_TARGETS_ACHIEVED" && "🥇 "}
-                                        {event.eventType === "REVERSE_TARGET_TRIGGERED" && "🎯 "}
-                                        {event.eventType === "PLAYER_VETOED" && "❌ "}
-                                        {event.eventType === "LAST_STRIKE" && "⚡ "}
                                         {event.eventType === "SOLD" && "🔨 "}
 
                                         {
-                                            event.eventType === "PLAYER_VETOED"
-                                                ? "NOMINATION VETOED"
-                                                : event.eventType === "LAST_STRIKE"
-                                                    ? "LAST STRIKE"
-                                                    : event.eventType === "SOLD"
-                                                        ? "SOLD"
-                                                        : event.eventType === "REVERSE_TARGET_TRIGGERED"
-                                                            ? "Reverse Target"
-                                                            : event.eventType
+                                            event.eventType === "SOLD"
+                                                ? "SOLD"
+                                                : event.eventType
                                         }
 
                                     </strong>
 
-                                    {event.eventType === "REVERSE_TARGET_TRIGGERED" ? (
-
-                                        <>
-                                            <div>{event.details}</div>
-
-                                            <div style={{ color: event.amount < 0 ? "#b91c1c" : "green", fontWeight: "bold" }}>
-                                                {event.amount < 0
-                                                    ? `Penalty : ₹${Math.abs(event.amount)}`
-                                                    : `Reward : ₹${event.amount}`}
-                                            </div>
-                                        </>
-
-                                    ) : (
-
+                                    {(
                                         <>
                                             <div>
                                                 {event.playerName}
@@ -653,7 +710,6 @@ function AuctionScreen() {
 
                                             <div>{event.details}</div>
                                         </>
-
                                     )}
 
                                 </div>

@@ -4,49 +4,79 @@ import { API_URL } from "../config";
 import { showToast } from "../services/toast";
 
 function SilentBidManager() {
-    const [players, setPlayers] = useState([]);
-    const [playerName, setPlayerName] = useState("");
+    const [currentAuctionPlayer, setCurrentAuctionPlayer] = useState("");
     const [bids, setBids] = useState([]);
     const [message, setMessage] = useState("");
     const [winner, setWinner] = useState(null);
-    const [roundStarted, setRoundStarted] = useState(false);
     const [soldCalled, setSoldCalled] = useState(false);
 
-    useEffect(() => {
-        loadPlayers();
-        loadBids();
+    const loadData = async () => {
+        try {
+            const [auctionRes, bidsRes] = await Promise.all([
+                fetch(`${API_URL}/api/auction/current`),
+                fetch(`${API_URL}/api/silent-bid/all`),
+            ]);
+            if (auctionRes.ok) {
+                const auctionData = await auctionRes.json();
+                setCurrentAuctionPlayer(auctionData?.currentPlayer || "");
+            }
+            if (bidsRes.ok) {
+                const bidsData = await bidsRes.json();
+                setBids(bidsData || []);
+            }
+        } catch {
+            // ignore network errors
+        }
+    };
 
-        const interval = setInterval(loadBids, 2000);
-        return () => clearInterval(interval);
+    useEffect(() => {
+        let isMounted = true;
+        const fetchAuctionAndBids = async () => {
+            try {
+                const [auctionRes, bidsRes] = await Promise.all([
+                    fetch(`${API_URL}/api/auction/current`),
+                    fetch(`${API_URL}/api/silent-bid/all`),
+                ]);
+                if (auctionRes.ok) {
+                    const auctionData = await auctionRes.json();
+                    if (isMounted) setCurrentAuctionPlayer(auctionData?.currentPlayer || "");
+                }
+                if (bidsRes.ok) {
+                    const bidsData = await bidsRes.json();
+                    if (isMounted) setBids(bidsData || []);
+                }
+            } catch {
+                // ignore network errors
+            }
+        };
+
+        fetchAuctionAndBids();
+        const interval = setInterval(fetchAuctionAndBids, 2000);
+        return () => {
+            isMounted = false;
+            clearInterval(interval);
+        };
     }, []);
 
-    const loadPlayers = async () => {
-        const response = await fetch(`${API_URL}/api/players/available`);
-        setPlayers(await response.json());
-    };
-
-    const loadBids = async () => {
-        const response = await fetch(`${API_URL}/api/silent-bid/all`);
-        setBids(await response.json());
-    };
+    const activePlayer = bids.length > 0 ? (bids[0]?.playerName || "") : currentAuctionPlayer;
+    const roundStarted = bids.length > 0;
 
     const startRound = async () => {
-        if (!playerName) {
-            showToast("Select a player.", "error");
+        if (!activePlayer) {
+            showToast("No player currently selected in auction wheel.", "error");
             return;
         }
 
         const response = await fetch(`${API_URL}/api/silent-bid/start`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ playerName }),
+            body: JSON.stringify({ playerName: activePlayer }),
         });
 
         setMessage(await response.text());
-        setRoundStarted(true);
         setWinner(null);
         setSoldCalled(false);
-        await loadBids();
+        await loadData();
     };
 
     const revealWinner = async () => {
@@ -62,7 +92,7 @@ function SilentBidManager() {
         if (data.tie) {
             showToast(`Tie detected: ${data.tiedCaptains.join(", ")}. Please rebid.`, "error");
             setWinner(null);
-            await loadBids();
+            await loadData();
             return;
         }
 
@@ -85,7 +115,7 @@ function SilentBidManager() {
             method: "POST",
         });
         const result = await response.text();
-        const successful = result === "Waiting for RTM / Last Strike.";
+        const successful = result.includes("Waiting for RTM.");
 
         showToast(result, successful ? "success" : "error");
         setSoldCalled(successful);
@@ -116,11 +146,8 @@ function SilentBidManager() {
         }
 
         setWinner(null);
-        setRoundStarted(false);
-        setPlayerName("");
         setSoldCalled(false);
-        await loadPlayers();
-        await loadBids();
+        await loadData();
     };
 
     const resetRound = async () => {
@@ -130,10 +157,8 @@ function SilentBidManager() {
 
         setMessage(await response.text());
         setWinner(null);
-        setRoundStarted(false);
-        setPlayerName("");
         setSoldCalled(false);
-        await loadBids();
+        await loadData();
     };
 
     return (
@@ -141,60 +166,69 @@ function SilentBidManager() {
             <div className="form-card">
                 <h1>🔒 Silent Bid Manager</h1>
 
-                <select
-                    className="select"
-                    value={playerName}
-                    disabled={roundStarted}
-                    onChange={event => setPlayerName(event.target.value)}
-                >
-                    <option value="">Select Player</option>
-                    {players.map(player => (
-                        <option key={player.name} value={player.name}>
-                            {player.name} ({player.seed})
-                        </option>
-                    ))}
-                </select>
+                <div style={{ marginTop: "15px", marginBottom: "15px", fontSize: "18px" }}>
+                    <span>Selected Player: </span>
+                    <strong>{activePlayer || "No player nominated on wheel"}</strong>
+                </div>
 
-                <button
-                    className="button"
-                    style={{ marginTop: "20px" }}
-                    disabled={roundStarted}
-                    onClick={startRound}
-                >
-                    🔒 Start Silent Bid Round
-                </button>
+                {!roundStarted ? (
+                    <button
+                        className="button"
+                        disabled={!activePlayer}
+                        onClick={startRound}
+                    >
+                        🔒 Start Silent Bid Round for {activePlayer || "Current Player"}
+                    </button>
+                ) : (
+                    <div className="message-success" style={{ marginTop: "10px" }}>
+                        🔒 Silent Bidding Active for <strong>{activePlayer}</strong>
+                    </div>
+                )}
 
-                {message && <div className="message-success">{message}</div>}
+                {message && <div className="message-success" style={{ marginTop: "15px" }}>{message}</div>}
             </div>
 
             <div className="form-card" style={{ marginTop: "25px" }}>
-                <h2>Incoming Bids</h2>
+                <h2>Incoming Bids {activePlayer ? `— ${activePlayer}` : ""}</h2>
 
-                <table style={{ width: "100%" }}>
-                    <thead>
-                        <tr>
-                            <th>Captain</th>
-                            <th>Bid</th>
-                            <th>Status</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {bids.map(bid => (
-                            <tr
-                                key={bid.id}
-                                style={{
-                                    backgroundColor: winner?.captainName === bid.captainName
-                                        ? "#d4edda"
-                                        : "transparent",
-                                }}
-                            >
-                                <td>{bid.captainName}</td>
-                                <td>{bid.submitted ? `₹${bid.bidAmount}` : "-"}</td>
-                                <td>{bid.submitted ? "✅ Submitted" : "⌛ Waiting"}</td>
+                <div className="silent-bid-matrix-wrap">
+                    <table className="standings-table silent-bid-matrix">
+                        <thead>
+                            <tr>
+                                <th scope="col">Player</th>
+                                {bids.map(bid => (
+                                    <th key={bid.id} scope="col">{bid.captainName}</th>
+                                ))}
                             </tr>
-                        ))}
-                    </tbody>
-                </table>
+                        </thead>
+                        <tbody>
+                            {bids.length > 0 ? (
+                                <tr>
+                                    <td className="silent-bid-player">{activePlayer}</td>
+                                    {bids.map(bid => (
+                                        <td
+                                            key={bid.id}
+                                            className={winner?.captainName === bid.captainName
+                                                ? "silent-bid-cell silent-bid-winner"
+                                                : "silent-bid-cell"}
+                                        >
+                                            <strong>{bid.submitted ? `₹${bid.bidAmount}` : "-"}</strong>
+                                            <span className={bid.submitted ? "silent-bid-status submitted" : "silent-bid-status"}>
+                                                {bid.submitted ? "Submitted" : "Waiting"}
+                                            </span>
+                                        </td>
+                                    ))}
+                                </tr>
+                            ) : (
+                                <tr>
+                                    <td colSpan="1" className="silent-bid-empty">
+                                        No incoming bids. Start a silent bid round to collect bids.
+                                    </td>
+                                </tr>
+                            )}
+                        </tbody>
+                    </table>
+                </div>
 
                 {winner && (
                     <div className="message-success" style={{ marginTop: "20px", fontSize: "22px" }}>

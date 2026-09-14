@@ -71,6 +71,15 @@ public class PlayerService {
         playerRepository.save(player);
     }
 
+    public void renameTeamReferences(String oldCaptainName, String newCaptainName) {
+        playerRepository.findAll().stream()
+                .filter(player -> oldCaptainName.equalsIgnoreCase(player.getTeam()))
+                .forEach(player -> {
+                    player.setTeam(newCaptainName);
+                    playerRepository.save(player);
+                });
+    }
+
     private int getSeedBasePrice(String seed) {
         if (seed == null) {
             return 100;

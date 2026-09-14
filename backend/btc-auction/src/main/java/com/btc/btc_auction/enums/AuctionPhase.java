@@ -4,7 +4,13 @@ public enum AuctionPhase {
 
     NO_AUCTION,
 
-    NOMINATION,
+    OPENING_BID,
+
+    SPINNING,
+
+    BLIND_OPENING_BID,
+
+    SILENT_BID,
 
     BIDDING,
 

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { API_URL } from "../config";
 import { showToast } from "../services/toast";
 
@@ -19,19 +19,7 @@ function SilentBid() {
     const [tieBreak, setTieBreak] =
         useState(false);
 
-    useEffect(() => {
-
-        loadRound();
-
-        const interval =
-            setInterval(loadRound, 2000);
-
-        return () =>
-            clearInterval(interval);
-
-    }, []);
-
-    const loadRound = async () => {
+    const loadRound = useCallback(async () => {
 
         const response =
             await fetch(
@@ -59,7 +47,23 @@ function SilentBid() {
             }
         }
 
-    };
+    }, [username]);
+
+    useEffect(() => {
+
+        const initialLoad = window.setTimeout(() => {
+            void loadRound();
+        }, 0);
+
+        const interval =
+            setInterval(loadRound, 2000);
+
+        return () => {
+            window.clearTimeout(initialLoad);
+            clearInterval(interval);
+        };
+
+    }, [loadRound]);
 
     const submitBid = async () => {
 
@@ -182,6 +186,7 @@ function SilentBid() {
                         <input
                             className="input"
                             type="number"
+                            step={Number(bid) > 1000 ? 100 : 50}
                             placeholder="Enter Bid"
                             value={bid}
                             onChange={(e) =>

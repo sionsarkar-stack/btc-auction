@@ -53,6 +53,13 @@ public class AuctionLogService {
         }
     }
 
+    public void removeLogForPlayer(String playerName) {
+        auctionLogRepository.findAll().stream()
+                .filter(log -> log.getPlayerName().equalsIgnoreCase(playerName))
+                .findFirst()
+                .ifPresent(auctionLogRepository::delete);
+    }
+
     public void clearLogs() {
 
         auctionLogRepository.deleteAll();

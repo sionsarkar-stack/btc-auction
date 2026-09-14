@@ -18,6 +18,8 @@ public class TeamEntity {
 
     private int playersLeft;
 
+    private Boolean wildPickUsed = false;
+
     public TeamEntity() {
     }
 
@@ -55,5 +57,13 @@ public class TeamEntity {
 
     public void setPlayersLeft(int playersLeft) {
         this.playersLeft = playersLeft;
+    }
+
+    public boolean isWildPickUsed() {
+        return Boolean.TRUE.equals(wildPickUsed);
+    }
+
+    public void setWildPickUsed(boolean wildPickUsed) {
+        this.wildPickUsed = wildPickUsed;
     }
 }

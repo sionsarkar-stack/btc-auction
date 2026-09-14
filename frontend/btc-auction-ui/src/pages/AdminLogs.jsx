@@ -1,17 +1,18 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import { API_URL } from "../config";
 import { showToast } from "../services/toast";
 
-const secretTargetActions = [
-    "SECRET_TARGET_SUBMITTED",
-    "SECRET_TARGET_SETTLED",
-    "SECRET_TARGET_SHARED",
+const protectionActions = [
+    "PROTECTION_PLAYER_SELECTED",
+    "PROTECTION_BOOST",
+    "PROTECTION_PENALTY",
+    "PROTECTION_BONUS",
 ];
 
-const reverseTargetActions = [
-    "REVERSE_TARGET_SUBMITTED",
-    "REVERSE_TARGET_TRIGGERED",
+const valueBetActions = [
+    "VALUE_BET_SUBMITTED",
+    "VALUE_BET_REWARD",
 ];
 
 function LogEntry({ log }) {
@@ -55,7 +56,7 @@ function AdminLogs() {
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState("");
 
-    const loadLogs = async () => {
+    const loadLogs = useCallback(async () => {
         setIsLoading(true);
         setError("");
 
@@ -70,13 +71,20 @@ function AdminLogs() {
         } finally {
             setIsLoading(false);
         }
-    };
+    }, []);
 
     useEffect(() => {
-        loadLogs();
-        const interval = setInterval(loadLogs, 5000);
-        return () => clearInterval(interval);
-    }, []);
+        const initialLoad = window.setTimeout(() => {
+            void loadLogs();
+        }, 0);
+        const interval = window.setInterval(() => {
+            void loadLogs();
+        }, 5000);
+        return () => {
+            window.clearTimeout(initialLoad);
+            window.clearInterval(interval);
+        };
+    }, [loadLogs]);
 
     const clearLogs = async () => {
         if (!window.confirm("Clear all admin logs for the current auction?")) return;
@@ -87,10 +95,10 @@ function AdminLogs() {
         if (response.ok) setLogs([]);
     };
 
-    const secretLogs = logs.filter(log => secretTargetActions.includes(log.actionType));
-    const reverseLogs = logs.filter(log => reverseTargetActions.includes(log.actionType));
-    const generalLogs = logs.filter(log => !secretTargetActions.includes(log.actionType)
-        && !reverseTargetActions.includes(log.actionType));
+    const protectionLogs = logs.filter(log => protectionActions.includes(log.actionType));
+    const valueBetLogs = logs.filter(log => valueBetActions.includes(log.actionType));
+    const generalLogs = logs.filter(log => !protectionActions.includes(log.actionType)
+        && !valueBetActions.includes(log.actionType));
 
     return (
         <div className="app-container">
@@ -113,8 +121,8 @@ function AdminLogs() {
             {isLoading && logs.length === 0 && !error ? <p>Loading audit logs...</p> : null}
 
             <div className="admin-log-sections">
-                <LogSection title="Secret Targets" icon="🎯" logs={secretLogs} emptyMessage="No secret-target activity yet." />
-                <LogSection title="Reverse Targets" icon="🛡️" logs={reverseLogs} emptyMessage="No reverse-target activity yet." />
+                <LogSection title="Protection Players" icon="🛡️" logs={protectionLogs} emptyMessage="No protection-player activity yet." />
+                <LogSection title="Value Bets" icon="💰" logs={valueBetLogs} emptyMessage="No Value Bet activity yet." />
                 <LogSection title="General Auction Logs" icon="📋" logs={generalLogs} emptyMessage="No general admin activity yet." />
             </div>
         </div>

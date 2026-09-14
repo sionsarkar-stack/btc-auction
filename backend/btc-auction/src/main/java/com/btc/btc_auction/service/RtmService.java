@@ -71,6 +71,10 @@ public class RtmService {
 
         }
 
+        if (auction.getCurrentPlayer().equalsIgnoreCase(config.getRtmLockdownPlayer())) {
+            return "RTM is locked down for this player.";
+        }
+
         if (auction.getLeader().equalsIgnoreCase(captainName)) {
             return "The current highest bidder cannot use RTM on this player.";
         }
@@ -165,6 +169,8 @@ public class RtmService {
         auction.setLeader(
                 claim.getCaptainName());
 
+        currentAuctionService.saveCurrentAuction();
+
         config.setAuctionPhase(
                 AuctionPhase.BIDDING);
 
@@ -248,6 +254,18 @@ public class RtmService {
 
             return "Captain not found.";
 
+        }
+
+        if (bidAmount == null || bidAmount <= 0) {
+            return "RTM bid must be greater than zero.";
+        }
+
+        if (!teamService.isValidBidIncrement(bidAmount)) {
+            return "RTM bid must be a multiple of 50 up to ₹1000, then a multiple of 100.";
+        }
+
+        if (bidAmount <= claim.getOriginalBidAmount()) {
+            return "RTM bid must be higher than the original bid.";
         }
 
         int maxBid = teamService.getMaxBid(team);
