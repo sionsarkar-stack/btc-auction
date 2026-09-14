@@ -44,8 +44,10 @@ function EventOverlay({ event }) {
         case "VALUE_BET_REWARD":
 
             icon = "💰";
-            title = "VALUE BET WINNER";
-            message = `${event.captainName} · +₹${event.amount}`;
+            title = event.captainName?.includes(",")
+                ? "VALUE BET WINNERS"
+                : "VALUE BET WINNER";
+            message = "";
             break;
 
         case "VALUE_BET":

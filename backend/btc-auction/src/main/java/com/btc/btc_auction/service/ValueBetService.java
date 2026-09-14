@@ -9,7 +9,9 @@ import com.btc.btc_auction.repository.ValueBetRepository;
 import jakarta.transaction.Transactional;
 import org.springframework.stereotype.Service;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Service
 public class ValueBetService {
@@ -115,49 +117,61 @@ public class ValueBetService {
             }
         }
 
-        ValueBetEntity closestBet = null;
         int closestDifference = Integer.MAX_VALUE;
-        long earliestBetId = Long.MAX_VALUE;
-
         for (ValueBetEntity bet : bets) {
             int difference = Math.abs(bet.getPredictedPrice() - finalPrice);
-            long betId = bet.getId() == null ? Long.MAX_VALUE : bet.getId();
-            if (difference > closestDifference
-                    || (difference == closestDifference && betId >= earliestBetId)) {
+            if (difference < closestDifference) {
+                closestDifference = difference;
+            }
+        }
+
+        for (ValueBetEntity bet : bets) {
+            auctionEventService.logEvent(
+                    "VALUE_BET_REVEALED",
+                    playerName,
+                    bet.getCaptainName(),
+                    bet.getPredictedPrice(),
+                    "Value Bet revealed after sale. Final price ₹" + finalPrice + ".");
+        }
+
+        List<String> winningCaptains = new ArrayList<>();
+        int rewardCount = 0;
+        for (ValueBetEntity bet : bets) {
+            if (Math.abs(bet.getPredictedPrice() - finalPrice) != closestDifference) {
                 continue;
             }
 
-            closestBet = bet;
-            closestDifference = difference;
-            earliestBetId = betId;
-        }
-
-        int rewardCount = 0;
-        if (closestBet != null) {
-            TeamEntity team = teamService.getTeam(closestBet.getCaptainName());
+            TeamEntity team = teamService.getTeam(bet.getCaptainName());
             if (team != null) {
                 team.setPurse(team.getPurse() + VALUE_BET_REWARD);
                 teamService.saveTeam(team);
-                closestBet.setRewarded(true);
-                repository.save(closestBet);
-                auctionEventService.logEvent(
-                        "VALUE_BET_REWARD",
-                        playerName,
-                        closestBet.getCaptainName(),
-                        VALUE_BET_REWARD,
-                        "Prediction ₹" + closestBet.getPredictedPrice() + " was closest to final price ₹" + finalPrice);
+                bet.setRewarded(true);
+                repository.save(bet);
+                winningCaptains.add(bet.getCaptainName());
                 if (adminActionLogService != null) {
                     adminActionLogService.addLog(
                             "VALUE_BET_REWARD",
                             playerName,
                             "",
-                            closestBet.getCaptainName(),
-                            closestBet.getPredictedPrice(),
+                            bet.getCaptainName(),
+                            bet.getPredictedPrice(),
                             VALUE_BET_REWARD,
                             "Closest prediction to final price ₹" + finalPrice + "; ₹200 awarded");
                 }
                 rewardCount++;
             }
+        }
+
+        if (!winningCaptains.isEmpty()) {
+            String winners = winningCaptains.stream()
+                    .collect(Collectors.joining(", "));
+            auctionEventService.logEvent(
+                    "VALUE_BET_REWARD",
+                    playerName,
+                    winners,
+                    VALUE_BET_REWARD,
+                    "Closest Value Bet prediction(s) to final price ₹" + finalPrice
+                            + "; ₹200 awarded to each winner.");
         }
         AuctionConfigEntity config = auctionConfigService.getConfig();
         if (playerName.equalsIgnoreCase(config.getValueBetPlayer())) {

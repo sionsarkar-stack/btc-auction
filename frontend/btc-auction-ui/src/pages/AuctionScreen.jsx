@@ -5,6 +5,7 @@ import axios from "axios";
 
 import { API_URL } from "../config";
 import CasinoReel from "../components/CasinoReel";
+import EventOverlay from "../components/EventOverlay";
 
 function AuctionScreen() {
 
@@ -29,10 +30,19 @@ function AuctionScreen() {
     const [silentWinner, setSilentWinner] =
         useState(null);
 
+    const [valueBetWinner, setValueBetWinner] =
+        useState(null);
+
     const lastProcessedEventId =
         useRef(null);
 
     const lastScreenEventId =
+        useRef(null);
+
+    const lastValueBetWinnerEventId =
+        useRef(null);
+
+    const valueBetWinnerTimer =
         useRef(null);
 
     const [auctionStatus, setAuctionStatus] =
@@ -156,6 +166,27 @@ function AuctionScreen() {
                             }, 5000);
 
                         }
+
+                        if (
+                            latest &&
+                            latest.eventType === "VALUE_BET_REWARD" &&
+                            latest.id !== lastValueBetWinnerEventId.current
+                        ) {
+
+                            lastValueBetWinnerEventId.current =
+                                latest.id;
+
+                            setValueBetWinner(latest);
+
+                            window.clearTimeout(valueBetWinnerTimer.current);
+
+                            valueBetWinnerTimer.current = window.setTimeout(() => {
+
+                                setValueBetWinner(null);
+
+                            }, 5000);
+
+                        }
                     }
 
                 });
@@ -212,6 +243,7 @@ function AuctionScreen() {
 
         return () => {
 
+            window.clearTimeout(valueBetWinnerTimer.current);
             client.deactivate();
 
         };
@@ -267,10 +299,17 @@ function AuctionScreen() {
     const isWheelSpinning =
         auctionStatus?.auctionPhase === "SPINNING";
 
+    const valueBetActive =
+        role === "CAPTAIN"
+        && ["OPENING_BID", "BLIND_OPENING_BID"].includes(auctionStatus?.auctionPhase)
+        && auctionStatus?.valueBetPlayer?.toLowerCase() === auction.currentPlayer?.toLowerCase()
+        && auction.currentPlayer;
+
     const reelPlayers = availablePlayers.filter(player => !player.sold);
 
     return (
         <>
+            <EventOverlay event={valueBetWinner} />
             {showSilentWinner &&
                 silentWinner && (
 
@@ -483,22 +522,25 @@ function AuctionScreen() {
                                 >
                                     {team?.wildPickUsed ? "Wild Pick Used" : "Return Player with Wild Pick"}
                                 </button>
-                                <div style={{ display: "flex", gap: "8px", maxWidth: "320px", width: "100%" }}>
-                                    <input
-                                        className="input"
-                                        type="number"
-                                        min="1"
-                                        step={Number(valueBetPrediction) > 1000 ? 100 : 50}
-                                        placeholder="Predict final price"
-                                        value={valueBetPrediction}
-                                        onChange={event => setValueBetPrediction(event.target.value)}
-                                    />
-                                    <button className="button" type="button" onClick={submitValueBet}>
-                                        Submit Value Bet
-                                    </button>
-                                </div>
                             </div>
                         )}
+
+                    {valueBetActive && (
+                        <div style={{ marginTop: "20px", display: "flex", gap: "8px", maxWidth: "320px", width: "100%" }}>
+                            <input
+                                className="input"
+                                type="number"
+                                min="1"
+                                step={Number(valueBetPrediction) > 1000 ? 100 : 50}
+                                placeholder="Predict final price"
+                                value={valueBetPrediction}
+                                onChange={event => setValueBetPrediction(event.target.value)}
+                            />
+                            <button className="button" type="button" onClick={submitValueBet}>
+                                Submit Value Bet
+                            </button>
+                        </div>
+                    )}
 
                     {!silentBidActive && (
 

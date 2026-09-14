@@ -26,6 +26,9 @@ ALTER TABLE IF EXISTS auction_config
     ADD COLUMN IF NOT EXISTS value_bet_player VARCHAR(255);
 
 ALTER TABLE IF EXISTS auction_config
+    ADD COLUMN IF NOT EXISTS value_bet_events_used INTEGER DEFAULT 0;
+
+ALTER TABLE IF EXISTS auction_config
     ADD COLUMN IF NOT EXISTS pending_silent_auction_player VARCHAR(255);
 
 ALTER TABLE IF EXISTS auction_config

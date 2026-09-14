@@ -11,6 +11,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
+import org.mockito.InOrder;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.List;
@@ -18,6 +19,8 @@ import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -102,6 +105,45 @@ class ValueBetServiceTest {
     }
 
     @Test
+    void rewardsEveryTiedClosestPredictionAndRevealsAllBetsAfterSale() {
+        TeamEntity sen = new TeamEntity();
+        sen.setCaptainName("Sen");
+        sen.setPurse(1000);
+        TeamEntity gappu = new TeamEntity();
+        gappu.setCaptainName("Gappu");
+        gappu.setPurse(1000);
+        TeamEntity joy = new TeamEntity();
+        joy.setCaptainName("Joy");
+        joy.setPurse(1000);
+
+        ValueBetEntity senBet = valueBet("Sen", 500);
+        ValueBetEntity gappuBet = valueBet("Gappu", 500);
+        ValueBetEntity joyBet = valueBet("Joy", 700);
+        when(repository.findByPlayerName("Rohit")).thenReturn(List.of(senBet, gappuBet, joyBet));
+        when(teamService.getTeam("Sen")).thenReturn(sen);
+        when(teamService.getTeam("Gappu")).thenReturn(gappu);
+
+        assertEquals(2, valueBetService.applyRewards("Rohit", 500));
+        assertEquals(1200, sen.getPurse());
+        assertEquals(1200, gappu.getPurse());
+        assertEquals(1000, joy.getPurse());
+
+        InOrder eventOrder = inOrder(auctionEventService);
+        eventOrder.verify(auctionEventService).logEvent(
+                eq("VALUE_BET_REVEALED"), eq("Rohit"), eq("Sen"), eq(500),
+                eq("Value Bet revealed after sale. Final price ₹500."));
+        eventOrder.verify(auctionEventService).logEvent(
+                eq("VALUE_BET_REVEALED"), eq("Rohit"), eq("Gappu"), eq(500),
+                eq("Value Bet revealed after sale. Final price ₹500."));
+        eventOrder.verify(auctionEventService).logEvent(
+                eq("VALUE_BET_REVEALED"), eq("Rohit"), eq("Joy"), eq(700),
+                eq("Value Bet revealed after sale. Final price ₹500."));
+        eventOrder.verify(auctionEventService).logEvent(
+                eq("VALUE_BET_REWARD"), eq("Rohit"), eq("Sen, Gappu"), eq(200),
+                eq("Closest Value Bet prediction(s) to final price ₹500; ₹200 awarded to each winner."));
+    }
+
+    @Test
     void acceptsPredictionDuringBlindOpeningBid() {
         config.setAuctionPhase(AuctionPhase.BLIND_OPENING_BID);
         currentAuctionService.setCurrentAuction(new Auction("Rohit", "A", 300, "None", 300));
@@ -123,5 +165,13 @@ class ValueBetServiceTest {
 
         assertEquals("Value Bet event is not active for this player.",
                 valueBetService.submitPrediction("Rohit", "Sen", 500));
+    }
+
+    private ValueBetEntity valueBet(String captainName, int predictedPrice) {
+        ValueBetEntity bet = new ValueBetEntity();
+        bet.setPlayerName("Rohit");
+        bet.setCaptainName(captainName);
+        bet.setPredictedPrice(predictedPrice);
+        return bet;
     }
 }

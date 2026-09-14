@@ -31,6 +31,7 @@ public class AuctionService {
         private static final long WHEEL_SPIN_MIN_DURATION_MILLIS = 800;
         private static final long WHEEL_SPIN_MAX_DURATION_MILLIS = 3000;
         private static final int WHEEL_SPIN_MAX_PLAYERS = 35;
+        private static final int MAX_VALUE_BET_EVENTS = 3;
 
         @Value("${btc.auction.random-event-probability:0.75}")
         private double randomEventProbability = RANDOM_EVENT_PROBABILITY;
@@ -209,7 +210,7 @@ public class AuctionService {
                         return "No available players left to spin.";
                 }
 
-                RandomEventEntity scheduledEvent = selectRandomEventForNextPlayer();
+                RandomEventEntity scheduledEvent = selectRandomEventForNextPlayer(config);
                 PlayerEntity selected = availablePlayers.get(
                                 (int) (randomValueSupplier.getAsDouble() * availablePlayers.size()));
 
@@ -466,7 +467,7 @@ public class AuctionService {
                 return "Random events are assigned automatically before each wheel spin.";
         }
 
-        private RandomEventEntity selectRandomEventForNextPlayer() {
+        private RandomEventEntity selectRandomEventForNextPlayer(AuctionConfigEntity config) {
                 if (randomEventService == null
                                 || randomValueSupplier.getAsDouble() >= randomEventProbability) {
                         return null;
@@ -477,10 +478,18 @@ public class AuctionService {
                         return null;
                 }
 
+                List<RandomEventEntity> eligibleEvents = activeEvents.stream()
+                                .filter(event -> event.getType() != RandomEventType.VALUE_BET
+                                                || config.getValueBetEventsUsed() < MAX_VALUE_BET_EVENTS)
+                                .toList();
+                if (eligibleEvents.isEmpty()) {
+                        return null;
+                }
+
                 int selectedIndex = Math.min(
-                                activeEvents.size() - 1,
-                                (int) (randomValueSupplier.getAsDouble() * activeEvents.size()));
-                return activeEvents.get(selectedIndex);
+                                eligibleEvents.size() - 1,
+                                (int) (randomValueSupplier.getAsDouble() * eligibleEvents.size()));
+                return eligibleEvents.get(selectedIndex);
         }
 
         private void assignRandomEventToPlayer(
@@ -512,6 +521,9 @@ public class AuctionService {
                                 break;
                         case VALUE_BET:
                                 config.setValueBetPlayer(playerName);
+                                config.setValueBetEventsUsed(Math.min(
+                                                MAX_VALUE_BET_EVENTS,
+                                                config.getValueBetEventsUsed() + 1));
                                 break;
                         case MARKET_CRASH:
                                 break;
@@ -523,7 +535,8 @@ public class AuctionService {
 
         private void logScheduledRandomEvent(AuctionConfigEntity config, String playerName) {
                 RandomEventType eventType = config.getPendingRandomEventType();
-                if (eventType == null || eventType == RandomEventType.MARKET_CRASH) {
+                if (eventType == null || eventType == RandomEventType.MARKET_CRASH
+                                || eventType == RandomEventType.VALUE_BET) {
                         return;
                 }
 
@@ -723,10 +736,6 @@ public class AuctionService {
                                 team.getPlayersLeft() - packageSize);
 
                 teamService.saveTeam(team);
-                if (valueBetService != null) {
-                        valueBetService.applyRewards(playerName, finalSalePrice);
-                }
-                clearRandomEventForPlayer(playerName, config);
                 AuctionLogEntity log = new AuctionLogEntity();
 
                 log.setPlayerName(playerName);
@@ -748,6 +757,10 @@ public class AuctionService {
                                                                                 + formatAdjustment(marketAdjustment))
                                                 + " | Net purse impact ₹"
                                                 + netPurseImpact);
+                if (valueBetService != null) {
+                        valueBetService.applyRewards(playerName, finalSalePrice);
+                }
+                clearRandomEventForPlayer(playerName, config);
                 rtmService.clearCurrentAuctionClaim();
                 currentAuctionService.setCurrentAuction(
                                 new Auction(
@@ -1060,6 +1073,7 @@ public class AuctionService {
                 config.setAuctionRound(1);
                 config.setProtectionSelectionEnabled(false);
                 config.setValueBetPlayer(null);
+                config.setValueBetEventsUsed(0);
                 config.setRtmLockdownPlayer(null);
                 config.setSquadSize(10);
                 config.setTargetBonus(150);

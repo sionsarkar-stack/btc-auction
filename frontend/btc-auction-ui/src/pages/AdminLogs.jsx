@@ -61,7 +61,9 @@ function AdminLogs() {
         setError("");
 
         try {
-            const response = await fetch(`${API_URL}/api/admin/logs`);
+            const response = await fetch(`${API_URL}/api/admin/logs`, {
+                credentials: "include"
+            });
             if (!response.ok) throw new Error("Unable to load audit logs");
             const data = await response.json();
             setLogs(data.slice().reverse());
@@ -89,7 +91,10 @@ function AdminLogs() {
     const clearLogs = async () => {
         if (!window.confirm("Clear all admin logs for the current auction?")) return;
 
-        const response = await fetch(`${API_URL}/api/admin/logs/clear`, { method: "POST" });
+        const response = await fetch(`${API_URL}/api/admin/logs/clear`, {
+            method: "POST",
+            credentials: "include"
+        });
         const result = await response.text();
         showToast(result, response.ok ? "success" : "error");
         if (response.ok) setLogs([]);

@@ -49,6 +49,8 @@ public class AuctionConfigEntity {
 
     private String valueBetPlayer;
 
+    private int valueBetEventsUsed;
+
     private String pendingSilentAuctionPlayer;
 
     private String pendingRandomEventType;
@@ -193,6 +195,14 @@ public class AuctionConfigEntity {
 
     public void setValueBetPlayer(String valueBetPlayer) {
         this.valueBetPlayer = valueBetPlayer;
+    }
+
+    public int getValueBetEventsUsed() {
+        return valueBetEventsUsed;
+    }
+
+    public void setValueBetEventsUsed(int valueBetEventsUsed) {
+        this.valueBetEventsUsed = valueBetEventsUsed;
     }
 
     public String getPendingSilentAuctionPlayer() {

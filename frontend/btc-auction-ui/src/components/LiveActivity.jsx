@@ -13,6 +13,7 @@ const eventNames = {
     PLAYER_SOLD: "🏆 Player Sold",
     STARTING_BID_SUBMITTED: "🎯 Starting Bid Submitted",
     STARTING_BID_WINNER: "🏆 Highest Starting Bid",
+    VALUE_BET_REVEALED: "💰 Value Bet",
     VALUE_BET_REWARD: "💰 Value Bet Winner",
     PROTECTION_REVEALED: "🛡️ Protection Revealed",
     SILENT_BID_SOLD: "🤐 Silent Auction Winner",
@@ -30,6 +31,22 @@ const overlayEvents = {
     PROTECTION_REVEALED: true,
     SILENT_BID_SOLD: true,
     WILDCARD_TRIGGERED: true
+};
+
+const formatEventAmount = event => {
+    if (event.amount === null || event.amount === undefined || event.amount === 0) {
+        return "";
+    }
+
+    if (event.eventType === "VALUE_BET_REVEALED") {
+        return ` Prediction ₹${event.amount}`;
+    }
+
+    if (event.eventType === "VALUE_BET_REWARD") {
+        return ` Bonus +₹${event.amount} each`;
+    }
+
+    return ` Final ₹${event.amount > 0 ? "+" : ""}${event.amount}`;
 };
 
 function LiveActivity({ showActivity = true }) {
@@ -205,7 +222,7 @@ function LiveActivity({ showActivity = true }) {
                             <div>
                                 {event.playerName}
                                 {event.captainName && ` → ${event.captainName}`}
-                                {event.amount !== 0 && ` Final ₹${event.amount > 0 ? "+" : ""}${event.amount}`}
+                                {formatEventAmount(event)}
                             </div>
 
                             <br />

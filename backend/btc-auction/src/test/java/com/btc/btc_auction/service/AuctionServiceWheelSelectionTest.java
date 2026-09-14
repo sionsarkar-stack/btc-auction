@@ -11,6 +11,7 @@ import com.btc.btc_auction.model.Auction;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -24,6 +25,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -58,6 +60,8 @@ class AuctionServiceWheelSelectionTest {
     private BlindOpeningBidService blindOpeningBidService;
     @Mock
     private ProtectionPlayerService protectionPlayerService;
+    @Mock
+    private ValueBetService valueBetService;
     @Mock
     private SilentBidService silentBidService;
     private AuctionConfigEntity config;
@@ -159,6 +163,35 @@ class AuctionServiceWheelSelectionTest {
     }
 
     @Test
+    void keepsValueBetActivationPrivateUntilThePlayerIsSold() {
+        RandomEventEntity valueBet = randomEvent(RandomEventType.VALUE_BET);
+        when(randomEventService.getActiveEvents()).thenReturn(List.of(valueBet));
+        auctionService = auctionServiceWithRandomEvents(new SequenceDoubleSupplier(0.0, 0.0, 0.0));
+
+        auctionService.spinWheel();
+        completeCurrentWheelSpin();
+
+        assertEquals("Rohit Sharma", config.getValueBetPlayer());
+        assertEquals(1, config.getValueBetEventsUsed());
+        verifyNoInteractions(auctionEventService);
+    }
+
+    @Test
+    void doesNotScheduleValueBetAfterThreeUses() {
+        config.setValueBetEventsUsed(3);
+        RandomEventEntity valueBet = randomEvent(RandomEventType.VALUE_BET);
+        when(randomEventService.getActiveEvents()).thenReturn(List.of(valueBet));
+        auctionService = auctionServiceWithRandomEvents(new SequenceDoubleSupplier(0.0, 0.0, 0.0));
+
+        auctionService.spinWheel();
+        completeCurrentWheelSpin();
+
+        assertNull(config.getValueBetPlayer());
+        assertEquals(3, config.getValueBetEventsUsed());
+        verifyNoInteractions(auctionEventService);
+    }
+
+    @Test
     void defersMarketCrashUntilCallSoldForTheAssignedPlayer() {
         RandomEventEntity marketCrash = randomEvent(RandomEventType.MARKET_CRASH);
         when(randomEventService.getActiveEvents()).thenReturn(List.of(marketCrash));
@@ -176,6 +209,51 @@ class AuctionServiceWheelSelectionTest {
         assertEquals("Market Crash triggered. Waiting for RTM.", auctionService.callSold("Sen", 300));
         assertEquals("Rohit Sharma", config.getMarketAdjustmentPlayer());
         assertEquals(-100, config.getMarketAdjustment());
+    }
+
+    @Test
+    void settlesValueBetsAfterLoggingThePlayerSale() {
+        TeamEntity team = new TeamEntity();
+        team.setCaptainName("Sen");
+        team.setPurse(1000);
+        team.setPlayersLeft(5);
+        PlayerEntity player = new PlayerEntity();
+        player.setName("Rohit Sharma");
+        player.setSeed("A");
+        player.setBasePrice(300);
+        currentAuctionService.setCurrentAuction(new Auction("Rohit Sharma", "A", 500, "Sen", 300));
+        config.setAuctionPhase(AuctionPhase.SOLD);
+        when(teamService.getTeam("Sen")).thenReturn(team);
+        when(teamService.getMaxBid(team)).thenReturn(1000);
+        when(playerService.getPlayer("Rohit Sharma")).thenReturn(player);
+        auctionService = new AuctionService(
+                teamService,
+                playerService,
+                auctionLogService,
+                adminActionLogService,
+                auctionEventService,
+                auctionConfigService,
+                rtmService,
+                auctionSocketService,
+                currentAuctionService,
+                clubbedPlayerPairService,
+                null,
+                null,
+                null,
+                valueBetService,
+                null,
+                () -> 0.75);
+
+        auctionService.sellPlayer("Rohit Sharma", "Sen", 500);
+
+        InOrder eventOrder = inOrder(auctionEventService, valueBetService);
+        eventOrder.verify(auctionEventService).logEvent(
+                eq("PLAYER_SOLD"),
+                eq("Rohit Sharma"),
+                eq("Sen"),
+                eq(500),
+                anyString());
+        eventOrder.verify(valueBetService).applyRewards("Rohit Sharma", 500);
     }
 
     @Test

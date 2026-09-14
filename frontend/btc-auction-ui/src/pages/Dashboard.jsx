@@ -478,7 +478,6 @@ function Dashboard() {
                 "PROTECTION_REVEALED",
                 "VALUE_BET_REWARD",
                 "STARTING_BID_WINNER",
-                "VALUE_BET",
                 "WILDCARD_TRIGGERED"
             ].includes(event.eventType)
         );
@@ -515,6 +514,8 @@ function Dashboard() {
     const activeRandomEventType = auctionStatus?.pendingRandomEventType;
     const activeRandomEventDescription = auctionStatus?.pendingRandomEventDescription
         || "A surprise auction rule is in play.";
+    const showPublicRandomEvent = activeRandomEventType
+        && activeRandomEventType !== "VALUE_BET";
 
     return (
 
@@ -531,7 +532,7 @@ function Dashboard() {
                 </div>
             )}
 
-            {activeRandomEventType && (
+            {showPublicRandomEvent && (
                 <section className="live-random-event-banner" role="status" aria-live="polite">
                     <span className="live-random-event-live">LIVE</span>
                     <div className="live-random-event-copy">
@@ -599,7 +600,7 @@ function Dashboard() {
                         && openingBidStatus?.submitted && (
                             <p className="message-success">Opening bid submitted. Waiting for all captains.</p>
                         )}
-                    {auctionStatus?.auctionPhase === "OPENING_BID"
+                    {["OPENING_BID", "BLIND_OPENING_BID"].includes(auctionStatus?.auctionPhase)
                         && auctionStatus?.valueBetPlayer?.toLowerCase() === currentAuction.currentPlayer?.toLowerCase()
                         && currentAuction.currentPlayer && (
                             <div className="captain-action-row" style={{ display: "flex", gap: "8px", marginBottom: "12px" }}>
@@ -940,6 +941,9 @@ function Dashboard() {
 
                             <strong>
 
+                                {event.eventType === "VALUE_BET_REWARD" &&
+                                    "💰 VALUE BET WINNERS"}
+
                                 {event.eventType ===
                                     "BOUNTY" &&
                                     "🎁 BOUNTY"}
@@ -969,22 +973,34 @@ function Dashboard() {
 
                             </strong>
 
-                            <div>
+                            {event.eventType === "VALUE_BET_REWARD" ? (
 
-                                {event.playerName}
-                                {event.captainName && ` → ${event.captainName}`}
+                                <div>{event.captainName}</div>
 
-                            </div>
+                            ) : (
 
-                            <div>
-                                {event.details}
-                            </div>
+                                <>
 
-                            {event.amount !== 0 && (
+                                    <div>
 
-                                <div>
-                                    ₹{event.amount > 0 ? "+" : ""}{event.amount}
-                                </div>
+                                        {event.playerName}
+                                        {event.captainName && ` → ${event.captainName}`}
+
+                                    </div>
+
+                                    <div>
+                                        {event.details}
+                                    </div>
+
+                                    {event.amount !== 0 && (
+
+                                        <div>
+                                            ₹{event.amount > 0 ? "+" : ""}{event.amount}
+                                        </div>
+
+                                    )}
+
+                                </>
 
                             )}
 
