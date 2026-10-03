@@ -64,6 +64,8 @@ class AuctionServiceWheelSelectionTest {
     private ValueBetService valueBetService;
     @Mock
     private SilentBidService silentBidService;
+    @Mock
+    private ReAuctionSnapshotService reAuctionSnapshotService;
     private AuctionConfigEntity config;
 
     private AuctionService auctionService;
@@ -127,6 +129,23 @@ class AuctionServiceWheelSelectionTest {
         assertEquals("Complete or return the current player before spinning the wheel again.",
                 auctionService.spinWheel());
         assertEquals("Rohit Sharma", currentAuctionService.getCurrentAuction().getCurrentPlayer());
+    }
+
+    @Test
+    void markUnsoldDefersTheCurrentPlayerAndExcludesThemFromRoundOneWheel() {
+        currentAuctionService.setCurrentAuction(new Auction("Rohit Sharma", "A", 300, "None", 300));
+        config.setAuctionPhase(AuctionPhase.BIDDING);
+
+        assertEquals(
+                "Rohit Sharma marked unsold and moved to the re-auction pool.",
+                auctionService.markCurrentPlayerUnsold());
+        assertTrue(playerService.getPlayer("Rohit Sharma").isDeferredToReAuction());
+        assertTrue(currentAuctionService.getCurrentAuction().getCurrentPlayer().isBlank());
+        assertEquals(AuctionPhase.NO_AUCTION, config.getAuctionPhase());
+
+        auctionService.spinWheel();
+
+        assertEquals("Virat Kohli", currentAuctionService.getCurrentAuction().getCurrentPlayer());
     }
 
     @Test
@@ -359,13 +378,16 @@ class AuctionServiceWheelSelectionTest {
                 null,
                 silentBidService,
                 () -> 0.75);
-        when(playerService.getAllPlayers()).thenReturn(List.of());
+        PlayerEntity deferredPlayer = playerService.getPlayer("Rohit Sharma");
+        deferredPlayer.setDeferredToReAuction(true);
+        when(playerService.getAllPlayers()).thenReturn(List.of(deferredPlayer));
 
         auctionService.resetAuction();
 
         verify(silentBidService).clearRound();
         verify(protectionPlayerService).clearAll();
         assertFalse(config.isProtectionSelectionEnabled());
+        assertFalse(deferredPlayer.isDeferredToReAuction());
     }
 
     @Test
@@ -483,6 +505,65 @@ class AuctionServiceWheelSelectionTest {
                 auctionService.spinWheel());
         assertEquals(3, config.getAuctionRound());
         assertFalse(config.isAuctionStarted());
+    }
+
+    @Test
+    void cancelReAuctionRestoresRoundOneAndReturnsUnsoldPlayersToTheWheel() {
+        PlayerEntity deferredPlayer = playerService.getPlayer("Rohit Sharma");
+        deferredPlayer.setDeferredToReAuction(true);
+        deferredPlayer.setReAuctioned(true);
+        when(playerService.getAllPlayers()).thenReturn(List.of(deferredPlayer));
+        when(reAuctionSnapshotService.hasSnapshot()).thenReturn(true);
+        when(reAuctionSnapshotService.restore()).thenReturn(1);
+        config.setAuctionRound(2);
+        config.setAuctionStarted(true);
+
+        auctionService = new AuctionService(
+                teamService,
+                playerService,
+                auctionLogService,
+                adminActionLogService,
+                auctionEventService,
+                auctionConfigService,
+                rtmService,
+                auctionSocketService,
+                currentAuctionService,
+                clubbedPlayerPairService,
+                null,
+                null,
+                null,
+                null,
+                null,
+                reAuctionSnapshotService,
+                () -> 0.75);
+
+        assertEquals(
+                "Re-auction cancelled. Re-auction sales were rolled back and unsold players returned to the wheel.",
+                auctionService.cancelReAuction());
+        assertEquals(1, config.getAuctionRound());
+        assertTrue(config.isAuctionStarted());
+        assertEquals(AuctionPhase.NO_AUCTION, config.getAuctionPhase());
+        assertFalse(deferredPlayer.isDeferredToReAuction());
+        assertFalse(deferredPlayer.isReAuctioned());
+        verify(reAuctionSnapshotService).restore();
+    }
+
+    @Test
+    void reAuctionAllowsLiveBidsAboveTheNormalMaximumBid() {
+        TeamEntity team = new TeamEntity();
+        team.setCaptainName("Sen");
+        team.setPlayersLeft(4);
+        currentAuctionService.setCurrentAuction(new Auction("Rohit Sharma", "A", 300, "None", 300));
+        config.setAuctionRound(2);
+        config.setAuctionPhase(AuctionPhase.BIDDING);
+        when(teamService.getTeam("Sen")).thenReturn(team);
+        when(teamService.isValidBidIncrement(5000)).thenReturn(true);
+
+        auctionService.updateCurrentAuction("Sen", 5000);
+
+        assertEquals("Sen", currentAuctionService.getCurrentAuction().getLeader());
+        assertEquals(5000, currentAuctionService.getCurrentAuction().getCurrentBid());
+        verify(teamService, never()).getMaxBid(team);
     }
 
     private AuctionService auctionServiceWithRandomEvents(DoubleSupplier randomValueSupplier) {

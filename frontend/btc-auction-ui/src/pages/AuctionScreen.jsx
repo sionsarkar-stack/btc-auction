@@ -7,6 +7,10 @@ import { API_URL } from "../config";
 import CasinoReel from "../components/CasinoReel";
 import EventOverlay from "../components/EventOverlay";
 
+const lastScreenEventStorageKey = "btc-auction:last-screen-event-id";
+const lastSilentWinnerStorageKey = "btc-auction:last-silent-winner-event-id";
+const lastValueBetWinnerStorageKey = "btc-auction:last-value-bet-winner-event-id";
+
 function AuctionScreen() {
 
     const [auction, setAuction] =
@@ -34,13 +38,15 @@ function AuctionScreen() {
         useState(null);
 
     const lastProcessedEventId =
-        useRef(null);
+        useRef(window.localStorage.getItem(lastSilentWinnerStorageKey));
 
     const lastScreenEventId =
-        useRef(null);
+        useRef(window.localStorage.getItem(lastScreenEventStorageKey));
 
     const lastValueBetWinnerEventId =
-        useRef(null);
+        useRef(window.localStorage.getItem(lastValueBetWinnerStorageKey));
+
+    const previousAuctionPhase = useRef(null);
 
     const valueBetWinnerTimer =
         useRef(null);
@@ -134,24 +140,30 @@ function AuctionScreen() {
 
                         setLatestEvent(latest);
 
-                        if (latest.id !== lastScreenEventId.current) {
-                            lastScreenEventId.current = latest.id;
+                        if (String(latest.id) !== String(lastScreenEventId.current)) {
+                            lastScreenEventId.current = String(latest.id);
+                            window.localStorage.setItem(lastScreenEventStorageKey, String(latest.id));
                             setEventPulse(true);
                             window.setTimeout(() => setEventPulse(false), 700);
 
                             if (["SOLD", "PLAYER_SOLD", "LAST_STRIKE"].includes(latest.eventType)) {
                                 new Audio("/sounds/last-strike.mp3").play().catch(() => { });
                             }
+
+                            if (latest.eventType === "PLAYER_SOLD") {
+                                window.scrollTo({ top: 0, behavior: "smooth" });
+                            }
                         }
 
                         if (
                             latest &&
                             latest.eventType === "SILENT_BID_SOLD" &&
-                            latest.id !== lastProcessedEventId.current
+                            String(latest.id) !== String(lastProcessedEventId.current)
                         ) {
 
                             lastProcessedEventId.current =
-                                latest.id;
+                                String(latest.id);
+                            window.localStorage.setItem(lastSilentWinnerStorageKey, String(latest.id));
 
                             setSilentWinner(latest);
 
@@ -170,11 +182,12 @@ function AuctionScreen() {
                         if (
                             latest &&
                             latest.eventType === "VALUE_BET_REWARD" &&
-                            latest.id !== lastValueBetWinnerEventId.current
+                            String(latest.id) !== String(lastValueBetWinnerEventId.current)
                         ) {
 
                             lastValueBetWinnerEventId.current =
-                                latest.id;
+                                String(latest.id);
+                            window.localStorage.setItem(lastValueBetWinnerStorageKey, String(latest.id));
 
                             setValueBetWinner(latest);
 
@@ -250,6 +263,17 @@ function AuctionScreen() {
 
     }, [username]);
 
+    useEffect(() => {
+        const enteredSoldPhase = auctionStatus?.auctionPhase === "SOLD"
+            && previousAuctionPhase.current !== "SOLD";
+
+        if (enteredSoldPhase) {
+            window.scrollTo({ top: 0, behavior: "smooth" });
+        }
+
+        previousAuctionPhase.current = auctionStatus?.auctionPhase;
+    }, [auctionStatus?.auctionPhase]);
+
     const useWildPick = async () => {
         if (!window.confirm("Activate Wildcard? This cancels every submitted blind opening bid and returns the player to the nomination lot.")) {
             return;
@@ -296,6 +320,7 @@ function AuctionScreen() {
     const waitingForLastStrike =
         auctionStatus &&
         auctionStatus.auctionPhase === "SOLD";
+
     const isWheelSpinning =
         auctionStatus?.auctionPhase === "SPINNING";
 

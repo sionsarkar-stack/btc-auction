@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { Client } from "@stomp/stompjs";
 import SockJS from "sockjs-client";
 
@@ -16,6 +16,7 @@ function AuctionManager() {
     const [playerName, setPlayerName] = useState("");
     const [captainName, setCaptainName] = useState("");
     const [soldPrice, setSoldPrice] = useState("");
+    const [callSoldPlayer, setCallSoldPlayer] = useState(null);
 
     const [message, setMessage] = useState("");
 
@@ -26,7 +27,11 @@ function AuctionManager() {
     const [isConnected, setIsConnected] = useState(false);
     const [isBusy, setIsBusy] = useState(false);
     const [auctionStatus, setAuctionStatus] = useState(null);
+    const [allCaptainsPassed, setAllCaptainsPassed] = useState(false);
+    const [openingBidTie, setOpeningBidTie] = useState(null);
+    const [openingBids, setOpeningBids] = useState([]);
     const [protectionPlayers, setProtectionPlayers] = useState([]);
+    const previousNominatedPlayer = useRef(null);
 
     const loadData = useCallback(async () => {
 
@@ -55,6 +60,8 @@ function AuctionManager() {
                 `${API_URL}/api/random-events`
             );
 
+            const eventsResponse = await fetch(`${API_URL}/api/events`);
+
             const teamsData =
                 await teamsResponse.json();
 
@@ -65,6 +72,15 @@ function AuctionManager() {
                 await currentAuctionResponse.json();
 
             const statusData = await statusResponse.json();
+            const nominatedPlayer = currentAuction?.currentPlayer;
+            const allPassed = statusData?.auctionPhase === "BLIND_OPENING_BID" && nominatedPlayer
+                ? await fetch(`${API_URL}/api/auction/blind-opening-bid/${encodeURIComponent(nominatedPlayer)}/all-passed`)
+                    .then(response => response.json())
+                : false;
+            const currentOpeningBids = statusData?.auctionPhase === "BLIND_OPENING_BID" && nominatedPlayer
+                ? await fetch(`${API_URL}/api/auction/blind-opening-bid/${encodeURIComponent(nominatedPlayer)}`)
+                    .then(response => response.json())
+                : [];
             const protectionData = await protectionResponse.json();
 
             const clubbedPairData =
@@ -73,7 +89,15 @@ function AuctionManager() {
             const randomEventsData =
                 await randomEventsResponse.json();
 
-            const nominatedPlayer = currentAuction?.currentPlayer;
+            const eventsData = await eventsResponse.json();
+            const latestEvent = eventsData.length > 0
+                ? eventsData[eventsData.length - 1]
+                : null;
+            const latestOpeningBidTie = latestEvent?.eventType === "STARTING_BID_TIE"
+                && latestEvent.playerName === nominatedPlayer
+                ? latestEvent
+                : null;
+
             const hasNominatedPlayer = playersData.some(
                 player => player.name === nominatedPlayer
             );
@@ -89,8 +113,16 @@ function AuctionManager() {
 
             setTeams(teamsData);
             setPlayers(sellablePlayers);
+            if (currentAuction?.currentPlayer !== previousNominatedPlayer.current) {
+                previousNominatedPlayer.current = currentAuction?.currentPlayer || null;
+                setPlayerName(currentAuction?.currentPlayer || "");
+                setCallSoldPlayer(null);
+            }
             setCurrentAuction(currentAuction);
             setAuctionStatus(statusData);
+            setAllCaptainsPassed(allPassed);
+            setOpeningBidTie(latestOpeningBidTie);
+            setOpeningBids(Array.isArray(currentOpeningBids) ? currentOpeningBids : []);
             setProtectionPlayers(protectionData);
             setClubbedPairs(Array.isArray(clubbedPairData) ? clubbedPairData : []);
             setRandomEvents(randomEventsData);
@@ -173,7 +205,11 @@ function AuctionManager() {
                 }
             );
 
-            setMessage(await response.text());
+            const result = await response.text();
+            setMessage(result);
+            if (response.ok && result.includes("Waiting for RTM")) {
+                setCallSoldPlayer(playerName);
+            }
         } catch (error) {
             console.error(error);
             setMessage("Unable to call SOLD. Check the connection and try again.");
@@ -267,6 +303,7 @@ function AuctionManager() {
                 await response.text();
 
             setMessage(result);
+            setCallSoldPlayer(null);
 
             await loadData();
 
@@ -350,7 +387,7 @@ function AuctionManager() {
         ).length === 2);
 
     const startReAuction = async () => {
-        if (!window.confirm("Start the one allowed re-auction round? Unsold players will use half their original base price.")) {
+        if (!window.confirm("Restart the auction? All unsold players will return to the wheel at half their original base price.")) {
             return;
         }
 
@@ -362,6 +399,54 @@ function AuctionManager() {
         } catch (error) {
             console.error(error);
             setMessage("Unable to start the re-auction.");
+        } finally {
+            setIsBusy(false);
+        }
+    };
+
+    const cancelReAuction = async () => {
+        if (!window.confirm("Cancel re-auction? Every sale made after restart will be rolled back and all round-one unsold players will return to the wheel.")) {
+            return;
+        }
+
+        try {
+            setIsBusy(true);
+            const response = await fetch(`${API_URL}/api/auction/re-auction/cancel`, { method: "POST" });
+            setMessage(await response.text());
+            setPlayerName("");
+            setCaptainName("");
+            setSoldPrice("");
+            await loadData();
+        } catch (error) {
+            console.error(error);
+            setMessage("Unable to cancel the re-auction.");
+        } finally {
+            setIsBusy(false);
+        }
+    };
+
+    const markUnsold = async () => {
+        const nominatedPlayer = currentAuction?.currentPlayer;
+        if (!nominatedPlayer) {
+            setMessage("No player is currently nominated.");
+            return;
+        }
+
+        if (!window.confirm(`Mark ${nominatedPlayer} unsold?`)) {
+            return;
+        }
+
+        try {
+            setIsBusy(true);
+            const response = await fetch(`${API_URL}/api/auction/mark-unsold`, { method: "POST" });
+            setMessage(await response.text());
+            setPlayerName("");
+            setCaptainName("");
+            setSoldPrice("");
+            await loadData();
+        } catch (error) {
+            console.error(error);
+            setMessage("Unable to mark the player unsold.");
         } finally {
             setIsBusy(false);
         }
@@ -391,7 +476,7 @@ function AuctionManager() {
 
     const saveClubbedPair = async () => {
         if (!pairPlayerOne || !pairPlayerTwo) {
-            setMessage("Select both players for the A + E pair.");
+            setMessage("Select one A-seeded player and one C-seeded player for the A + C pair.");
             return;
         }
 
@@ -483,21 +568,19 @@ function AuctionManager() {
                         <button
                             className="button-secondary"
                             type="button"
-                            onClick={spinWheel}
-                            data-testid="spin-wheel"
-                            disabled={isBusy || !auctionStatus?.auctionStarted || wheelPlayers.length === 0 || Boolean(currentAuction?.currentPlayer)}
-                            title={currentAuction?.currentPlayer ? "Resolve the active player before spinning again." : undefined}
+                            onClick={startReAuction}
+                            disabled={isBusy || auctionStatus?.auctionRound !== 1 || auctionStatus?.auctionStarted}
                         >
-                            🎡 Spin Wheel
+                            🔄 Restart Auction
                         </button>
 
                         <button
                             className="button-secondary"
                             type="button"
-                            onClick={startReAuction}
-                            disabled={isBusy}
+                            onClick={cancelReAuction}
+                            disabled={isBusy || auctionStatus?.auctionRound !== 2}
                         >
-                            🔄 Start Re-auction
+                            ✖ Cancel Re-auction
                         </button>
 
                     </div>
@@ -537,24 +620,24 @@ function AuctionManager() {
                     )}
 
                     <div className="pair-config" style={{ marginBottom: "20px", display: "grid", gap: "12px", padding: "12px", border: "1px solid #e2e8f0", borderRadius: "10px", background: "#f8fafc" }}>
-                        <h3 style={{ margin: 0 }}>A + E Pair (Admin)</h3>
+                        <h3 style={{ margin: 0 }}>A + C Pair (Admin)</h3>
                         <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(180px, 1fr))", gap: "12px" }}>
                             <select className="select" value={pairPlayerOne} onChange={(e) => setPairPlayerOne(e.target.value)}>
-                                <option value="">Select Player 1</option>
-                                {players.map((player) => (
+                                <option value="">Select A Player</option>
+                                {players.filter(player => player.seed?.toUpperCase() === "A").map((player) => (
                                     <option key={`pair-one-${player.name}`} value={player.name}>{player.name}</option>
                                 ))}
                             </select>
                             <select className="select" value={pairPlayerTwo} onChange={(e) => setPairPlayerTwo(e.target.value)}>
-                                <option value="">Select Player 2</option>
-                                {players.map((player) => (
+                                <option value="">Select C Player</option>
+                                {players.filter(player => player.seed?.toUpperCase() === "C").map((player) => (
                                     <option key={`pair-two-${player.name}`} value={player.name}>{player.name}</option>
                                 ))}
                             </select>
                         </div>
                         <div className="button-group">
                             <button className="button" type="button" onClick={saveClubbedPair} disabled={isBusy || !pairPlayerOne || !pairPlayerTwo}>
-                                💼 Save A + E Pair
+                                💼 Save A + C Pair
                             </button>
                             <button className="button-secondary" type="button" onClick={clearClubbedPair} disabled={isBusy || clubbedPairs.length === 0}>
                                 🧹 Clear Pair
@@ -591,14 +674,27 @@ function AuctionManager() {
                         )}
                     </div>
 
-                    <div className="wheel-layout" style={{ display: "grid", gridTemplateColumns: "minmax(280px, 360px) 1fr", gap: "20px", alignItems: "center", marginBottom: "24px" }}>
-                        <CasinoReel
-                            players={wheelPlayers}
-                            selectedPlayer={currentAuction?.currentPlayer}
-                            spinStartedAt={auctionStatus?.wheelSpinStartedAt}
-                            spinEndsAt={auctionStatus?.wheelSpinEndsAt}
-                            seasonName={auctionStatus?.seasonName}
-                        />
+                    <div className="wheel-layout" style={{ display: "grid", gridTemplateColumns: "minmax(280px, 360px) minmax(240px, 1fr) minmax(320px, 1.2fr)", gap: "20px", alignItems: "center", marginBottom: "24px" }}>
+                        <div>
+                            <button
+                                className="button-secondary"
+                                type="button"
+                                onClick={spinWheel}
+                                data-testid="spin-wheel"
+                                disabled={isBusy || !auctionStatus?.auctionStarted || wheelPlayers.length === 0 || Boolean(currentAuction?.currentPlayer)}
+                                title={currentAuction?.currentPlayer ? "Resolve the active player before spinning again." : undefined}
+                                style={{ width: "100%", marginBottom: "14px" }}
+                            >
+                                🎡 Spin Wheel
+                            </button>
+                            <CasinoReel
+                                players={wheelPlayers}
+                                selectedPlayer={currentAuction?.currentPlayer}
+                                spinStartedAt={auctionStatus?.wheelSpinStartedAt}
+                                spinEndsAt={auctionStatus?.wheelSpinEndsAt}
+                                seasonName={auctionStatus?.seasonName}
+                            />
+                        </div>
 
                         <div>
                             <h3 style={{ margin: "0 0 10px", color: "#d97706" }}>💎 {auctionStatus?.seasonName || "BTC Season 12"} Auction Reel</h3>
@@ -607,9 +703,51 @@ function AuctionManager() {
                                 {wheelPlayers.length} player{wheelPlayers.length === 1 ? "" : "s"} remaining in wheel drum.
                             </p>
                         </div>
+
+                        <div className="section-card" style={{ margin: 0 }}>
+                            <h3 style={{ margin: "0 0 10px" }}>Opening Bids</h3>
+                            {auctionStatus?.auctionPhase === "BLIND_OPENING_BID" && openingBids.length > 0 ? (
+                                <table className="standings-table opening-bid-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Captain</th>
+                                            <th>Status</th>
+                                            <th>Bid</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {openingBids.map(bid => (
+                                            <tr key={bid.id || bid.captainName}>
+                                                <td>{bid.captainName}</td>
+                                                <td>{bid.submitted ? (bid.passed ? "Passed" : "Submitted") : "Waiting"}</td>
+                                                <td>{bid.submitted && !bid.passed ? `₹${bid.bidAmount}` : "-"}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            ) : (
+                                <p className="table-empty">Opening bid round has not started.</p>
+                            )}
+                        </div>
                     </div>
 
                     <h2>Sell Player</h2>
+
+                    {allCaptainsPassed && (
+                        <p className="message-success" role="status">
+                            All captains passed on the opening bid. This player is ready to be marked unsold.
+                        </p>
+                    )}
+
+                    {openingBidTie && (
+                        <div className="message-warning opening-bid-tie-alert" role="alert">
+                            <strong>Opening bid tie</strong>
+                            <span>
+                                {openingBidTie.captainName} tied at ₹{openingBidTie.amount}.
+                                Ask these captains to submit the opening bid again or pass.
+                            </span>
+                        </div>
+                    )}
 
                     <div className="form-field">
 
@@ -778,7 +916,10 @@ function AuctionManager() {
                                 className="button-secondary"
                                 type="button"
                                 onClick={callSold}
-                                disabled={isBusy || isWheelSpinning}
+                                disabled={isBusy
+                                    || isWheelSpinning
+                                    || auctionStatus?.auctionPhase === "SOLD"
+                                    || callSoldPlayer === currentAuction?.currentPlayer}
                             >
 
                                 🟢 CALL SOLD
@@ -794,6 +935,15 @@ function AuctionManager() {
 
                                 ✅ CONFIRM SALE
 
+                            </button>
+
+                            <button
+                                className="button-secondary"
+                                type="button"
+                                onClick={markUnsold}
+                                disabled={isBusy || isWheelSpinning || !currentAuction?.currentPlayer || auctionStatus?.auctionPhase === "SOLD"}
+                            >
+                                ◌ Mark Unsold
                             </button>
 
                             <button

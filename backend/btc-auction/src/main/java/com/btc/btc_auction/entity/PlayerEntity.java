@@ -32,6 +32,8 @@ public class PlayerEntity {
 
     private Boolean reAuctioned = false;
 
+    private Boolean deferredToReAuction = false;
+
     public PlayerEntity() {
     }
 
@@ -92,7 +94,7 @@ public class PlayerEntity {
     }
 
     public int getFinalPrice() {
-        return finalPrice > 0 ? finalPrice : soldPrice;
+        return finalPrice != 0 ? finalPrice : soldPrice;
     }
 
     public void setFinalPrice(int finalPrice) {
@@ -113,5 +115,13 @@ public class PlayerEntity {
 
     public void setReAuctioned(boolean reAuctioned) {
         this.reAuctioned = reAuctioned;
+    }
+
+    public boolean isDeferredToReAuction() {
+        return Boolean.TRUE.equals(deferredToReAuction);
+    }
+
+    public void setDeferredToReAuction(boolean deferredToReAuction) {
+        this.deferredToReAuction = deferredToReAuction;
     }
 }

@@ -99,8 +99,8 @@ function Settings() {
 
                     <label>
                         {field === "protectionBonus"
-                            ? "Protection Bonus (points)"
-                            : "Protection Penalty (points)"}
+                            ? "Protection Purse Bonus"
+                            : "Protection Purse Penalty"}
                     </label>
 
                     <input

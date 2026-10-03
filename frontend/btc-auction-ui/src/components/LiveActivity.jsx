@@ -11,6 +11,7 @@ const eventNames = {
     RTM_ACCEPTED: "✅ RTM Accepted",
     RTM_DECLINED: "❌ RTM Declined",
     PLAYER_SOLD: "🏆 Player Sold",
+    MARKET_CRASH: "📉 Market Crash",
     STARTING_BID_SUBMITTED: "🎯 Starting Bid Submitted",
     STARTING_BID_WINNER: "🏆 Highest Starting Bid",
     VALUE_BET_REVEALED: "💰 Value Bet",
@@ -26,6 +27,7 @@ const overlayEvents = {
     RTM_ACCEPTED: true,
     RTM_DECLINED: true,
     PLAYER_SOLD: true,
+    MARKET_CRASH: true,
     STARTING_BID_WINNER: true,
     VALUE_BET_REWARD: true,
     PROTECTION_REVEALED: true,
@@ -49,13 +51,17 @@ const formatEventAmount = event => {
     return ` Final ₹${event.amount > 0 ? "+" : ""}${event.amount}`;
 };
 
+const lastDisplayedEventStorageKey = "btc-auction:last-displayed-event-id";
+
 function LiveActivity({ showActivity = true }) {
 
     const [events, setEvents] = useState([]);
 
     const [overlayEvent, setOverlayEvent] = useState(null);
 
-    const lastEventId = useRef(null);
+    const lastEventId = useRef(
+        window.localStorage.getItem(lastDisplayedEventStorageKey)
+    );
 
     const overlayTimer = useRef(null);
 
@@ -84,8 +90,9 @@ function LiveActivity({ showActivity = true }) {
                         ? data[data.length - 1]
                         : null;
 
-                if (latest && latest.id !== lastEventId.current) {
-                    lastEventId.current = latest.id;
+                if (latest && String(latest.id) !== String(lastEventId.current)) {
+                    lastEventId.current = String(latest.id);
+                    window.localStorage.setItem(lastDisplayedEventStorageKey, String(latest.id));
 
                     if (overlayEvents[latest.eventType]) {
                         switch (latest.eventType) {

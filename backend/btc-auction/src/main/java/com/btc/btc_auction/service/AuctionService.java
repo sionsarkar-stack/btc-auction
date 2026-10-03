@@ -56,6 +56,7 @@ public class AuctionService {
         private final ProtectionPlayerService protectionPlayerService;
         private final ValueBetService valueBetService;
         private final SilentBidService silentBidService;
+        private final ReAuctionSnapshotService reAuctionSnapshotService;
         private final DoubleSupplier randomValueSupplier;
 
         public AuctionService(
@@ -72,7 +73,7 @@ public class AuctionService {
                                 auctionEventService, auctionConfigService,
                                 rtmService, auctionSocketService,
                                 currentAuctionService, clubbedPlayerPairService,
-                                null, null, null, null, null, Math::random);
+                                null, null, null, null, null, null, Math::random);
         }
 
         @org.springframework.beans.factory.annotation.Autowired
@@ -90,14 +91,16 @@ public class AuctionService {
                         BlindOpeningBidService blindOpeningBidService,
                         ProtectionPlayerService protectionPlayerService,
                         ValueBetService valueBetService,
-                        @Lazy SilentBidService silentBidService) {
+                        @Lazy SilentBidService silentBidService,
+                        ReAuctionSnapshotService reAuctionSnapshotService) {
 
                 this(teamService, playerService, auctionLogService, adminActionLogService,
                                 auctionEventService, auctionConfigService,
                                 rtmService, auctionSocketService,
                                 currentAuctionService, clubbedPlayerPairService,
                                 randomEventService, blindOpeningBidService,
-                                protectionPlayerService, valueBetService, silentBidService, Math::random);
+                                protectionPlayerService, valueBetService, silentBidService, reAuctionSnapshotService,
+                                Math::random);
         }
 
         AuctionService(
@@ -117,6 +120,32 @@ public class AuctionService {
                         SilentBidService silentBidService,
                         DoubleSupplier randomValueSupplier) {
 
+                this(teamService, playerService, auctionLogService, adminActionLogService,
+                                auctionEventService, auctionConfigService,
+                                rtmService, auctionSocketService,
+                                currentAuctionService, clubbedPlayerPairService,
+                                randomEventService, blindOpeningBidService,
+                                protectionPlayerService, valueBetService, silentBidService, null, randomValueSupplier);
+        }
+
+        AuctionService(
+                        TeamService teamService,
+                        PlayerService playerService,
+                        AuctionLogService auctionLogService,
+                        AdminActionLogService adminActionLogService,
+                        AuctionEventService auctionEventService,
+                        AuctionConfigService auctionConfigService,
+                        RtmService rtmService, AuctionSocketService auctionSocketService,
+                        CurrentAuctionService currentAuctionService,
+                        ClubbedPlayerPairService clubbedPlayerPairService,
+                        RandomEventService randomEventService,
+                        BlindOpeningBidService blindOpeningBidService,
+                        ProtectionPlayerService protectionPlayerService,
+                        ValueBetService valueBetService,
+                        SilentBidService silentBidService,
+                        ReAuctionSnapshotService reAuctionSnapshotService,
+                        DoubleSupplier randomValueSupplier) {
+
                 this.teamService = teamService;
                 this.playerService = playerService;
                 this.auctionLogService = auctionLogService;
@@ -132,6 +161,7 @@ public class AuctionService {
                 this.protectionPlayerService = protectionPlayerService;
                 this.valueBetService = valueBetService;
                 this.silentBidService = silentBidService;
+                this.reAuctionSnapshotService = reAuctionSnapshotService;
                 this.randomValueSupplier = randomValueSupplier;
         }
 
@@ -193,6 +223,11 @@ public class AuctionService {
                                         .filter(player -> !player.isReAuctioned())
                                         .toList();
                 }
+                if (availablePlayers != null && config.getAuctionRound() == 1) {
+                        availablePlayers = availablePlayers.stream()
+                                        .filter(player -> !player.isDeferredToReAuction())
+                                        .toList();
+                }
                 if (availablePlayers != null) {
                         availablePlayers = availablePlayers.stream()
                                         .filter(player -> !clubbedPlayerPairService.isPlayerTwo(player.getName()))
@@ -204,6 +239,9 @@ public class AuctionService {
                                 config.setAuctionStarted(false);
                                 config.setAuctionPhase(AuctionPhase.NO_AUCTION);
                                 auctionConfigService.save(config);
+                                if (reAuctionSnapshotService != null) {
+                                        reAuctionSnapshotService.clear();
+                                }
                                 auctionSocketService.broadcastRefresh();
                                 return "Re-auction completed. Remaining unsold players are displayed for admin manual sale.";
                         }
@@ -239,6 +277,66 @@ public class AuctionService {
                 auctionSocketService.broadcastRefresh();
 
                 return "Wheel spinning. Nominee will be revealed shortly.";
+        }
+
+        @Transactional
+        public synchronized String markCurrentPlayerUnsold() {
+                Auction auction = currentAuctionService.getCurrentAuction();
+                AuctionConfigEntity config = auctionConfigService.getConfig();
+
+                if (auction == null || auction.getCurrentPlayer() == null || auction.getCurrentPlayer().isBlank()) {
+                        return "No active auction.";
+                }
+
+                if (config.getAuctionPhase() == AuctionPhase.SPINNING) {
+                        return "Wait for the wheel spin to finish.";
+                }
+
+                if (config.getAuctionPhase() == AuctionPhase.SOLD) {
+                        return "Resolve the SOLD and RTM window before marking this player unsold.";
+                }
+
+                PlayerEntity player = playerService.getPlayer(auction.getCurrentPlayer());
+                if (player == null) {
+                        return "Player not found.";
+                }
+
+                if (player.isSold()) {
+                        return "A sold player cannot be marked unsold from the active auction.";
+                }
+
+                if (config.getAuctionRound() == 1) {
+                        player.setDeferredToReAuction(true);
+                } else if (config.getAuctionRound() == 2) {
+                        player.setReAuctioned(true);
+                }
+                playerService.savePlayer(player);
+
+                clearRandomEventForPlayer(player.getName(), config);
+                if (blindOpeningBidService != null) {
+                        blindOpeningBidService.clearRound(player.getName());
+                }
+                if (silentBidService != null) {
+                        silentBidService.clearRound();
+                }
+                currentAuctionService.setCurrentAuction(new Auction("", "", 0, "None", 0, ""));
+                clearWheelSpinState(config);
+                config.setAuctionPhase(AuctionPhase.NO_AUCTION);
+                auctionConfigService.save(config);
+
+                auctionEventService.logEvent(
+                                "PLAYER_MARKED_UNSOLD",
+                                player.getName(),
+                                null,
+                                0,
+                                config.getAuctionRound() == 1
+                                                ? "Player deferred to the re-auction pool."
+                                                : "Player remains unsold after re-auction.");
+                auctionSocketService.broadcastRefresh();
+
+                return config.getAuctionRound() == 1
+                                ? player.getName() + " marked unsold and moved to the re-auction pool."
+                                : player.getName() + " marked unsold after re-auction.";
         }
 
         @Scheduled(fixedDelay = 100)
@@ -316,12 +414,85 @@ public class AuctionService {
                         return "End the main auction before starting the re-auction.";
                 }
 
+                Auction activeAuction = currentAuctionService.getCurrentAuction();
+                if (activeAuction != null && activeAuction.getCurrentPlayer() != null
+                                && !activeAuction.getCurrentPlayer().isBlank()) {
+                        return "Complete or mark the current player unsold before restarting the auction.";
+                }
+
+                if (reAuctionSnapshotService != null) {
+                        reAuctionSnapshotService.capture(config.getValueBetEventsUsed());
+                }
+
+                playerService.getUnsoldPlayers().forEach(player -> {
+                        player.setDeferredToReAuction(false);
+                        player.setReAuctioned(false);
+                        playerService.savePlayer(player);
+                });
+
                 config.setAuctionRound(2);
                 config.setAuctionStarted(true);
                 config.setAuctionPhase(AuctionPhase.NO_AUCTION);
                 auctionConfigService.save(config);
                 auctionSocketService.broadcastRefresh();
                 return "Re-auction started. Unsold players will return at 50% of their original base price.";
+        }
+
+        @Transactional
+        public synchronized String cancelReAuction() {
+                AuctionConfigEntity config = auctionConfigService.getConfig();
+                if (config.getAuctionRound() != 2) {
+                        return "No active re-auction to cancel.";
+                }
+                if (reAuctionSnapshotService == null || !reAuctionSnapshotService.hasSnapshot()) {
+                        return "Cannot cancel re-auction because its starting snapshot is unavailable.";
+                }
+
+                Auction activeAuction = currentAuctionService.getCurrentAuction();
+                if (activeAuction != null && activeAuction.getCurrentPlayer() != null
+                                && !activeAuction.getCurrentPlayer().isBlank()
+                                && blindOpeningBidService != null) {
+                        blindOpeningBidService.clearRound(activeAuction.getCurrentPlayer());
+                }
+                if (silentBidService != null) {
+                        silentBidService.clearRound();
+                }
+
+                int restoredValueBetEventsUsed = reAuctionSnapshotService.restore();
+                playerService.getAllPlayers().stream()
+                                .filter(player -> !player.isSold())
+                                .forEach(player -> {
+                                        player.setDeferredToReAuction(false);
+                                        player.setReAuctioned(false);
+                                        playerService.savePlayer(player);
+                                });
+
+                pendingSilentAuctionPlayer = null;
+                currentPlayerRandomEventPlayer = null;
+                currentPlayerRandomEvent = null;
+                marketCrashApplied = false;
+                persistRuntimeState(config);
+                config.setValueBetPlayer(null);
+                config.setValueBetEventsUsed(restoredValueBetEventsUsed);
+                config.setRtmLockdownPlayer(null);
+                config.setMarketAdjustmentPlayer(null);
+                config.setMarketAdjustment(0);
+                clearWheelSpinState(config);
+                config.setAuctionRound(1);
+                config.setAuctionStarted(true);
+                config.setAuctionPhase(AuctionPhase.NO_AUCTION);
+                auctionConfigService.save(config);
+
+                currentAuctionService.setCurrentAuction(new Auction("", "", 0, "None", 0, ""));
+                auctionEventService.logEvent(
+                                "RE_AUCTION_CANCELLED",
+                                null,
+                                null,
+                                0,
+                                "Re-auction sales were rolled back and unsold round-one players returned to the wheel.");
+                auctionSocketService.broadcastRefresh();
+
+                return "Re-auction cancelled. Re-auction sales were rolled back and unsold players returned to the wheel.";
         }
 
         public synchronized String startBlindOpeningBid(String playerName) {
@@ -425,6 +596,27 @@ public class AuctionService {
                 return result;
         }
 
+        public synchronized String passBlindOpeningBid(String playerName, String captainName) {
+                if (blindOpeningBidService == null) {
+                        return "Blind opening bid system unavailable.";
+                }
+                AuctionConfigEntity config = auctionConfigService.getConfig();
+                if (config.getAuctionPhase() != AuctionPhase.BLIND_OPENING_BID) {
+                        return "Blind opening bids are not active.";
+                }
+                String result = blindOpeningBidService.passBid(playerName, captainName);
+                if ("Blind opening bid passed.".equals(result)
+                                && blindOpeningBidService.getAllBids(playerName).stream()
+                                                .allMatch(bid -> bid != null && bid.isSubmitted())) {
+                        blindOpeningBidService.revealWinner(playerName);
+                }
+                return result;
+        }
+
+        public boolean allBlindOpeningBidsPassed(String playerName) {
+                return blindOpeningBidService != null && blindOpeningBidService.allCaptainsPassed(playerName);
+        }
+
         public BlindOpeningBidEntity getBlindOpeningBid(String playerName, String captainName) {
                 if (blindOpeningBidService == null) {
                         return null;
@@ -433,6 +625,13 @@ public class AuctionService {
                                 .filter(bid -> bid.getCaptainName().equalsIgnoreCase(captainName))
                                 .findFirst()
                                 .orElse(null);
+        }
+
+        public List<BlindOpeningBidEntity> getAllBlindOpeningBids(String playerName) {
+                if (blindOpeningBidService == null) {
+                        return List.of();
+                }
+                return blindOpeningBidService.getAllBids(playerName);
         }
 
         public synchronized String revealBlindOpeningBid(String playerName) {
@@ -677,7 +876,8 @@ public class AuctionService {
                 }
 
                 int marketAdjustment = getMarketAdjustment(config, playerName);
-                if (soldPrice + Math.max(0, marketAdjustment) > teamService.getMaxBid(team)) {
+                if (config.getAuctionRound() != 2
+                                && soldPrice + Math.max(0, marketAdjustment) > teamService.getMaxBid(team)) {
                         return "Sold price exceeds the team's maximum bid after market adjustment";
                 }
 
@@ -688,6 +888,9 @@ public class AuctionService {
                 }
 
                 marketAdjustment = getMarketAdjustment(config, playerName);
+                int protectionAdjustment = protectionPlayerService != null
+                                ? protectionPlayerService.applyPurchaseReward(playerName, captainName)
+                                : 0;
                 int finalSalePrice = Math.max(0, soldPrice + marketAdjustment);
                 if (marketAdjustment != 0) {
                         config.setMarketAdjustmentPlayer(null);
@@ -718,16 +921,10 @@ public class AuctionService {
                                         "A + E partnership revealed after sale of " + playerName);
                 }
 
-                int protectionReward = protectionPlayerService != null
-                                ? protectionPlayerService.applyPurchaseReward(playerName, captainName)
-                                : 0;
-
                 team.setPurse(
                                 team.getPurse()
-                                                - soldPrice
-                                                - marketAdjustment
-                                                - penalty
-                                                + protectionReward);
+                                                - finalSalePrice
+                                                - penalty);
 
                 team.setPlayersBought(
                                 team.getPlayersBought() + packageSize);
@@ -743,19 +940,21 @@ public class AuctionService {
                 log.setSoldPrice(finalSalePrice);
 
                 auctionLogService.addLog(log);
-                int netPurseImpact = finalSalePrice;
-                player.setFinalPrice(netPurseImpact);
+                int netPurseImpact = finalSalePrice - Math.max(0, protectionAdjustment);
+                player.setFinalPrice(finalSalePrice);
                 playerService.savePlayer(player);
                 auctionEventService.logEvent(
                                 "PLAYER_SOLD",
                                 playerName,
                                 captainName,
-                                netPurseImpact,
+                                finalSalePrice,
                                 "Bid ₹" + soldPrice
                                                 + (marketAdjustment == 0 ? ""
                                                                 : " | Market adjustment "
                                                                                 + formatAdjustment(marketAdjustment))
-                                                + " | Net purse impact ₹"
+                                                + " | Recorded sale price ₹"
+                                                + finalSalePrice
+                                                + " | Buyer net purse impact ₹"
                                                 + netPurseImpact);
                 if (valueBetService != null) {
                         valueBetService.applyRewards(playerName, finalSalePrice);
@@ -1109,6 +1308,7 @@ public class AuctionService {
                                         player.setFinalPrice(0);
                                         player.setTeam("");
                                         player.setReAuctioned(false);
+                                        player.setDeferredToReAuction(false);
 
                                         playerService.savePlayer(player);
                                 });
@@ -1129,6 +1329,10 @@ public class AuctionService {
 
                 if (silentBidService != null) {
                         silentBidService.clearRound();
+                }
+
+                if (reAuctionSnapshotService != null) {
+                        reAuctionSnapshotService.clear();
                 }
 
                 rtmService.clear();
@@ -1184,11 +1388,13 @@ public class AuctionService {
                                 return "Squad is already complete.";
                         }
 
-                        int maxBid = teamService.getMaxBid(team);
-                        int marketAdjustment = getMarketAdjustment(config, auction.getCurrentPlayer());
-                        int maximumAllowedBid = maxBid - Math.max(0, marketAdjustment);
-                        if (soldPrice > maximumAllowedBid) {
-                                return "Sold price exceeds maximum bid (₹" + maximumAllowedBid + ").";
+                        if (config.getAuctionRound() != 2) {
+                                int maxBid = teamService.getMaxBid(team);
+                                int marketAdjustment = getMarketAdjustment(config, auction.getCurrentPlayer());
+                                int maximumAllowedBid = maxBid - Math.max(0, marketAdjustment);
+                                if (soldPrice > maximumAllowedBid) {
+                                        return "Sold price exceeds maximum bid (₹" + maximumAllowedBid + ").";
+                                }
                         }
 
                         if (soldPrice < auction.getBasePrice()) {
@@ -1384,12 +1590,14 @@ public class AuctionService {
                         }
                 }
 
-                int maxBid = teamService.getMaxBid(team);
-                int marketAdjustment = getMarketAdjustment(
-                                auctionConfigService.getConfig(), auction.getCurrentPlayer());
-                int maximumAllowedBid = maxBid - Math.max(0, marketAdjustment);
-                if (currentBid > maximumAllowedBid) {
-                        return "Bid exceeds maximum bid (₹" + maximumAllowedBid + ").";
+                AuctionConfigEntity config = auctionConfigService.getConfig();
+                if (config.getAuctionRound() != 2) {
+                        int maxBid = teamService.getMaxBid(team);
+                        int marketAdjustment = getMarketAdjustment(config, auction.getCurrentPlayer());
+                        int maximumAllowedBid = maxBid - Math.max(0, marketAdjustment);
+                        if (currentBid > maximumAllowedBid) {
+                                return "Bid exceeds maximum bid (₹" + maximumAllowedBid + ").";
+                        }
                 }
 
                 auction.setLeader(captainName);

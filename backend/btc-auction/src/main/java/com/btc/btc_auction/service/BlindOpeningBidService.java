@@ -19,6 +19,7 @@ public class BlindOpeningBidService {
     private final CurrentAuctionService currentAuctionService;
     private final AuctionSocketService auctionSocketService;
     private final AuctionEventService auctionEventService;
+    private final AuctionConfigService auctionConfigService;
 
     public BlindOpeningBidService(
             BlindOpeningBidRepository repository,
@@ -26,11 +27,23 @@ public class BlindOpeningBidService {
             CurrentAuctionService currentAuctionService,
             AuctionSocketService auctionSocketService,
             AuctionEventService auctionEventService) {
+        this(repository, teamService, currentAuctionService, auctionSocketService, auctionEventService, null);
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public BlindOpeningBidService(
+            BlindOpeningBidRepository repository,
+            TeamService teamService,
+            CurrentAuctionService currentAuctionService,
+            AuctionSocketService auctionSocketService,
+            AuctionEventService auctionEventService,
+            AuctionConfigService auctionConfigService) {
         this.repository = repository;
         this.teamService = teamService;
         this.currentAuctionService = currentAuctionService;
         this.auctionSocketService = auctionSocketService;
         this.auctionEventService = auctionEventService;
+        this.auctionConfigService = auctionConfigService;
     }
 
     public void startRound(String playerName) {
@@ -42,6 +55,7 @@ public class BlindOpeningBidService {
             bid.setCaptainName(team.getCaptainName());
             bid.setBidAmount(0);
             bid.setSubmitted(false);
+            bid.setPassed(false);
             repository.save(bid);
         });
 
@@ -67,13 +81,16 @@ public class BlindOpeningBidService {
             return "Blind opening bid not found.";
         }
 
-        int maxBid = teamService.getMaxBid(team);
-        if (amount > maxBid) {
-            return "Bid exceeds the captain's maximum bid (₹" + maxBid + ").";
+        if (hasMaximumBidLimit()) {
+            int maxBid = teamService.getMaxBid(team);
+            if (amount > maxBid) {
+                return "Bid exceeds the captain's maximum bid (₹" + maxBid + ").";
+            }
         }
 
         bid.setBidAmount(amount);
         bid.setSubmitted(true);
+        bid.setPassed(false);
         repository.save(bid);
 
         auctionEventService.logEvent(
@@ -85,6 +102,33 @@ public class BlindOpeningBidService {
 
         auctionSocketService.broadcastRefresh();
         return "Blind opening bid submitted.";
+    }
+
+    public String passBid(String playerName, String captainName) {
+        TeamEntity team = teamService.getTeam(captainName);
+        if (team == null) {
+            return "Captain not found.";
+        }
+
+        BlindOpeningBidEntity bid = repository.findByPlayerNameAndCaptainName(playerName, captainName).orElse(null);
+        if (bid == null) {
+            return "Blind opening bid not found.";
+        }
+
+        bid.setBidAmount(0);
+        bid.setPassed(true);
+        bid.setSubmitted(true);
+        repository.save(bid);
+
+        auctionEventService.logEvent(
+                "STARTING_BID_PASSED",
+                playerName,
+                captainName,
+                0,
+                "Captain passed on the starting bid");
+
+        auctionSocketService.broadcastRefresh();
+        return "Blind opening bid passed.";
     }
 
     public List<BlindOpeningBidEntity> getAllBids(String playerName) {
@@ -103,17 +147,52 @@ public class BlindOpeningBidService {
         }
 
         BlindOpeningBidEntity winner = bids.stream()
+                .filter(bid -> !bid.isPassed() && bid.getBidAmount() != null && bid.getBidAmount() > 0)
                 .max(Comparator.comparingInt(bid -> bid.getBidAmount()))
                 .orElse(null);
 
         if (winner == null) {
+            auctionEventService.logEvent(
+                    "STARTING_BID_ALL_PASSED",
+                    playerName,
+                    null,
+                    0,
+                    "All captains passed on the starting bid. Player is ready to be marked unsold.");
             return null;
         }
 
+        int highestBidAmount = winner.getBidAmount();
         String highestBidCaptains = bids.stream()
-                .filter(bid -> Objects.equals(bid.getBidAmount(), winner.getBidAmount()))
+                .filter(bid -> !bid.isPassed()
+                        && Objects.equals(bid.getBidAmount(), highestBidAmount))
                 .map(bid -> bid.getCaptainName())
                 .collect(Collectors.joining(", "));
+
+        long tiedCaptainCount = bids.stream()
+                .filter(bid -> !bid.isPassed()
+                        && Objects.equals(bid.getBidAmount(), highestBidAmount))
+                .count();
+        if (tiedCaptainCount > 1) {
+            bids.stream()
+                    .filter(bid -> !bid.isPassed()
+                            && Objects.equals(bid.getBidAmount(), highestBidAmount))
+                    .forEach(bid -> {
+                        bid.setBidAmount(0);
+                        bid.setPassed(false);
+                        bid.setSubmitted(false);
+                        repository.save(bid);
+                    });
+
+            auctionEventService.logEvent(
+                    "STARTING_BID_TIE",
+                    playerName,
+                    highestBidCaptains,
+                    highestBidAmount,
+                    "Tie declared at ₹" + highestBidAmount
+                            + ". Tied captains must submit again or pass.");
+            auctionSocketService.broadcastRefresh();
+            return null;
+        }
 
         Auction auction = currentAuctionService.getCurrentAuction();
         if (auction != null) {
@@ -134,8 +213,20 @@ public class BlindOpeningBidService {
         return winner;
     }
 
+    public boolean allCaptainsPassed(String playerName) {
+        List<BlindOpeningBidEntity> bids = repository.findByPlayerName(playerName);
+        return !bids.isEmpty()
+                && bids.stream().allMatch(bid -> bid != null && bid.isSubmitted() && bid.isPassed());
+    }
+
     public void clearRound(String playerName) {
         repository.findByPlayerName(playerName).forEach(repository::delete);
         auctionSocketService.broadcastRefresh();
+    }
+
+    private boolean hasMaximumBidLimit() {
+        return auctionConfigService == null
+                || auctionConfigService.getConfig() == null
+                || auctionConfigService.getConfig().getAuctionRound() != 2;
     }
 }

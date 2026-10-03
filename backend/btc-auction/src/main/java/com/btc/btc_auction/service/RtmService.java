@@ -268,12 +268,15 @@ public class RtmService {
             return "RTM bid must be higher than the original bid.";
         }
 
-        int maxBid = teamService.getMaxBid(team);
+        AuctionConfigEntity config = auctionConfigService.getConfig();
+        if (config == null || config.getAuctionRound() != 2) {
+            int maxBid = teamService.getMaxBid(team);
 
-        if (bidAmount > maxBid) {
+            if (bidAmount > maxBid) {
 
-            return "RTM bid exceeds maximum bid (₹"
-                    + maxBid + ").";
+                return "RTM bid exceeds maximum bid (₹"
+                        + maxBid + ").";
+            }
 
         }
 

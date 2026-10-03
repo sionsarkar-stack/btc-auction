@@ -1,6 +1,7 @@
 package com.btc.btc_auction.controller;
 
 import com.btc.btc_auction.entity.AuctionConfigEntity;
+import com.btc.btc_auction.entity.PlayerEntity;
 import com.btc.btc_auction.model.Auction;
 import com.btc.btc_auction.model.ManualSaleRequest;
 import com.btc.btc_auction.model.SellPlayerRequest;
@@ -78,6 +79,11 @@ public class AuctionController {
         return auctionService.startReAuction();
     }
 
+    @PostMapping("/api/auction/re-auction/cancel")
+    public String cancelReAuction() {
+        return auctionService.cancelReAuction();
+    }
+
     @PostMapping("/api/auction/wild-pick")
     public ResponseEntity<String> useWildPick(HttpSession session) {
         Object username = session.getAttribute(SessionAttributes.USERNAME);
@@ -105,6 +111,11 @@ public class AuctionController {
         return auctionService.getBlindOpeningBid(playerName, captainName);
     }
 
+    @GetMapping("/api/auction/blind-opening-bid/{playerName}")
+    public Object getAllBlindOpeningBids(@PathVariable String playerName) {
+        return auctionService.getAllBlindOpeningBids(playerName);
+    }
+
     @PostMapping("/api/auction/blind-opening-bid/submit")
     public String submitBlindOpeningBid(@RequestBody java.util.Map<String, Object> request) {
         String playerName = (String) request.get("playerName");
@@ -129,6 +140,23 @@ public class AuctionController {
         return auctionService.submitBlindOpeningBid(playerName, captainName, bidAmount);
     }
 
+    @PostMapping("/api/auction/blind-opening-bid/pass")
+    public String passBlindOpeningBid(@RequestBody java.util.Map<String, String> request) {
+        String playerName = request.get("playerName");
+        String captainName = request.get("captainName");
+
+        if (playerName == null || playerName.isBlank() || captainName == null || captainName.isBlank()) {
+            return "Player and captain names are required.";
+        }
+
+        return auctionService.passBlindOpeningBid(playerName, captainName);
+    }
+
+    @GetMapping("/api/auction/blind-opening-bid/{playerName}/all-passed")
+    public boolean allBlindOpeningBidsPassed(@PathVariable String playerName) {
+        return auctionService.allBlindOpeningBidsPassed(playerName);
+    }
+
     @PostMapping("/api/auction/blind-opening-bid/reveal")
     public String revealBlindOpeningBid(@RequestBody java.util.Map<String, String> request) {
         String playerName = request.get("playerName");
@@ -146,6 +174,11 @@ public class AuctionController {
                 request.getPlayerName(),
                 request.getCaptainName(),
                 request.getSoldPrice());
+    }
+
+    @PostMapping("/api/auction/mark-unsold")
+    public String markUnsold() {
+        return auctionService.markCurrentPlayerUnsold();
     }
 
     @PostMapping("/api/auction/undo")
@@ -268,26 +301,35 @@ public class AuctionController {
         String playerTwo = request.get("playerTwo");
 
         if (playerOne == null || playerTwo == null || playerOne.isBlank() || playerTwo.isBlank()) {
-            return "Both players are required to create an A + E pair.";
+            return "Both players are required to create an A + C pair.";
         }
 
         if (playerOne.equalsIgnoreCase(playerTwo)) {
             return "A player cannot be paired with itself.";
         }
 
+        PlayerEntity firstPlayer = playerService.getPlayer(playerOne);
+        PlayerEntity secondPlayer = playerService.getPlayer(playerTwo);
+        if (firstPlayer == null || secondPlayer == null) {
+            return "Both selected players must exist.";
+        }
+        if (!"A".equalsIgnoreCase(firstPlayer.getSeed()) || !"C".equalsIgnoreCase(secondPlayer.getSeed())) {
+            return "A + C pairing requires an A-seeded first player and a C-seeded second player.";
+        }
+
         clubbedPlayerPairService.createPair(playerOne, playerTwo);
-        return "A + E pair added: " + playerOne + " + " + playerTwo;
+        return "A + C pair added: " + playerOne + " + " + playerTwo;
     }
 
     @DeleteMapping("/api/auction/clubbed-pair")
     public String clearClubbedPair() {
         clubbedPlayerPairService.clearPair();
-        return "A + E pair cleared.";
+        return "A + C pair cleared.";
     }
 
     @DeleteMapping("/api/auction/clubbed-pair/{id}")
     public String deleteClubbedPair(@PathVariable Long id) {
         clubbedPlayerPairService.deletePair(id);
-        return "A + E pair deleted.";
+        return "A + C pair deleted.";
     }
 }

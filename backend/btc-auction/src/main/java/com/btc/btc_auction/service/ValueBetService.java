@@ -108,6 +108,10 @@ public class ValueBetService {
         return "Value Bet submitted.";
     }
 
+    public boolean hasSubmittedPrediction(String playerName, String captainName) {
+        return repository.findByPlayerNameAndCaptainName(playerName, captainName).isPresent();
+    }
+
     @Transactional
     public synchronized int applyRewards(String playerName, int finalPrice) {
         List<ValueBetEntity> bets = repository.findByPlayerName(playerName);

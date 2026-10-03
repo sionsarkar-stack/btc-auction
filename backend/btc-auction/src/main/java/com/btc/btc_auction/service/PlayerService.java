@@ -33,6 +33,12 @@ public class PlayerService {
                 .toList();
     }
 
+    public List<PlayerEntity> getAvailablePlayers() {
+        return getUnsoldPlayers().stream()
+                .filter(player -> !player.isDeferredToReAuction())
+                .toList();
+    }
+
     public PlayerEntity getPlayer(String name) {
         return playerRepository
                 .findByName(name)
@@ -54,15 +60,15 @@ public class PlayerService {
         player.setName(name);
         player.setSeed(seed);
         player.setCategory(category == null || category.isBlank() ? seed : category.trim());
-        // CSV imports remain compatible with the original name,seed format.
-        // A third basePrice column is optional and overrides the seed default.
+        // The opening bid establishes the price when no explicit price is provided.
         player.setBasePrice(basePrice != null && basePrice > 0
                 ? basePrice
-                : getSeedBasePrice(seed));
+                : 0);
         player.setSold(false);
         player.setSoldPrice(0);
         player.setFinalPrice(0);
         player.setTeam("");
+        player.setDeferredToReAuction(false);
 
         playerRepository.save(player);
     }
@@ -78,20 +84,6 @@ public class PlayerService {
                     player.setTeam(newCaptainName);
                     playerRepository.save(player);
                 });
-    }
-
-    private int getSeedBasePrice(String seed) {
-        if (seed == null) {
-            return 100;
-        }
-
-        return switch (seed.trim().toLowerCase()) {
-            case "hackers", "icon", "z" -> 800;
-            case "developers", "star", "a" -> 600;
-            case "new joiners", "challenger", "b" -> 100;
-            case "interns", "pro", "c" -> 50;
-            default -> 100;
-        };
     }
 
     public void deletePlayer(@NonNull Long id) {

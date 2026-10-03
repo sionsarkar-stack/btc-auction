@@ -2,6 +2,8 @@ package com.btc.btc_auction.controller;
 
 import com.btc.btc_auction.service.ValueBetService;
 import org.springframework.web.bind.annotation.CrossOrigin;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
@@ -38,5 +40,12 @@ public class ValueBetController {
         } catch (NumberFormatException exception) {
             return "Prediction must be a valid number.";
         }
+    }
+
+    @GetMapping("/api/value-bet/{playerName}/{captainName}")
+    public boolean hasSubmittedPrediction(
+            @PathVariable String playerName,
+            @PathVariable String captainName) {
+        return valueBetService.hasSubmittedPrediction(playerName, captainName);
     }
 }

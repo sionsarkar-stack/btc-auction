@@ -27,6 +27,41 @@ function App() {
   const [seasonName, setSeasonName] = useState("");
   const [silentBidActive, setSilentBidActive] = useState(false);
 
+  const [sessionChecked, setSessionChecked] = useState(!role);
+
+  useEffect(() => {
+    if (!role) {
+      return undefined;
+    }
+
+    let active = true;
+    fetch(`${API_URL}/api/session`, { credentials: "include" })
+      .then(response => {
+        if (!active) {
+          return;
+        }
+        if (!response.ok) {
+          localStorage.removeItem("role");
+          localStorage.removeItem("username");
+          setRole(null);
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setRole(null);
+        }
+      })
+      .finally(() => {
+        if (active) {
+          setSessionChecked(true);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [role]);
+
   useEffect(() => {
     fetch(`${API_URL}/api/config`)
       .then(response => response.json())
@@ -80,11 +115,18 @@ function App() {
     }
   };
 
+  if (!sessionChecked) {
+    return <div className="app-container">Checking session...</div>;
+  }
+
   if (!role) {
 
     return (
       <Login
-        onLogin={setRole}
+        onLogin={(loggedInRole) => {
+          setSessionChecked(false);
+          setRole(loggedInRole);
+        }}
       />
     );
   }

@@ -27,11 +27,18 @@ function EventOverlay({ event }) {
             message = `${event.playerName} · FINAL ₹${event.amount}${event.details ? ` · ${event.details}` : ""}`;
             break;
 
+        case "MARKET_CRASH":
+
+            icon = "📉";
+            title = "MARKET CRASH";
+            message = `${event.playerName || "Current player"} · Price reduced when SOLD was called`;
+            break;
+
         case "PROTECTION_REVEALED":
 
             icon = "🛡️";
             title = "PROTECTION REVEALED";
-            message = `${event.playerName} · ${event.details || "Protection reward settled"}`;
+            message = `${event.playerName} · ${event.details || "Protection price adjustment applied"}`;
             break;
 
         case "STARTING_BID_WINNER":
@@ -39,6 +46,13 @@ function EventOverlay({ event }) {
             icon = "🎯";
             title = "HIGHEST STARTING BID";
             message = `${event.captainName} · ₹${event.amount}`;
+            break;
+
+        case "STARTING_BID_TIE":
+
+            icon = "⚖️";
+            title = "OPENING BID TIE";
+            message = `${event.captainName} · ₹${event.amount}. Submit again or pass.`;
             break;
 
         case "VALUE_BET_REWARD":

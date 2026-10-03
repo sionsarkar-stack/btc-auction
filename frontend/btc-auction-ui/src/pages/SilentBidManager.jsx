@@ -8,6 +8,7 @@ function SilentBidManager() {
     const [bids, setBids] = useState([]);
     const [message, setMessage] = useState("");
     const [winner, setWinner] = useState(null);
+    const [allPassed, setAllPassed] = useState(false);
     const [soldCalled, setSoldCalled] = useState(false);
 
     const loadData = async () => {
@@ -75,6 +76,7 @@ function SilentBidManager() {
 
         setMessage(await response.text());
         setWinner(null);
+        setAllPassed(false);
         setSoldCalled(false);
         await loadData();
     };
@@ -92,6 +94,13 @@ function SilentBidManager() {
         if (data.tie) {
             showToast(`Tie detected: ${data.tiedCaptains.join(", ")}. Please rebid.`, "error");
             setWinner(null);
+            await loadData();
+            return;
+        }
+
+        if (data.allPassed) {
+            setWinner(null);
+            setAllPassed(true);
             await loadData();
             return;
         }
@@ -157,8 +166,25 @@ function SilentBidManager() {
 
         setMessage(await response.text());
         setWinner(null);
+        setAllPassed(false);
         setSoldCalled(false);
         await loadData();
+    };
+
+    const markUnsold = async () => {
+        if (!window.confirm(`Mark ${activePlayer} unsold and move it to re-auction?`)) {
+            return;
+        }
+
+        const response = await fetch(`${API_URL}/api/auction/mark-unsold`, { method: "POST" });
+        const result = await response.text();
+        showToast(result, response.ok ? "success" : "error");
+        if (response.ok) {
+            setWinner(null);
+            setAllPassed(false);
+            setSoldCalled(false);
+            await loadData();
+        }
     };
 
     return (
@@ -240,11 +266,21 @@ function SilentBidManager() {
                     </div>
                 )}
 
+                {allPassed && (
+                    <div className="message-warning" style={{ marginTop: "20px" }}>
+                        <strong>All captains submitted ₹0.</strong>
+                        <p>No silent-bid winner. Mark this player unsold to move them to re-auction.</p>
+                        <button className="button-secondary" type="button" onClick={markUnsold}>
+                            Mark Unsold for Re-auction
+                        </button>
+                    </div>
+                )}
+
                 <div className="button-group" style={{ marginTop: "25px" }}>
                     <button className="button" onClick={revealWinner} disabled={soldCalled}>
                         🏆 Reveal Winner
                     </button>
-                    <button className="button" onClick={callSoldWinner} disabled={!winner || soldCalled}>
+                    <button className="button" onClick={callSoldWinner} disabled={!winner || soldCalled || allPassed}>
                         🔨 Call SOLD / Open RTM
                     </button>
                     <button className="button" onClick={sellWinner} disabled={!winner || !soldCalled}>

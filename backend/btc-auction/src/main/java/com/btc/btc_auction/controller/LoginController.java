@@ -69,4 +69,18 @@ public class LoginController {
         return ResponseEntity.noContent().build();
 
     }
+
+    @GetMapping("/api/session")
+    public ResponseEntity<LoginResponse> getSession(HttpSession session) {
+        Object username = session.getAttribute(SessionAttributes.USERNAME);
+        Object role = session.getAttribute(SessionAttributes.ROLE);
+        if (!(username instanceof String authenticatedUsername)
+                || authenticatedUsername.isBlank()
+                || !(role instanceof String authenticatedRole)
+                || authenticatedRole.isBlank()) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+
+        return ResponseEntity.ok(new LoginResponse(authenticatedUsername, authenticatedRole));
+    }
 }

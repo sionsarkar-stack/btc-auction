@@ -615,6 +615,63 @@ body {
     margin-top: 20px;
 }
 
+.admin-auction-controls {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    margin-bottom: 18px;
+}
+
+.opening-bid-tie-alert {
+    display: grid;
+    gap: 4px;
+    margin: 12px 0;
+    padding: 12px 14px;
+    border: 1px solid #f59e0b;
+    border-radius: 8px;
+    background: #fffbeb;
+    color: #92400e;
+}
+
+.pdf-export-report {
+    display: none;
+}
+
+@media print {
+    body * {
+        visibility: hidden;
+    }
+
+    .pdf-export-report,
+    .pdf-export-report * {
+        visibility: visible;
+    }
+
+    .pdf-export-report {
+        display: block;
+        position: absolute;
+        inset: 0;
+        padding: 24px;
+        color: #111827;
+        background: white;
+        font-family: Georgia, serif;
+    }
+
+    .pdf-export-report h1 {
+        margin-bottom: 4px;
+    }
+
+    .pdf-export-report article {
+        border-bottom: 1px solid #d1d5db;
+        padding: 12px 0;
+        break-inside: avoid;
+    }
+
+    .pdf-export-report article h2 {
+        margin: 0 0 6px;
+    }
+}
+
 .intelligence-toolbar {
     display: grid;
     grid-template-columns: minmax(220px, 1fr);
@@ -2668,6 +2725,36 @@ body {
 
     .silent-bid-matrix.standings-table {
         min-width: 100%;
+    }
+
+    .opening-bid-table.standings-table {
+        min-width: 100%;
+        width: 100%;
+        table-layout: fixed;
+    }
+
+    .opening-bid-table th,
+    .opening-bid-table td {
+        padding: 7px 5px;
+        font-size: 12px;
+        line-height: 1.2;
+        overflow-wrap: anywhere;
+    }
+
+    .opening-bid-table th:nth-child(1),
+    .opening-bid-table td:nth-child(1) {
+        width: 42%;
+    }
+
+    .opening-bid-table th:nth-child(2),
+    .opening-bid-table td:nth-child(2) {
+        width: 34%;
+    }
+
+    .opening-bid-table th:nth-child(3),
+    .opening-bid-table td:nth-child(3) {
+        width: 24%;
+        text-align: right;
     }
 
     .silent-bid-matrix th,

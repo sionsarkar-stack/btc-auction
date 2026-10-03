@@ -54,8 +54,14 @@ function Dashboard() {
     const [valueBetPrediction, setValueBetPrediction] =
         useState("");
 
+    const [valueBetSubmitted, setValueBetSubmitted] =
+        useState(false);
+
     const [dashboardView, setDashboardView] =
         useState("overview");
+
+    const [auctionEnded, setAuctionEnded] =
+        useState(false);
 
     const role =
         localStorage.getItem("role");
@@ -99,6 +105,9 @@ function Dashboard() {
     const [players, setPlayers] =
         useState([]);
 
+    const [clubbedPairs, setClubbedPairs] =
+        useState([]);
+
     const [, setCaptains] =
         useState([]);
 
@@ -115,6 +124,9 @@ function Dashboard() {
         useState("ALL");
 
     const [protectionPlayers, setProtectionPlayers] =
+        useState([]);
+
+    const [allProtectionPlayers, setAllProtectionPlayers] =
         useState([]);
 
     const [newProtectionPlayer, setNewProtectionPlayer] =
@@ -139,6 +151,16 @@ function Dashboard() {
         fetch(`${API_URL}/api/players`)
             .then(r => r.json())
             .then(setPlayers);
+
+        fetch(`${API_URL}/api/auction/clubbed-pair`)
+            .then(r => r.json())
+            .then(data => setClubbedPairs(Array.isArray(data) ? data : []))
+            .catch(() => setClubbedPairs([]));
+
+        fetch(`${API_URL}/api/protection-players`)
+            .then(r => r.json())
+            .then(data => setAllProtectionPlayers(Array.isArray(data) ? data : []))
+            .catch(() => setAllProtectionPlayers([]));
 
         fetch(`${API_URL}/api/teams`)
             .then(r => r.json())
@@ -191,6 +213,23 @@ function Dashboard() {
         fetch(`${API_URL}/api/auction/status`)
             .then(response => response.json())
             .then(status => {
+                fetch(`${API_URL}/api/auction/current`)
+                    .then(response => response.json())
+                    .then(current => {
+                        const valueBetActiveForPlayer = isCaptain
+                            && ["OPENING_BID", "BLIND_OPENING_BID"].includes(status.auctionPhase)
+                            && status.valueBetPlayer
+                            && current?.currentPlayer
+                            && status.valueBetPlayer.toLowerCase() === current.currentPlayer.toLowerCase();
+                        if (valueBetActiveForPlayer) {
+                            return fetch(`${API_URL}/api/value-bet/${encodeURIComponent(current.currentPlayer)}/${encodeURIComponent(username)}`)
+                                .then(response => response.json())
+                                .then(setValueBetSubmitted);
+                        }
+                        setValueBetSubmitted(false);
+                        return null;
+                    })
+                    .catch(() => setValueBetSubmitted(false));
                 if (isCaptain && status.auctionPhase === "BLIND_OPENING_BID") {
                     return fetch(`${API_URL}/api/auction/current`)
                         .then(response => response.json())
@@ -326,6 +365,7 @@ function Dashboard() {
 
     const submitValueBet = async () => {
         if (!valueBetPrediction || Number(valueBetPrediction) <= 0) return;
+        if (!window.confirm("Once submitted, cant be altered")) return;
         const response = await fetch(`${API_URL}/api/value-bet/submit`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -335,8 +375,12 @@ function Dashboard() {
                 predictedPrice: Number(valueBetPrediction)
             })
         });
-        showToast(await response.text());
-        setValueBetPrediction("");
+        const result = await response.text();
+        showToast(result);
+        if (result === "Value Bet submitted.") {
+            setValueBetSubmitted(true);
+            setValueBetPrediction("");
+        }
     };
 
     const acceptRtm = async () => {
@@ -404,7 +448,7 @@ function Dashboard() {
     };
 
     const submitSilentBid = async () => {
-        if (!silentRound || !silentBid || Number(silentBid) <= 0) return;
+        if (!silentRound || silentBid === "" || Number(silentBid) < 0) return;
         const response = await fetch(`${API_URL}/api/silent-bid/submit`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -437,6 +481,39 @@ function Dashboard() {
         showToast(await response.text());
         setOpeningBid("");
         loadDashboard();
+    };
+
+    const passOpeningBid = async () => {
+        if (!dashboard.currentAuction.currentPlayer) return;
+        const response = await fetch(`${API_URL}/api/auction/blind-opening-bid/pass`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                playerName: dashboard.currentAuction.currentPlayer,
+                captainName: username
+            })
+        });
+        const result = await response.text();
+        showToast(result, result === "Blind opening bid passed." ? "success" : "error");
+        loadDashboard();
+    };
+
+    const endAuction = async () => {
+        if (!window.confirm("End the auction and prepare the final team report?")) {
+            return;
+        }
+
+        const response = await fetch(`${API_URL}/api/auction/end`, { method: "POST" });
+        const result = await response.text();
+        showToast(result, response.ok ? "success" : "error");
+        if (response.ok) {
+            setAuctionEnded(true);
+            loadDashboard();
+        }
+    };
+
+    const exportFinalTeamsPdf = () => {
+        window.print();
     };
 
     const activateWildcard = async () => {
@@ -507,19 +584,72 @@ function Dashboard() {
     });
 
     const currentAuction = dashboard.currentAuction;
+    const currentPlayerPair = clubbedPairs.find(pair =>
+        pair.playerOne?.toLowerCase() === currentAuction.currentPlayer?.toLowerCase()
+    );
+    const currentPlayerLabel = currentPlayerPair
+        ? `${currentPlayerPair.playerOne} + ${currentPlayerPair.playerTwo}`
+        : currentAuction.currentPlayer;
+    const effectiveSaleValue = player => {
+        const recordedValue = player.finalPrice !== 0 ? player.finalPrice : player.soldPrice;
+        if (recordedValue < 0) {
+            return recordedValue;
+        }
+        const protector = allProtectionPlayers.find(protection =>
+            protection.playerName?.toLowerCase() === player.name?.toLowerCase()
+            && protection.captainName?.toLowerCase() === player.team?.toLowerCase()
+        );
+        return protector ? recordedValue - (auctionStatus?.protectionBonus || 300) : recordedValue;
+    };
+    const squadValueForTeam = captainName => players
+        .filter(player => player.team === captainName)
+        .filter(player => !clubbedPairs.some(pair =>
+            pair.playerTwo?.toLowerCase() === player.name?.toLowerCase()
+        ))
+        .reduce((total, player) => total + effectiveSaleValue(player), 0);
+    const squadPlayerLabel = playerName => {
+        const player = players.find(item => item.name === playerName);
+        if (player?.seed?.toUpperCase() === "C") {
+            return playerName;
+        }
+        const saleValue = player ? effectiveSaleValue(player) : null;
+        return saleValue === null || saleValue === undefined
+            ? playerName
+            : `${playerName} (₹${saleValue})`;
+    };
     const rtmLocked = auctionStatus?.rtmLockdownPlayer?.toLowerCase()
         === currentAuction.currentPlayer?.toLowerCase();
     const effectiveMaxBid = currentTeam?.maxBid || 0;
+    const isReAuction = auctionStatus?.auctionRound === 2;
     const isBidding = ["OPENING_BID", "BIDDING"].includes(auctionStatus?.auctionPhase);
+    const valueBetActive = isCaptain
+        && ["OPENING_BID", "BLIND_OPENING_BID"].includes(auctionStatus?.auctionPhase)
+        && auctionStatus?.valueBetPlayer?.toLowerCase() === currentAuction.currentPlayer?.toLowerCase()
+        && currentAuction.currentPlayer;
     const activeRandomEventType = auctionStatus?.pendingRandomEventType;
     const activeRandomEventDescription = auctionStatus?.pendingRandomEventDescription
         || "A surprise auction rule is in play.";
     const showPublicRandomEvent = activeRandomEventType
-        && activeRandomEventType !== "VALUE_BET";
+        && activeRandomEventType !== "VALUE_BET"
+        && (activeRandomEventType !== "MARKET_CRASH"
+            || auctionStatus?.auctionPhase === "SOLD");
 
     return (
 
         <div>
+
+            {isAdmin && (
+                <div className="section-card admin-auction-controls">
+                    <button className="button" type="button" onClick={endAuction} disabled={auctionEnded}>
+                        {auctionEnded ? "Auction Ended" : "End Auction"}
+                    </button>
+                    {auctionEnded && (
+                        <button className="button-secondary" type="button" onClick={exportFinalTeamsPdf}>
+                            Export Final Teams PDF
+                        </button>
+                    )}
+                </div>
+            )}
 
             {isCaptain && (
                 <div className="button-group captain-tabs" style={{ marginBottom: "18px" }}>
@@ -567,51 +697,59 @@ function Dashboard() {
                     {silentBidActive && silentRound?.submitted && (
                         <p className="message-success">Silent bid submitted. Waiting for the other captains.</p>
                     )}
-                    {isBidding && auctionStatus?.auctionPhase !== "SOLD" && (
-                        <div className="captain-action-row" style={{ display: "flex", gap: "8px", marginBottom: "12px" }}>
-                            <input className="input" type="number" min="1" max={effectiveMaxBid}
-                                step={Number(liveBid) > 1000 ? 100 : 50}
-                                placeholder={`Start bid (max ₹${effectiveMaxBid})`}
-                                value={liveBid} onChange={event => setLiveBid(event.target.value)} />
-                            <button className="button" onClick={submitLiveBid}>Place Bid</button>
-                        </div>
-                    )}
-                    {auctionStatus?.auctionPhase === "BLIND_OPENING_BID" && (
-                        <div className="captain-action-row" style={{ display: "flex", gap: "8px", marginBottom: "12px" }}>
-                            {openingBidStatus && !openingBidStatus.submitted && (
-                                <>
-                                    <input className="input" type="number" min="1"
-                                        data-testid="blind-opening-bid"
-                                        step={Number(openingBid) > 1000 ? 100 : 50}
-                                        placeholder="Opening bid"
-                                        value={openingBid}
-                                        onChange={event => setOpeningBid(event.target.value)} />
-                                    <button className="button" data-testid="place-blind-opening-bid" onClick={submitOpeningBid}>Place Blind Opening Bid</button>
-                                </>
-                            )}
-                            {currentTeam && !currentTeam.wildPickUsed && (
-                                <button className="button-secondary" type="button" data-testid="activate-wildcard" onClick={activateWildcard}>
-                                    Activate Wildcard
-                                </button>
-                            )}
-                        </div>
-                    )}
+                    {isBidding && auctionStatus?.auctionPhase !== "SOLD"
+                        && (!valueBetActive || valueBetSubmitted) && (
+                            <div className="captain-action-row" style={{ display: "flex", gap: "8px", marginBottom: "12px" }}>
+                                <input className="input" type="number" min="1" max={isReAuction ? undefined : effectiveMaxBid}
+                                    step={Number(liveBid) > 1000 ? 100 : 50}
+                                    placeholder={isReAuction ? "Start bid (no maximum)" : `Start bid (max ₹${effectiveMaxBid})`}
+                                    value={liveBid} onChange={event => setLiveBid(event.target.value)} />
+                                <button className="button" onClick={submitLiveBid}>Place Bid</button>
+                            </div>
+                        )}
+                    {auctionStatus?.auctionPhase === "BLIND_OPENING_BID"
+                        && (!valueBetActive || valueBetSubmitted) && (
+                            <div className="captain-action-row" style={{ display: "flex", gap: "8px", marginBottom: "12px" }}>
+                                {openingBidStatus && !openingBidStatus.submitted && (
+                                    <>
+                                        <input className="input" type="number" min="1"
+                                            data-testid="blind-opening-bid"
+                                            step={Number(openingBid) > 1000 ? 100 : 50}
+                                            placeholder="Opening bid"
+                                            value={openingBid}
+                                            onChange={event => setOpeningBid(event.target.value)} />
+                                        <button className="button" data-testid="place-blind-opening-bid" onClick={submitOpeningBid}>Place Blind Opening Bid</button>
+                                        <button className="button-secondary" data-testid="pass-blind-opening-bid" onClick={passOpeningBid}>Pass</button>
+                                    </>
+                                )}
+                                {currentTeam && !currentTeam.wildPickUsed && (
+                                    <button className="button-secondary" type="button" data-testid="activate-wildcard" onClick={activateWildcard}>
+                                        Activate Wildcard
+                                    </button>
+                                )}
+                            </div>
+                        )}
                     {auctionStatus?.auctionPhase === "BLIND_OPENING_BID"
                         && openingBidStatus?.submitted && (
-                            <p className="message-success">Opening bid submitted. Waiting for all captains.</p>
+                            <p className="message-success">
+                                {openingBidStatus.passed
+                                    ? "Passed on the opening bid. Waiting for all captains."
+                                    : "Opening bid submitted. Waiting for all captains."}
+                            </p>
                         )}
-                    {["OPENING_BID", "BLIND_OPENING_BID"].includes(auctionStatus?.auctionPhase)
+                    {(["OPENING_BID", "BLIND_OPENING_BID"].includes(auctionStatus?.auctionPhase)
                         && auctionStatus?.valueBetPlayer?.toLowerCase() === currentAuction.currentPlayer?.toLowerCase()
-                        && currentAuction.currentPlayer && (
+                        && currentAuction.currentPlayer
+                        && !valueBetSubmitted && (
                             <div className="captain-action-row" style={{ display: "flex", gap: "8px", marginBottom: "12px" }}>
-                                <input className="input" type="number" min="1"
+                                <input className="input" type="number" min="0"
                                     step={Number(valueBetPrediction) > 1000 ? 100 : 50}
                                     placeholder="Predict final price"
                                     value={valueBetPrediction}
                                     onChange={event => setValueBetPrediction(event.target.value)} />
                                 <button className="button-secondary" onClick={submitValueBet}>Submit Value Bet</button>
                             </div>
-                        )}
+                        ))}
                     {auctionStatus?.auctionPhase === "SOLD" && !isCurrentHighestBidder && !rtmLocked && !rtm && !rtmAlreadyUsed && (
                         <button className="button" onClick={claimRtm}>Claim RTM</button>
                     )}
@@ -619,7 +757,7 @@ function Dashboard() {
                     {isRtmCaptain && rtm?.status === "CLAIMED" && (
                         <div className="captain-action-row" style={{ display: "flex", gap: "8px" }}>
                             <input className="input" type="number" min={currentAuction.currentBid + 100}
-                                max={effectiveMaxBid} value={rtmBid}
+                                max={isReAuction ? undefined : effectiveMaxBid} value={rtmBid}
                                 onChange={event => setRtmBid(event.target.value)} placeholder="RTM price" />
                             <button className="button" onClick={submitRtmBid}>Submit RTM Price</button>
                         </div>
@@ -673,13 +811,23 @@ function Dashboard() {
                 </h2>
 
                 <CasinoReel
-                    players={players.filter(player => !player.sold)}
+                    players={players.filter(player => !player.sold
+                        && (isReAuction || !player.deferredToReAuction)
+                        && !clubbedPairs.some(pair =>
+                            pair.playerTwo?.toLowerCase() === player.name?.toLowerCase()
+                        ))}
                     selectedPlayer={currentAuction.currentPlayer}
                     spinStartedAt={auctionStatus?.wheelSpinStartedAt}
                     spinEndsAt={auctionStatus?.wheelSpinEndsAt}
                     className="captain-casino-reel"
                     seasonName={auctionStatus?.seasonName}
                 />
+
+                {currentPlayerLabel && (
+                    <p className="current-player-name" style={{ marginTop: "16px" }}>
+                        {currentPlayerLabel}
+                    </p>
+                )}
 
                 <p style={{ marginTop: "16px" }}>
                     <strong>Current Bid:</strong>{" "}
@@ -720,7 +868,7 @@ function Dashboard() {
                                 💰 Purse: ₹{team.purse}
                             </p>
                             <p>
-                                🔨 Max Bid: ₹{team.maxBid}
+                                🔨 Max Bid: {isReAuction ? "No limit" : `₹${team.maxBid}`}
                             </p>
                             <p>
                                 🔄 RTM:
@@ -732,9 +880,7 @@ function Dashboard() {
                                 👥 Players Bought: {team.playersBought}
                             </p>
                             <p>
-                                📊 Squad Value: ₹{players
-                                    .filter(player => player.team === team.captainName)
-                                    .reduce((total, player) => total + (player.finalPrice || player.soldPrice || 0), 0)}
+                                📊 Squad Value: ₹{squadValueForTeam(team.captainName)}
                             </p>
 
 
@@ -753,7 +899,7 @@ function Dashboard() {
                                     {team.squad.map(player => (
 
                                         <li key={player}>
-                                            {player}
+                                            {squadPlayerLabel(player)}
                                         </li>
 
                                     ))}
@@ -791,11 +937,9 @@ function Dashboard() {
                                 <tr key={`comparison-${team.captainName}`}>
                                     <td>{team.captainName}</td>
                                     <td>₹{team.purse}</td>
-                                    <td>₹{team.maxBid}</td>
+                                    <td>{isReAuction ? "No limit" : `₹${team.maxBid}`}</td>
                                     <td>{team.playersLeft}</td>
-                                    <td>₹{players
-                                        .filter(player => player.team === team.captainName)
-                                        .reduce((total, player) => total + (player.finalPrice || player.soldPrice || 0), 0)}</td>
+                                    <td>₹{squadValueForTeam(team.captainName)}</td>
                                 </tr>
                             ))}
                         </tbody>
@@ -847,11 +991,15 @@ function Dashboard() {
                                     </td>
                                     <td>
                                         <span className={player.sold ? "status-badge sold" : "status-badge available"}>
-                                            {player.sold ? "Sold" : "Available"}
+                                            {player.sold
+                                                ? "Sold"
+                                                : player.deferredToReAuction
+                                                    ? "Held for re-auction"
+                                                    : "Available"}
                                         </span>
                                     </td>
                                     <td>{player.sold
-                                        ? `Final ₹${player.finalPrice || player.soldPrice}`
+                                        ? `Final ₹${effectiveSaleValue(player)}`
                                         : `Base ₹${player.basePrice}`}</td>
                                 </tr>
                             ))}
@@ -1014,6 +1162,21 @@ function Dashboard() {
                     <LiveActivity />
                 </div>
             </div>}
+
+            <section className="pdf-export-report" aria-label="Final teams report">
+                <h1>BTC Auction Final Teams</h1>
+                <p>Final team standings</p>
+                {dashboard.teams?.map(team => (
+                    <article key={`pdf-${team.captainName}`}>
+                        <h2>{team.captainName}</h2>
+                        <p>Purse: ₹{team.purse} | Players bought: {team.playersBought} | Slots left: {team.playersLeft}</p>
+                        <p>Squad value: ₹{squadValueForTeam(team.captainName)}</p>
+                        <p>Squad: {team.squad?.length
+                            ? team.squad.map(squadPlayerLabel).join(", ")
+                            : "No players bought"}</p>
+                    </article>
+                ))}
+            </section>
 
         </div>
 

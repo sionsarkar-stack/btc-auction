@@ -37,11 +37,10 @@ class ProtectionPlayerServiceTest {
     }
 
     @Test
-    void buyerGetsBonusWhenTheyBuyTheirOwnProtectedPlayer() {
+    void protectorGetsThreeHundredInTheirPurse() {
         TeamEntity sen = new TeamEntity();
         sen.setCaptainName("Sen");
         sen.setPurse(1000);
-
         ProtectionPlayerEntity protection = new ProtectionPlayerEntity();
         protection.setCaptainName("Sen");
         protection.setPlayerName("Rohit");
@@ -56,15 +55,13 @@ class ProtectionPlayerServiceTest {
     }
 
     @Test
-    void otherCaptainGetsBonusAndProtectorPaysPenalty() {
+    void anotherCaptainCausesTwoHundredPursePenaltyForProtector() {
         TeamEntity sen = new TeamEntity();
         sen.setCaptainName("Sen");
         sen.setPurse(1000);
-
         TeamEntity gappu = new TeamEntity();
         gappu.setCaptainName("Gappu");
         gappu.setPurse(1200);
-
         ProtectionPlayerEntity protection = new ProtectionPlayerEntity();
         protection.setCaptainName("Sen");
         protection.setPlayerName("Rohit");
@@ -75,8 +72,8 @@ class ProtectionPlayerServiceTest {
 
         int result = service.applyPurchaseReward("Rohit", "Gappu");
 
-        assertEquals(300, result);
+        assertEquals(-200, result);
         assertEquals(800, sen.getPurse());
-        assertEquals(1500, gappu.getPurse());
+        assertEquals(1200, gappu.getPurse());
     }
 }

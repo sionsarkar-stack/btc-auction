@@ -8,6 +8,8 @@ public class SilentBidResult {
 
     private boolean tie;
 
+    private boolean allPassed;
+
     private SilentBidEntity winner;
 
     private List<String> tiedCaptains;
@@ -18,6 +20,14 @@ public class SilentBidResult {
 
     public void setTie(boolean tie) {
         this.tie = tie;
+    }
+
+    public boolean isAllPassed() {
+        return allPassed;
+    }
+
+    public void setAllPassed(boolean allPassed) {
+        this.allPassed = allPassed;
     }
 
     public SilentBidEntity getWinner() {

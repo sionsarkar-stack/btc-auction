@@ -41,7 +41,7 @@ public class PlayerController {
     @GetMapping("/api/players/available")
     public List<PlayerEntity> getAvailablePlayers() {
 
-        return playerService.getUnsoldPlayers();
+        return playerService.getAvailablePlayers();
     }
 
     @PostMapping("/api/players")

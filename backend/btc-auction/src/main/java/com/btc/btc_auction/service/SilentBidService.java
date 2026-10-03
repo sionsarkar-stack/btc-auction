@@ -22,19 +22,32 @@ public class SilentBidService {
 
     private final AuctionSocketService auctionSocketService;
 
+    private final AuctionConfigService auctionConfigService;
+
     public SilentBidService(
             SilentBidRepository repository,
             TeamService teamService, AuctionService auctionService,
 
             AuctionEventService auctionEventService,
             AuctionSocketService auctionSocketService) {
+        this(repository, teamService, auctionService, auctionEventService, auctionSocketService, null);
+    }
 
+    @org.springframework.beans.factory.annotation.Autowired
+    public SilentBidService(
+            SilentBidRepository repository,
+            TeamService teamService, AuctionService auctionService,
+
+            AuctionEventService auctionEventService,
+            AuctionSocketService auctionSocketService,
+            AuctionConfigService auctionConfigService) {
         this.repository = repository;
         this.teamService = teamService;
         this.auctionService = auctionService;
 
         this.auctionEventService = auctionEventService;
         this.auctionSocketService = auctionSocketService;
+        this.auctionConfigService = auctionConfigService;
 
     }
 
@@ -75,11 +88,11 @@ public class SilentBidService {
             String captainName,
             int amount) {
 
-        if (amount <= 0) {
-            return "Bid must be greater than zero.";
+        if (amount < 0) {
+            return "Silent bid cannot be negative.";
         }
 
-        if (!teamService.isValidBidIncrement(amount)) {
+        if (amount > 0 && !teamService.isValidBidIncrement(amount)) {
             return "Bid must be a multiple of 50 up to ₹1000, then a multiple of 100.";
         }
 
@@ -111,7 +124,7 @@ public class SilentBidService {
             return "Captain not found.";
         }
 
-        if (amount > teamService.getMaxBid(team)) {
+        if (amount > 0 && hasMaximumBidLimit() && amount > teamService.getMaxBid(team)) {
             return "Bid exceeds the captain's maximum bid.";
         }
 
@@ -268,6 +281,11 @@ public class SilentBidService {
                 .max()
                 .orElse(0);
 
+        if (highest == 0) {
+            result.setAllPassed(true);
+            return result;
+        }
+
         List<SilentBidEntity> highestBidders = bids.stream()
                 .filter(b -> b.getBidAmount() == highest)
                 .toList();
@@ -315,5 +333,11 @@ public class SilentBidService {
 
         return result;
 
+    }
+
+    private boolean hasMaximumBidLimit() {
+        return auctionConfigService == null
+                || auctionConfigService.getConfig() == null
+                || auctionConfigService.getConfig().getAuctionRound() != 2;
     }
 }

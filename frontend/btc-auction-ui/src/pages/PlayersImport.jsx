@@ -125,14 +125,14 @@ function PlayersImport() {
                 </h2>
 
                 <pre>
-                    {`name,seed,basePrice,category
-Virat,A,600,Batter
-Rohit,A,600,All-rounder
-Rahul,B,300,Bowler
-Pant,B,300,Wicketkeeper
-Rinku,C,100,Batter
+                    {`Player,Seed
+Pritam,A
+Susovon,A
+Harshit,A
+Remo da,B
+Tuhin da,C
 
-Category is optional. Existing files using name,seed or name,seed,basePrice remain supported.`}
+The opening bid sets the player's base price. Optional third and fourth columns are still accepted as basePrice and category.`}
                 </pre>
 
             </div>

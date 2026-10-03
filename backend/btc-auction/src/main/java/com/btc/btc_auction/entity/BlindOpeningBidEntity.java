@@ -22,6 +22,8 @@ public class BlindOpeningBidEntity {
 
     private boolean submitted;
 
+    private boolean passed;
+
     public Long getId() {
         return id;
     }
@@ -56,5 +58,13 @@ public class BlindOpeningBidEntity {
 
     public void setSubmitted(boolean submitted) {
         this.submitted = submitted;
+    }
+
+    public boolean isPassed() {
+        return passed;
+    }
+
+    public void setPassed(boolean passed) {
+        this.passed = passed;
     }
 }

@@ -117,7 +117,7 @@ test("reset clears protections and disables Start Auction", async ({ browser, re
 
         await admin.page.reload();
         await admin.page.getByRole("button", { name: "BTC Control Room" }).click();
-        await expect(admin.page.getByRole("button", { name: /start auction/i })).toBeDisabled();
+        await expect(admin.page.getByRole("button", { name: "🚀 Start Auction" })).toBeDisabled();
     } finally {
         await closeContexts(admin.context);
     }
@@ -173,6 +173,136 @@ test("captain Wildcard returns the player and lets the admin spin again", async 
         await spinWheel(admin.page);
     } finally {
         await closeContexts(captain.context, admin.context);
+    }
+});
+
+test("marks a nominee unsold, restarts the auction, and cancels re-auction", async ({ browser, request }) => {
+    const admin = await login(browser, "auctioneer", "Sarkar");
+
+    try {
+        const deferredPlayer = await spinWheel(admin.page);
+
+        const markUnsoldDialog = admin.page.waitForEvent("dialog");
+        await Promise.all([
+            admin.page.getByRole("button", { name: /mark unsold/i }).click(),
+            markUnsoldDialog.then(dialog => dialog.accept()),
+        ]);
+        await expect(admin.page.getByTestId("current-nominated-player")).toHaveValue("No player nominated");
+
+        const heldPool = await request.get(`${BACKEND_URL}/api/players/available`);
+        await assertSuccessful(heldPool);
+        expect((await heldPool.json()).map(player => player.name)).not.toContain(deferredPlayer);
+
+        await assertSuccessful(await request.post(`${BACKEND_URL}/api/auction/end`));
+        await admin.page.reload();
+        await admin.page.getByRole("button", { name: "BTC Control Room" }).click();
+
+        const restartDialog = admin.page.waitForEvent("dialog");
+        await Promise.all([
+            admin.page.getByRole("button", { name: /restart auction/i }).click(),
+            restartDialog.then(dialog => dialog.accept()),
+        ]);
+        await expect(admin.page.getByText("Re-auction started. Unsold players will return at 50% of their original base price.")).toBeVisible();
+
+        const restartedStatus = await request.get(`${BACKEND_URL}/api/auction/status`);
+        await assertSuccessful(restartedStatus);
+        expect((await restartedStatus.json()).auctionRound).toBe(2);
+
+        const reAuctionPool = await request.get(`${BACKEND_URL}/api/players/available`);
+        await assertSuccessful(reAuctionPool);
+        expect((await reAuctionPool.json()).map(player => player.name)).toContain(deferredPlayer);
+
+        const teamsBeforeSale = await request.get(`${BACKEND_URL}/api/teams`);
+        await assertSuccessful(teamsBeforeSale);
+        const originalTeam = (await teamsBeforeSale.json()).find(team => team.captainName === captains[0]);
+
+        await assertSuccessful(await request.post(`${BACKEND_URL}/api/auction/manual-sale`, {
+            data: {
+                playerName: deferredPlayer,
+                newCaptain: captains[0],
+                newPrice: 600,
+            },
+        }));
+
+        const cancelDialog = admin.page.waitForEvent("dialog");
+        await Promise.all([
+            admin.page.getByRole("button", { name: /cancel re-auction/i }).click(),
+            cancelDialog.then(dialog => dialog.accept()),
+        ]);
+        await expect(admin.page.getByText("Re-auction cancelled. Re-auction sales were rolled back and unsold players returned to the wheel.")).toBeVisible();
+
+        const restoredStatus = await request.get(`${BACKEND_URL}/api/auction/status`);
+        await assertSuccessful(restoredStatus);
+        const restoredConfig = await restoredStatus.json();
+        expect(restoredConfig.auctionRound).toBe(1);
+        expect(restoredConfig.auctionStarted).toBeTruthy();
+
+        const restoredPlayers = await request.get(`${BACKEND_URL}/api/players`);
+        await assertSuccessful(restoredPlayers);
+        const restoredPlayer = (await restoredPlayers.json()).find(player => player.name === deferredPlayer);
+        expect(restoredPlayer.sold).toBeFalsy();
+        expect(restoredPlayer.deferredToReAuction).toBeFalsy();
+
+        const restoredPool = await request.get(`${BACKEND_URL}/api/players/available`);
+        await assertSuccessful(restoredPool);
+        expect((await restoredPool.json()).map(player => player.name)).toContain(deferredPlayer);
+
+        const restoredTeams = await request.get(`${BACKEND_URL}/api/teams`);
+        await assertSuccessful(restoredTeams);
+        const restoredTeam = (await restoredTeams.json()).find(team => team.captainName === captains[0]);
+        expect(restoredTeam.purse).toBe(originalTeam.purse);
+        expect(restoredTeam.playersBought).toBe(originalTeam.playersBought);
+        expect(restoredTeam.playersLeft).toBe(originalTeam.playersLeft);
+    } finally {
+        await closeContexts(admin.context);
+    }
+});
+
+test("re-auction removes the live bid maximum", async ({ browser, request }) => {
+    const admin = await login(browser, "auctioneer", "Sarkar");
+
+    try {
+        await assertSuccessful(await request.post(`${BACKEND_URL}/api/auction/end`));
+        await admin.page.reload();
+        await admin.page.getByRole("button", { name: "BTC Control Room" }).click();
+
+        const restartDialog = admin.page.waitForEvent("dialog");
+        await Promise.all([
+            admin.page.getByRole("button", { name: /restart auction/i }).click(),
+            restartDialog.then(dialog => dialog.accept()),
+        ]);
+        await expect(admin.page.getByText("Re-auction started. Unsold players will return at 50% of their original base price.")).toBeVisible();
+
+        const selectedPlayer = await spinWheel(admin.page);
+        for (const [index, captainName] of captains.entries()) {
+            const response = await request.post(`${BACKEND_URL}/api/auction/blind-opening-bid/submit`, {
+                data: {
+                    playerName: selectedPlayer,
+                    captainName,
+                    bidAmount: 10_000 + index * 100,
+                },
+            });
+            expect(await response.text()).toBe("Blind opening bid submitted.");
+        }
+
+        const captain = await login(browser, captains[0], "e2e-password");
+        try {
+            const liveBid = captain.page.getByPlaceholder("Start bid (no maximum)");
+            await expect(liveBid).toBeVisible();
+            expect(await liveBid.getAttribute("max")).toBeNull();
+
+            await liveBid.fill("11000");
+            await captain.page.getByRole("button", { name: "Place Bid" }).click();
+            await expect(captain.page.getByRole("status")).toContainText("Updated");
+
+            const currentAuction = await request.get(`${BACKEND_URL}/api/auction/current`);
+            await assertSuccessful(currentAuction);
+            expect((await currentAuction.json()).currentBid).toBe(11_000);
+        } finally {
+            await closeContexts(captain.context);
+        }
+    } finally {
+        await closeContexts(admin.context);
     }
 });
 

@@ -4,6 +4,14 @@ ALTER TABLE IF EXISTS auction_config
 ALTER TABLE IF EXISTS players
     ADD COLUMN IF NOT EXISTS re_auctioned BOOLEAN DEFAULT FALSE;
 
+ALTER TABLE IF EXISTS players
+    ADD COLUMN IF NOT EXISTS deferred_to_re_auction BOOLEAN DEFAULT FALSE;
+
+CREATE TABLE IF NOT EXISTS re_auction_snapshots (
+    id BIGINT PRIMARY KEY,
+    state_json CLOB NOT NULL
+);
+
 ALTER TABLE IF EXISTS auction_config
     ADD COLUMN IF NOT EXISTS rtm_lockdown_player VARCHAR(255);
 

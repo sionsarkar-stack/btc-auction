@@ -157,7 +157,6 @@ public class ProtectionPlayerService {
         ProtectionPlayerEntity protection = matches.get(0);
         TeamEntity protectorTeam = teamService.getTeam(protection.getCaptainName());
         TeamEntity buyerTeam = teamService.getTeam(buyerCaptainName);
-
         if (protectorTeam == null || buyerTeam == null) {
             return 0;
         }
@@ -169,7 +168,7 @@ public class ProtectionPlayerService {
         int adjustment;
         if (protection.getCaptainName().equalsIgnoreCase(buyerCaptainName)) {
             adjustment = protectionBonus;
-            protectorTeam.setPurse(protectorTeam.getPurse() + adjustment);
+            protectorTeam.setPurse(protectorTeam.getPurse() + protectionBonus);
             teamService.saveTeam(protectorTeam);
             auctionEventService.logEvent(
                     "PROTECTION_REVEALED",
@@ -177,7 +176,7 @@ public class ProtectionPlayerService {
                     buyerCaptainName,
                     adjustment,
                     "Protected player bought by " + buyerCaptainName
-                            + "; protector bonus +₹" + protectionBonus);
+                            + "; purse increased by +₹" + protectionBonus);
             if (adminActionLogService != null) {
                 adminActionLogService.addLog(
                         "PROTECTION_BOOST",
@@ -186,62 +185,43 @@ public class ProtectionPlayerService {
                         buyerCaptainName,
                         0,
                         adjustment,
-                        "Protected player bought by protector; +₹" + protectionBonus + " bonus");
+                        "Purse increased by +₹" + protectionBonus);
             }
             auctionEventService.logEvent(
                     "PROTECTION_BOOST",
                     playerName,
                     buyerCaptainName,
                     adjustment,
-                    "Protected player bought by the same captain");
+                    "Purse increased by +₹" + protectionBonus);
             return adjustment;
         }
 
-        adjustment = protectionBonus;
-        buyerTeam.setPurse(buyerTeam.getPurse() + adjustment);
+        adjustment = -protectionPenalty;
         protectorTeam.setPurse(Math.max(0, protectorTeam.getPurse() - protectionPenalty));
-        teamService.saveTeam(buyerTeam);
         teamService.saveTeam(protectorTeam);
         auctionEventService.logEvent(
                 "PROTECTION_REVEALED",
                 playerName,
                 buyerCaptainName,
-                adjustment,
+                protectionPenalty,
                 "Protected player bought by " + buyerCaptainName
-                        + "; buyer bonus +₹" + protectionBonus + ", protector "
-                        + protection.getCaptainName() + " penalty -₹" + protectionPenalty);
+                        + "; protector purse reduced by -₹" + protectionPenalty);
         if (adminActionLogService != null) {
             adminActionLogService.addLog(
-                    "PROTECTION_BONUS",
+                    "PROTECTION_PENALTY",
                     playerName,
                     "",
                     buyerCaptainName,
                     0,
                     adjustment,
-                    "Buyer received +₹" + protectionBonus + "; protector " + protection.getCaptainName()
-                            + " received -₹" + protectionPenalty);
-            adminActionLogService.addLog(
-                    "PROTECTION_PENALTY",
-                    playerName,
-                    "",
-                    protection.getCaptainName(),
-                    0,
-                    -protectionPenalty,
-                    "Protected player bought by " + buyerCaptainName
-                            + "; protector penalty -₹" + protectionPenalty);
+                    "Protector purse reduced by -₹" + protectionPenalty);
         }
         auctionEventService.logEvent(
                 "PROTECTION_PENALTY",
                 playerName,
-                protection.getCaptainName(),
-                -protectionPenalty,
-                "Protected player sold to another captain; protector penalty -₹" + protectionPenalty);
-        auctionEventService.logEvent(
-                "PROTECTION_BONUS",
-                playerName,
                 buyerCaptainName,
                 adjustment,
-                "Buyer received +300 for taking protected player");
+                "Protector purse reduced by -₹" + protectionPenalty);
         return adjustment;
     }
 
