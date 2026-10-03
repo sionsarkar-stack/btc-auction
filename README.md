@@ -59,7 +59,7 @@ A web-based cricket auction management platform built for **Belgharia Turf Crick
 
 ## Backend
 
-- Java 21
+- Java 25
 - Spring Boot
 - Maven
 - Spring Data JPA

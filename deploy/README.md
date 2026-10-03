@@ -1,18 +1,18 @@
 # Native Ubuntu Deployment
 
-This deployment serves the Vite build with Nginx and runs the Spring Boot backend with systemd. Nginx proxies `/api/` and `/ws/` to the backend, so the frontend can keep relative API URLs. These instructions target an Ubuntu 24.04 LTS EC2 instance; the backend requires Java 21.
+This deployment serves the Vite build with Nginx and runs the Spring Boot backend with systemd. Nginx proxies `/api/` and `/ws/` to the backend, so the frontend can keep relative API URLs. These instructions target an Ubuntu 26.04 LTS EC2 instance or newer; the backend requires Java 25.
 
 ## 1. Install packages
 
-On Ubuntu 24.04 LTS or newer:
+On Ubuntu 26.04 LTS or newer:
 
 ```bash
 sudo apt update
-sudo apt install -y openjdk-21-jre-headless nginx
+sudo apt install -y openjdk-25-jre-headless nginx
 java -version
 ```
 
-The build machine needs JDK 21; the EC2 server only needs JRE 21. Build the backend, then copy the jar to the server:
+The build machine needs JDK 25; the EC2 server only needs JRE 25. Build the backend, then copy the jar to the server:
 
 ```bash
 cd backend/btc-auction
