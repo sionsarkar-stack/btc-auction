@@ -83,67 +83,104 @@ function CaptainManagement() {
     };
 
     return (
-        <div className="form-card">
-            <h2>Captain Management</h2>
-            <p>Add, update, or delete captain accounts and their starting points.</p>
+        <div className="captain-management-page">
+            <header className="captain-management-header">
+                <div>
+                    <span className="captain-management-kicker">TEAM ACCOUNTS</span>
+                    <h2>Captain Management</h2>
+                </div>
+                <span className="captain-count">{captains.length} captains</span>
+            </header>
 
-            <div className="form-card" style={{ marginBottom: "16px" }}>
-                <h3>Add Captain</h3>
-                <div className="form-field">
-                    <label>Captain Name</label>
-                    <input className="input" value={newCaptain.captainName}
-                        onChange={event => setNewCaptain({ ...newCaptain, captainName: event.target.value })} />
+            <section className="captain-create-section" aria-labelledby="captain-create-title">
+                <div className="captain-section-heading">
+                    <h3 id="captain-create-title">Add Captain</h3>
                 </div>
-                <div className="form-field">
-                    <label>Captain Account Password</label>
-                    <input className="input" type="password" value={newCaptain.password}
-                        onChange={event => setNewCaptain({ ...newCaptain, password: event.target.value })} />
+                <div className="captain-create-grid">
+                    <div className="form-field">
+                        <label htmlFor="new-captain-name">Captain Name</label>
+                        <input id="new-captain-name" className="input" value={newCaptain.captainName}
+                            onChange={event => setNewCaptain({ ...newCaptain, captainName: event.target.value })} />
+                    </div>
+                    <div className="form-field">
+                        <label htmlFor="new-captain-password">Account Password</label>
+                        <input id="new-captain-password" className="input" type="password" value={newCaptain.password}
+                            onChange={event => setNewCaptain({ ...newCaptain, password: event.target.value })} />
+                    </div>
+                    <div className="form-field">
+                        <label htmlFor="new-captain-purse">Initial Auction Purse</label>
+                        <div className="captain-currency-input">
+                            <span aria-hidden="true">&#8377;</span>
+                            <input id="new-captain-purse" type="number" min="0" step="50" value={newCaptain.totalPoints}
+                                onChange={event => setNewCaptain({ ...newCaptain, totalPoints: event.target.value })} />
+                        </div>
+                    </div>
+                    <button className="button captain-create-button" type="button" onClick={addCaptain}
+                        disabled={!newCaptain.captainName || !newCaptain.password || newCaptain.totalPoints === ""}>
+                        Create Captain
+                    </button>
                 </div>
-                <div className="form-field">
-                    <label>Starting Points</label>
-                    <input className="input" type="number" min="0" value={newCaptain.totalPoints}
-                        onChange={event => setNewCaptain({ ...newCaptain, totalPoints: event.target.value })} />
-                </div>
-                <button className="button" type="button" onClick={addCaptain}
-                    disabled={!newCaptain.captainName || !newCaptain.password || newCaptain.totalPoints === ""}>
-                    Create Captain
-                </button>
-            </div>
+            </section>
 
-            {captains.map((captain, index) => (
-                <div className="form-card" key={captain.currentName || index} style={{ marginBottom: "16px" }}>
-                    <div className="form-field">
-                        <label>Captain Name</label>
-                        <input className="input" value={captain.captainName || ""}
-                            onChange={event => setCaptains(previous => previous.map((item, itemIndex) =>
-                                itemIndex === index ? { ...item, captainName: event.target.value } : item
-                            ))} />
-                    </div>
-                    <div className="form-field">
-                        <label>Captain Account Password</label>
-                        <input className="input" type="password" placeholder="Leave blank to keep current password"
-                            value={captain.password || ""}
-                            onChange={event => setCaptains(previous => previous.map((item, itemIndex) =>
-                                itemIndex === index ? { ...item, password: event.target.value } : item
-                            ))} />
-                    </div>
-                    <div className="form-field">
-                        <label>Starting Points</label>
-                        <input className="input" type="number" min="0" value={captain.totalPoints ?? 0}
-                            onChange={event => setCaptains(previous => previous.map((item, itemIndex) =>
-                                itemIndex === index ? { ...item, totalPoints: event.target.value } : item
-                            ))} />
-                    </div>
-                    <div className="button-group">
-                        <button className="button" type="button" onClick={() => updateCaptain(captain, index)}>
-                            Save Captain
-                        </button>
-                        <button className="button-secondary" type="button" onClick={() => deleteCaptain(captain.currentName)}>
-                            Delete Captain
-                        </button>
-                    </div>
+            <section className="captain-list-section" aria-labelledby="captain-list-title">
+                <div className="captain-section-heading">
+                    <h3 id="captain-list-title">Current Captains</h3>
+                    <span>{captains.length}</span>
                 </div>
-            ))}
+                {captains.length === 0 ? (
+                    <p className="table-empty">No captains created yet.</p>
+                ) : (
+                    <div className="captain-management-list">
+                        {captains.map((captain, index) => (
+                            <article className="captain-management-card" key={captain.currentName || index}>
+                                <div className="captain-edit-grid">
+                                    <div className="form-field">
+                                        <label htmlFor={`captain-name-${index}`}>Captain Name</label>
+                                        <input id={`captain-name-${index}`} className="input" value={captain.captainName || ""}
+                                            onChange={event => setCaptains(previous => previous.map((item, itemIndex) =>
+                                                itemIndex === index ? { ...item, captainName: event.target.value } : item
+                                            ))} />
+                                    </div>
+                                    <div className="captain-score">
+                                        <span>Tournament Score</span>
+                                        <strong>{captain.tournamentPoints ?? 0}<small> pts</small></strong>
+                                    </div>
+                                </div>
+                                <div className="captain-credentials-grid">
+                                    <div className="form-field">
+                                        <label htmlFor={`captain-password-${index}`}>Account Password</label>
+                                        <input id={`captain-password-${index}`} className="input" type="password"
+                                            placeholder="Leave blank to keep current password"
+                                            value={captain.password || ""}
+                                            onChange={event => setCaptains(previous => previous.map((item, itemIndex) =>
+                                                itemIndex === index ? { ...item, password: event.target.value } : item
+                                            ))} />
+                                    </div>
+                                    <div className="form-field">
+                                        <label htmlFor={`captain-purse-${index}`}>Auction Purse</label>
+                                        <div className="captain-currency-input">
+                                            <span aria-hidden="true">&#8377;</span>
+                                            <input id={`captain-purse-${index}`} type="number" min="0" step="50"
+                                                value={captain.totalPoints ?? 0}
+                                                onChange={event => setCaptains(previous => previous.map((item, itemIndex) =>
+                                                    itemIndex === index ? { ...item, totalPoints: event.target.value } : item
+                                                ))} />
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="captain-card-actions">
+                                    <button className="button" type="button" onClick={() => updateCaptain(captain, index)}>
+                                        Save Captain
+                                    </button>
+                                    <button className="button-secondary" type="button" onClick={() => deleteCaptain(captain.currentName)}>
+                                        Delete Captain
+                                    </button>
+                                </div>
+                            </article>
+                        ))}
+                    </div>
+                )}
+            </section>
 
             {message && <div className="message-success">{message}</div>}
         </div>

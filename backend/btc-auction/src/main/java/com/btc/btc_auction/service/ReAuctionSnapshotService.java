@@ -1,15 +1,17 @@
 package com.btc.btc_auction.service;
 
 import com.btc.btc_auction.entity.AuctionLogEntity;
+import com.btc.btc_auction.entity.BlindOpeningBidEntity;
+import com.btc.btc_auction.entity.CursePlayerEntity;
 import com.btc.btc_auction.entity.ReAuctionSnapshotEntity;
 import com.btc.btc_auction.entity.RtmEntity;
-import com.btc.btc_auction.entity.ValueBetEntity;
 import com.btc.btc_auction.repository.AuctionLogRepository;
+import com.btc.btc_auction.repository.BlindOpeningBidRepository;
+import com.btc.btc_auction.repository.CursePlayerRepository;
 import com.btc.btc_auction.repository.PlayerRepository;
 import com.btc.btc_auction.repository.ReAuctionSnapshotRepository;
 import com.btc.btc_auction.repository.RtmRepository;
 import com.btc.btc_auction.repository.TeamRepository;
-import com.btc.btc_auction.repository.ValueBetRepository;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.transaction.Transactional;
@@ -28,8 +30,9 @@ public class ReAuctionSnapshotService {
     private final TeamRepository teamRepository;
     private final PlayerRepository playerRepository;
     private final AuctionLogRepository auctionLogRepository;
+    private final BlindOpeningBidRepository blindOpeningBidRepository;
+    private final CursePlayerRepository cursePlayerRepository;
     private final RtmRepository rtmRepository;
-    private final ValueBetRepository valueBetRepository;
     private final ObjectMapper objectMapper;
 
     public ReAuctionSnapshotService(
@@ -37,25 +40,28 @@ public class ReAuctionSnapshotService {
             TeamRepository teamRepository,
             PlayerRepository playerRepository,
             AuctionLogRepository auctionLogRepository,
+            BlindOpeningBidRepository blindOpeningBidRepository,
+            CursePlayerRepository cursePlayerRepository,
             RtmRepository rtmRepository,
-            ValueBetRepository valueBetRepository,
             ObjectMapper objectMapper) {
         this.snapshotRepository = snapshotRepository;
         this.teamRepository = teamRepository;
         this.playerRepository = playerRepository;
         this.auctionLogRepository = auctionLogRepository;
+        this.blindOpeningBidRepository = blindOpeningBidRepository;
+        this.cursePlayerRepository = cursePlayerRepository;
         this.rtmRepository = rtmRepository;
-        this.valueBetRepository = valueBetRepository;
         this.objectMapper = objectMapper;
     }
 
     @Transactional
-    public void capture(int valueBetEventsUsed) {
+    public void capture(int blindBonanzaAwardsUsed) {
         ReAuctionState state = new ReAuctionState(
                 teamRepository.findAll().stream()
                         .map(team -> new TeamState(
                                 team.getCaptainName(),
                                 team.getPurse(),
+                                team.getTournamentPoints(),
                                 team.getPlayersBought(),
                                 team.getPlayersLeft(),
                                 team.isWildPickUsed()))
@@ -76,6 +82,26 @@ public class ReAuctionSnapshotService {
                                 log.getCaptainName(),
                                 log.getSoldPrice()))
                         .toList(),
+                cursePlayerRepository.findAll().stream()
+                        .map(curse -> new CurseState(
+                                curse.getCaptainName(),
+                                curse.getPlayerName(),
+                                curse.isTriggered(),
+                                curse.getSettledBuyer(),
+                                curse.getSettledAmount(),
+                                curse.getBuyerDeduction()))
+                        .toList(),
+                blindOpeningBidRepository.findAll().stream()
+                        .map(bid -> new BlindOpeningBidState(
+                                bid.getPlayerName(),
+                                bid.getCaptainName(),
+                                bid.getBidAmount(),
+                                bid.isSubmitted(),
+                                bid.isPassed(),
+                                bid.isBonusEligible(),
+                                bid.isBonusAwarded(),
+                                bid.getBonusAwardedAmount()))
+                        .toList(),
                 rtmRepository.findAll().stream()
                         .map(rtm -> new RtmState(
                                 rtm.getCaptainName(),
@@ -88,14 +114,7 @@ public class ReAuctionSnapshotService {
                                 rtm.getStatus(),
                                 rtm.getOriginalBidAmount()))
                         .toList(),
-                valueBetRepository.findAll().stream()
-                        .map(valueBet -> new ValueBetState(
-                                valueBet.getPlayerName(),
-                                valueBet.getCaptainName(),
-                                valueBet.getPredictedPrice(),
-                                valueBet.isRewarded()))
-                        .toList(),
-                valueBetEventsUsed);
+                blindBonanzaAwardsUsed);
 
         ReAuctionSnapshotEntity snapshot = new ReAuctionSnapshotEntity();
         snapshot.setId(SNAPSHOT_ID);
@@ -116,6 +135,7 @@ public class ReAuctionSnapshotService {
         for (TeamState teamState : state.teams()) {
             teamRepository.findByCaptainName(teamState.captainName()).ifPresent(team -> {
                 team.setPurse(teamState.purse());
+                team.setTournamentPoints(teamState.tournamentPoints());
                 team.setPlayersBought(teamState.playersBought());
                 team.setPlayersLeft(teamState.playersLeft());
                 team.setWildPickUsed(teamState.wildPickUsed());
@@ -146,6 +166,40 @@ public class ReAuctionSnapshotService {
         }
         auctionLogRepository.saveAll(auctionLogs);
 
+        cursePlayerRepository.deleteAll();
+        List<CursePlayerEntity> curses = new ArrayList<>();
+        if (state.curses() != null) {
+            for (CurseState curseState : state.curses()) {
+                CursePlayerEntity curse = new CursePlayerEntity();
+                curse.setCaptainName(curseState.captainName());
+                curse.setPlayerName(curseState.playerName());
+                curse.setTriggered(curseState.triggered());
+                curse.setSettledBuyer(curseState.settledBuyer());
+                curse.setSettledAmount(curseState.settledAmount());
+                curse.setBuyerDeduction(curseState.buyerDeduction());
+                curses.add(curse);
+            }
+        }
+        cursePlayerRepository.saveAll(curses);
+
+        blindOpeningBidRepository.deleteAll();
+        List<BlindOpeningBidEntity> blindBids = new ArrayList<>();
+        if (state.blindOpeningBids() != null) {
+            for (BlindOpeningBidState bidState : state.blindOpeningBids()) {
+                BlindOpeningBidEntity bid = new BlindOpeningBidEntity();
+                bid.setPlayerName(bidState.playerName());
+                bid.setCaptainName(bidState.captainName());
+                bid.setBidAmount(bidState.bidAmount());
+                bid.setSubmitted(bidState.submitted());
+                bid.setPassed(bidState.passed());
+                bid.setBonusEligible(bidState.bonusEligible());
+                bid.setBonusAwarded(bidState.bonusAwarded());
+                bid.setBonusAwardedAmount(bidState.bonusAwardedAmount());
+                blindBids.add(bid);
+            }
+        }
+        blindOpeningBidRepository.saveAll(blindBids);
+
         rtmRepository.deleteAll();
         List<RtmEntity> rtms = new ArrayList<>();
         for (RtmState rtmState : state.rtms()) {
@@ -163,20 +217,8 @@ public class ReAuctionSnapshotService {
         }
         rtmRepository.saveAll(rtms);
 
-        valueBetRepository.deleteAll();
-        List<ValueBetEntity> valueBets = new ArrayList<>();
-        for (ValueBetState valueBetState : state.valueBets()) {
-            ValueBetEntity valueBet = new ValueBetEntity();
-            valueBet.setPlayerName(valueBetState.playerName());
-            valueBet.setCaptainName(valueBetState.captainName());
-            valueBet.setPredictedPrice(valueBetState.predictedPrice());
-            valueBet.setRewarded(valueBetState.rewarded());
-            valueBets.add(valueBet);
-        }
-        valueBetRepository.saveAll(valueBets);
-
         snapshotRepository.delete(snapshot);
-        return state.valueBetEventsUsed();
+        return state.blindBonanzaAwardsUsed();
     }
 
     public void clear() {
@@ -203,14 +245,16 @@ public class ReAuctionSnapshotService {
             List<TeamState> teams,
             List<PlayerState> players,
             List<AuctionLogState> auctionLogs,
+            List<CurseState> curses,
+            List<BlindOpeningBidState> blindOpeningBids,
             List<RtmState> rtms,
-            List<ValueBetState> valueBets,
-            int valueBetEventsUsed) {
+            int blindBonanzaAwardsUsed) {
     }
 
     public record TeamState(
             String captainName,
             int purse,
+            int tournamentPoints,
             int playersBought,
             int playersLeft,
             boolean wildPickUsed) {
@@ -232,6 +276,26 @@ public class ReAuctionSnapshotService {
             int soldPrice) {
     }
 
+    public record CurseState(
+            String captainName,
+            String playerName,
+            boolean triggered,
+            String settledBuyer,
+            int settledAmount,
+            int buyerDeduction) {
+    }
+
+    public record BlindOpeningBidState(
+            String playerName,
+            String captainName,
+            Integer bidAmount,
+            boolean submitted,
+            boolean passed,
+            boolean bonusEligible,
+            boolean bonusAwarded,
+            int bonusAwardedAmount) {
+    }
+
     public record RtmState(
             String captainName,
             String playerName,
@@ -244,10 +308,4 @@ public class ReAuctionSnapshotService {
             Integer originalBidAmount) {
     }
 
-    public record ValueBetState(
-            String playerName,
-            String captainName,
-            int predictedPrice,
-            boolean rewarded) {
-    }
 }

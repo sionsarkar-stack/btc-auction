@@ -79,7 +79,7 @@ class RandomEventServiceTest {
     }
 
     @Test
-    void rtmLockdownMarksOnlyTheNextPlayer() {
+    void noMercyMarksTheNextPlayerAndDescribesBothBans() {
         RandomEventEntity event = new RandomEventEntity();
         event.setType(RandomEventType.RTM_LOCKDOWN);
         event.setAmount(0);
@@ -88,5 +88,11 @@ class RandomEventServiceTest {
 
         assertEquals("__NEXT__", config.getRtmLockdownPlayer());
         verify(auctionConfigService).save(Objects.requireNonNull(config));
+        verify(auctionEventService).logEvent(
+                "RTM_LOCKDOWN",
+                null,
+                null,
+                0,
+                "RTM and Wild Pick cannot be used on the next player.");
     }
 }

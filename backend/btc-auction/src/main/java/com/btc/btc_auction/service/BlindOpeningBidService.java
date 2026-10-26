@@ -4,6 +4,7 @@ import com.btc.btc_auction.entity.BlindOpeningBidEntity;
 import com.btc.btc_auction.entity.TeamEntity;
 import com.btc.btc_auction.model.Auction;
 import com.btc.btc_auction.repository.BlindOpeningBidRepository;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.util.Comparator;
@@ -13,6 +14,10 @@ import java.util.stream.Collectors;
 
 @Service
 public class BlindOpeningBidService {
+
+    private static final int NORMAL_BLIND_BONUS_POINTS = 300;
+    private static final int BLIND_BONANZA_POINTS = 500;
+    private static final int MAX_BLIND_BONUS_AWARDS = 4;
 
     private final BlindOpeningBidRepository repository;
     private final TeamService teamService;
@@ -30,7 +35,7 @@ public class BlindOpeningBidService {
         this(repository, teamService, currentAuctionService, auctionSocketService, auctionEventService, null);
     }
 
-    @org.springframework.beans.factory.annotation.Autowired
+    @Autowired
     public BlindOpeningBidService(
             BlindOpeningBidRepository repository,
             TeamService teamService,
@@ -47,7 +52,7 @@ public class BlindOpeningBidService {
     }
 
     public void startRound(String playerName) {
-        repository.deleteAll();
+        repository.deleteByPlayerName(playerName);
 
         teamService.getAllTeams().forEach(team -> {
             BlindOpeningBidEntity bid = new BlindOpeningBidEntity();
@@ -79,13 +84,6 @@ public class BlindOpeningBidService {
         BlindOpeningBidEntity bid = repository.findByPlayerNameAndCaptainName(playerName, captainName).orElse(null);
         if (bid == null) {
             return "Blind opening bid not found.";
-        }
-
-        if (hasMaximumBidLimit()) {
-            int maxBid = teamService.getMaxBid(team);
-            if (amount > maxBid) {
-                return "Bid exceeds the captain's maximum bid (₹" + maxBid + ").";
-            }
         }
 
         bid.setBidAmount(amount);
@@ -152,6 +150,12 @@ public class BlindOpeningBidService {
                 .orElse(null);
 
         if (winner == null) {
+            bids.forEach(bid -> {
+                if (bid.isBonusEligible()) {
+                    bid.setBonusEligible(false);
+                    repository.save(bid);
+                }
+            });
             auctionEventService.logEvent(
                     "STARTING_BID_ALL_PASSED",
                     playerName,
@@ -194,6 +198,14 @@ public class BlindOpeningBidService {
             return null;
         }
 
+        bids.forEach(bid -> {
+            boolean eligible = bid.getCaptainName().equalsIgnoreCase(winner.getCaptainName());
+            if (bid.isBonusEligible() != eligible) {
+                bid.setBonusEligible(eligible);
+                repository.save(bid);
+            }
+        });
+
         Auction auction = currentAuctionService.getCurrentAuction();
         if (auction != null) {
             auction.setLeader(winner.getCaptainName());
@@ -213,6 +225,85 @@ public class BlindOpeningBidService {
         return winner;
     }
 
+    public int awardBonusIfEligible(String playerName, String finalBuyer) {
+        var config = auctionConfigService == null ? null : auctionConfigService.getConfig();
+
+        BlindOpeningBidEntity eligibleBid = repository.findByPlayerName(playerName).stream()
+                .filter(BlindOpeningBidEntity::isBonusEligible)
+                .findFirst()
+                .orElse(null);
+        if (eligibleBid == null || eligibleBid.isBonusAwarded()
+                || !eligibleBid.getCaptainName().equalsIgnoreCase(finalBuyer)) {
+            return 0;
+        }
+
+        TeamEntity team = teamService.getTeam(finalBuyer);
+        if (team == null) {
+            return 0;
+        }
+
+        boolean blindBonanzaActive = config != null
+                && config.getPendingRandomEventType() == com.btc.btc_auction.enums.RandomEventType.BLIND_BONANZA
+                && playerName.equalsIgnoreCase(config.getPendingRandomEventPlayer())
+                && config.getBlindBonanzaAwardsUsed() < MAX_BLIND_BONUS_AWARDS;
+        int bonusAmount = blindBonanzaActive ? BLIND_BONANZA_POINTS : NORMAL_BLIND_BONUS_POINTS;
+
+        team.setTournamentPoints(team.getTournamentPoints() + bonusAmount);
+        teamService.saveTeam(team);
+        if (blindBonanzaActive) {
+            config.setBlindBonanzaAwardsUsed(config.getBlindBonanzaAwardsUsed() + 1);
+            auctionConfigService.save(config);
+        }
+        eligibleBid.setBonusAwarded(true);
+        eligibleBid.setBonusAwardedAmount(bonusAmount);
+        repository.save(eligibleBid);
+        String eventType = blindBonanzaActive ? "BLIND_BONANZA_REWARDED" : "BLIND_BID_BONUS";
+        String eventDetails = blindBonanzaActive
+                ? "Blind Bonanza upgraded the blind-bid bonus to +500 tournament points."
+                : "Highest valid blind bidder won the player; +300 tournament points.";
+        auctionEventService.logEvent(
+                eventType,
+                playerName,
+                finalBuyer,
+                bonusAmount,
+                eventDetails);
+        auctionSocketService.broadcastRefresh();
+        return bonusAmount;
+    }
+
+    public void reverseBonusIfAwarded(String playerName) {
+        BlindOpeningBidEntity awardedBid = repository.findByPlayerName(playerName).stream()
+                .filter(BlindOpeningBidEntity::isBonusAwarded)
+                .findFirst()
+                .orElse(null);
+        if (awardedBid == null) {
+            return;
+        }
+
+        int bonusAmount = awardedBid.getBonusAwardedAmount() > 0
+                ? awardedBid.getBonusAwardedAmount()
+                : BLIND_BONANZA_POINTS;
+        TeamEntity team = teamService.getTeam(awardedBid.getCaptainName());
+        if (team != null) {
+            team.setTournamentPoints(Math.max(0, team.getTournamentPoints() - bonusAmount));
+            teamService.saveTeam(team);
+        }
+        if (bonusAmount == BLIND_BONANZA_POINTS && auctionConfigService != null) {
+            var config = auctionConfigService.getConfig();
+            if (config != null) {
+                config.setBlindBonanzaAwardsUsed(Math.max(0, config.getBlindBonanzaAwardsUsed() - 1));
+                auctionConfigService.save(config);
+            }
+        }
+        awardedBid.setBonusAwarded(false);
+        awardedBid.setBonusAwardedAmount(0);
+        repository.save(awardedBid);
+    }
+
+    public void clearAll() {
+        repository.deleteAll();
+    }
+
     public boolean allCaptainsPassed(String playerName) {
         List<BlindOpeningBidEntity> bids = repository.findByPlayerName(playerName);
         return !bids.isEmpty()
@@ -224,9 +315,4 @@ public class BlindOpeningBidService {
         auctionSocketService.broadcastRefresh();
     }
 
-    private boolean hasMaximumBidLimit() {
-        return auctionConfigService == null
-                || auctionConfigService.getConfig() == null
-                || auctionConfigService.getConfig().getAuctionRound() != 2;
-    }
 }

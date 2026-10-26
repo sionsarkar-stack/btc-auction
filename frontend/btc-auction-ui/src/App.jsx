@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import Dashboard from "./pages/Dashboard";
 import AuctionManager from "./pages/AuctionManager";
 import AuctionScreen from "./pages/AuctionScreen";
-import AddPlayer from "./pages/AddPlayer";
 import ManualSale from "./pages/ManualSale";
 import AdminLogs from "./pages/AdminLogs";
 import Login from "./pages/Login";
@@ -10,6 +9,7 @@ import Settings from "./pages/Settings";
 import CaptainManagement from "./pages/CaptainManagement";
 import PlayersImport from "./pages/PlayersImport";
 import SilentBid from "./pages/SilentBid";
+import MarketPreview from "./pages/MarketPreview";
 import { API_URL } from "./config";
 
 function App() {
@@ -26,11 +26,13 @@ function App() {
 
   const [seasonName, setSeasonName] = useState("");
   const [silentBidActive, setSilentBidActive] = useState(false);
+  const marketPreview = import.meta.env.DEV
+    && new URLSearchParams(window.location.search).get("marketPreview") === "1";
 
   const [sessionChecked, setSessionChecked] = useState(!role);
 
   useEffect(() => {
-    if (!role) {
+    if (!role || marketPreview) {
       return undefined;
     }
 
@@ -60,17 +62,21 @@ function App() {
     return () => {
       active = false;
     };
-  }, [role]);
+  }, [role, marketPreview]);
 
   useEffect(() => {
+    if (marketPreview) {
+      return undefined;
+    }
+
     fetch(`${API_URL}/api/config`)
       .then(response => response.json())
       .then(config => setSeasonName(config.seasonName || ""))
       .catch(() => { });
-  }, []);
+  }, [marketPreview]);
 
   useEffect(() => {
-    if (role !== "CAPTAIN") {
+    if (role !== "CAPTAIN" || marketPreview) {
       return undefined;
     }
 
@@ -90,7 +96,7 @@ function App() {
     loadSilentBidStatus();
     const interval = window.setInterval(loadSilentBidStatus, 2000);
     return () => window.clearInterval(interval);
-  }, [role, screen]);
+  }, [role, screen, marketPreview]);
 
   useEffect(() => {
     const handleToast = (event) => {
@@ -114,6 +120,15 @@ function App() {
       window.location.reload();
     }
   };
+
+  const navigateToMenuScreen = (nextScreen, event) => {
+    setScreen(nextScreen);
+    event.currentTarget.closest("details")?.removeAttribute("open");
+  };
+
+  if (marketPreview) {
+    return <MarketPreview />;
+  }
 
   if (!sessionChecked) {
     return <div className="app-container">Checking session...</div>;
@@ -194,7 +209,7 @@ function App() {
             </button>
           )}
 
-          {role !== "VIEWER" && (
+          {role === "CAPTAIN" && (
             <button
               className={screen === "live" ? "button button-active" : "button-secondary"}
               onClick={() =>
@@ -205,83 +220,62 @@ function App() {
           )}
 
           {role === "ADMIN" && (
-
-            <button
-              className={screen === "add-player" ? "button button-active" : "button-secondary"}
-              onClick={() =>
-                setScreen("add-player")}
-            >
-              Add Player
-            </button>
-
-          )}
-          {role === "ADMIN" && (
-
-            <button
-              className={screen === "import-players" ? "button button-active" : "button-secondary"}
-              onClick={() =>
-                setScreen("import-players")}
-            >
-              Import Players
-            </button>
-
-          )}
-
-          {role === "ADMIN" && (
-
-            <button
-              className={
-                screen === "manual-sale"
-                  ? "button button-active"
-                  : "button-secondary"
-              }
-              onClick={() =>
-                setScreen("manual-sale")}
-            >
-              Manual Sale
-            </button>
-
+            <details className={`app-nav-menu app-nav-settings-menu${["settings", "import-players", "captain-management"].includes(screen) ? " is-current" : ""}`}>
+              <summary className="app-nav-menu-trigger">
+                <span>Settings</span>
+                <span className="app-nav-menu-chevron" aria-hidden="true">⌄</span>
+              </summary>
+              <div className="app-nav-menu-panel">
+                <div className="app-nav-menu-group" role="group" aria-label="Auction setup">
+                  <h2>Auction Setup</h2>
+                  <button type="button" className={screen === "settings" ? "is-current" : ""}
+                    aria-current={screen === "settings" ? "page" : undefined}
+                    onClick={event => navigateToMenuScreen("settings", event)}>
+                    Auction Settings
+                  </button>
+                  <button type="button" className={screen === "import-players" ? "is-current" : ""}
+                    aria-current={screen === "import-players" ? "page" : undefined}
+                    onClick={event => navigateToMenuScreen("import-players", event)}>
+                    Import Players
+                  </button>
+                </div>
+                <div className="app-nav-menu-group" role="group" aria-label="Teams">
+                  <h2>Teams</h2>
+                  <button type="button" className={screen === "captain-management" ? "is-current" : ""}
+                    aria-current={screen === "captain-management" ? "page" : undefined}
+                    onClick={event => navigateToMenuScreen("captain-management", event)}>
+                    Captain Management
+                  </button>
+                </div>
+              </div>
+            </details>
           )}
 
           {role === "ADMIN" && (
-
-            <button
-              className={
-                screen === "settings"
-                  ? "button button-active"
-                  : "button-secondary"
-              }
-              onClick={() =>
-                setScreen("settings")}
-            >
-              Settings
-            </button>
-
-          )}
-
-          {role === "ADMIN" && (
-            <button
-              className={screen === "captain-management" ? "button button-active" : "button-secondary"}
-              onClick={() => setScreen("captain-management")}
-            >
-              Captain Management
-            </button>
-          )}
-
-          {role === "ADMIN" && (
-
-            <button
-              className={
-                screen === "admin-logs"
-                  ? "button button-active"
-                  : "button-secondary"
-              }
-              onClick={() =>
-                setScreen("admin-logs")}
-            >
-              Admin Logs
-            </button>
-
+            <details className={`app-nav-menu app-nav-manage-menu${["manual-sale", "admin-logs"].includes(screen) ? " is-current" : ""}`}>
+              <summary className="app-nav-menu-trigger">
+                <span>Manage</span>
+                <span className="app-nav-menu-chevron" aria-hidden="true">⌄</span>
+              </summary>
+              <div className="app-nav-menu-panel app-nav-manage-panel">
+                <div className="app-nav-menu-group" role="group" aria-label="Auction management">
+                  <h2>Auction</h2>
+                  <button type="button" className={screen === "manual-sale" ? "is-current" : ""}
+                    aria-current={screen === "manual-sale" ? "page" : undefined}
+                    onClick={event => navigateToMenuScreen("manual-sale", event)}>
+                    Manual Sale
+                  </button>
+                </div>
+                <div className="app-nav-menu-group" role="group" aria-label="Administration">
+                  <h2>Administration</h2>
+                  <button type="button" className={screen === "admin-logs" ? "is-current" : ""}
+                    aria-current={screen === "admin-logs" ? "page" : undefined}
+                    onClick={event => navigateToMenuScreen("admin-logs", event)}>
+                    Admin Logs
+                  </button>
+                </div>
+              </div>
+            </details>
           )}
 
 
@@ -309,12 +303,8 @@ function App() {
             role === "ADMIN" &&
             <AuctionManager />}
 
-          {screen === "live" &&
+          {screen === "live" && role !== "ADMIN" &&
             <AuctionScreen />}
-
-          {screen === "add-player" &&
-            role === "ADMIN" &&
-            <AddPlayer />}
 
           {screen === "manual-sale" &&
             role === "ADMIN" &&

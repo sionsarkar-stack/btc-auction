@@ -15,7 +15,8 @@
     "global": "^4.4.0",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
-    "sockjs-client": "^1.6.1"
+    "sockjs-client": "^1.6.1",
+    "three": "^0.186.1"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

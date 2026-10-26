@@ -15,56 +15,38 @@ function Login({ onLogin }) {
         useState("");
 
     const login = async () => {
+        setError("");
 
-        const response =
-            await fetch(
-                `${API_URL}/api/login`,
-                {
-                    method: "POST",
-                    headers: {
-                        "Content-Type":
-                            "application/json"
-                    },
-                    credentials: "include",
-                    body: JSON.stringify({
-                        username,
-                        password
-                    })
-                });
+        try {
+            const response = await fetch(`${API_URL}/api/login`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                credentials: "include",
+                body: JSON.stringify({ username, password }),
+            });
 
-        if (!response.ok) {
+            if (response.status === 401) {
+                setError("Invalid username or password");
+                return;
+            }
 
-            setError(
-                "Invalid username or password"
-            );
+            if (!response.ok) {
+                setError(`Auction server error (HTTP ${response.status}). Please try again.`);
+                return;
+            }
 
-            return;
+            const user = await response.json();
+            if (!user || !user.role) {
+                setError("Invalid username or password");
+                return;
+            }
 
+            localStorage.setItem("role", user.role);
+            localStorage.setItem("username", user.username);
+            onLogin(user.role);
+        } catch {
+            setError("Auction server is unavailable. Start the backend and try again.");
         }
-
-        const user =
-            await response.json();
-
-        if (!user || !user.role) {
-
-            setError(
-                "Invalid username or password"
-            );
-
-            return;
-        }
-
-        localStorage.setItem(
-            "role",
-            user.role
-        );
-
-        localStorage.setItem(
-            "username",
-            user.username
-        );
-
-        onLogin(user.role);
     };
 
     return (

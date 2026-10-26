@@ -14,6 +14,8 @@ public class TeamEntity {
 
     private int purse;
 
+    private int tournamentPoints;
+
     private int playersBought;
 
     private int playersLeft;
@@ -41,6 +43,14 @@ public class TeamEntity {
 
     public void setPurse(int purse) {
         this.purse = purse;
+    }
+
+    public int getTournamentPoints() {
+        return tournamentPoints;
+    }
+
+    public void setTournamentPoints(int tournamentPoints) {
+        this.tournamentPoints = tournamentPoints;
     }
 
     public int getPlayersBought() {

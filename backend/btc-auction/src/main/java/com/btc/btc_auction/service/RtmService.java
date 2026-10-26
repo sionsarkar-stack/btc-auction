@@ -72,7 +72,7 @@ public class RtmService {
         }
 
         if (auction.getCurrentPlayer().equalsIgnoreCase(config.getRtmLockdownPlayer())) {
-            return "RTM is locked down for this player.";
+            return "NO MERCY bans RTM and Wild Pick for this player.";
         }
 
         if (auction.getLeader().equalsIgnoreCase(captainName)) {
@@ -266,18 +266,6 @@ public class RtmService {
 
         if (bidAmount <= claim.getOriginalBidAmount()) {
             return "RTM bid must be higher than the original bid.";
-        }
-
-        AuctionConfigEntity config = auctionConfigService.getConfig();
-        if (config == null || config.getAuctionRound() != 2) {
-            int maxBid = teamService.getMaxBid(team);
-
-            if (bidAmount > maxBid) {
-
-                return "RTM bid exceeds maximum bid (₹"
-                        + maxBid + ").";
-            }
-
         }
 
         if (auction == null) {

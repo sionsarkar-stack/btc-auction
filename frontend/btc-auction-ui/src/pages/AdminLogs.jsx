@@ -1,29 +1,21 @@
 import { useCallback, useEffect, useState } from "react";
+import { Client } from "@stomp/stompjs";
+import SockJS from "sockjs-client";
 
 import { API_URL } from "../config";
 import { showToast } from "../services/toast";
 
-const protectionActions = [
-    "PROTECTION_PLAYER_SELECTED",
-    "PROTECTION_BOOST",
-    "PROTECTION_PENALTY",
-    "PROTECTION_BONUS",
-];
-
-const valueBetActions = [
-    "VALUE_BET_SUBMITTED",
-    "VALUE_BET_REWARD",
-];
-
 function LogEntry({ log }) {
+    const isCurseSelection = log.actionType === "CURSE_SELECTED";
+
     return (
         <article className="admin-log-entry">
             <div className="admin-log-entry-heading">
-                <strong>{log.actionType}</strong>
+                <strong>{isCurseSelection ? "Curse Selected" : log.actionType}</strong>
                 <time>{log.timestamp}</time>
             </div>
             <p className="admin-log-player">{log.playerName || "Auction action"}</p>
-            {log.newCaptain && <p><strong>Captain:</strong> {log.newCaptain}</p>}
+            {log.newCaptain && <p><strong>{isCurseSelection ? "Selected by" : "Captain:"}</strong> {log.newCaptain}</p>}
             {log.oldCaptain && <p><strong>Transfer:</strong> {log.oldCaptain} → {log.newCaptain}</p>}
             {(log.oldPrice || log.newPrice) ? (
                 <p><strong>Price:</strong> ₹{log.oldPrice} → ₹{log.newPrice}</p>
@@ -51,27 +43,61 @@ function LogSection({ title, icon, logs, emptyMessage }) {
     );
 }
 
+function CurseSelectionSection({ selections }) {
+    return (
+        <section className="admin-log-section">
+            <div className="admin-log-section-heading">
+                <h2>🎯 Curse Selections</h2>
+                <span>{selections.length}</span>
+            </div>
+            {selections.length === 0 ? (
+                <p className="table-empty">No curse players selected yet.</p>
+            ) : (
+                <div className="admin-log-list">
+                    {selections.map(selection => (
+                        <article className="admin-log-entry" key={selection.id}>
+                            <div className="admin-log-entry-heading">
+                                <strong>{selection.playerName}</strong>
+                                <span>{selection.captainName}</span>
+                            </div>
+                            <p className="admin-log-reason">Selected as a curse player</p>
+                        </article>
+                    ))}
+                </div>
+            )}
+        </section>
+    );
+}
+
 function AdminLogs() {
     const [logs, setLogs] = useState([]);
+    const [curseSelections, setCurseSelections] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState("");
 
-    const loadLogs = useCallback(async () => {
-        setIsLoading(true);
+    const loadLogs = useCallback(async (showLoading = true) => {
+        if (showLoading) setIsLoading(true);
         setError("");
 
         try {
-            const response = await fetch(`${API_URL}/api/admin/logs`, {
-                credentials: "include"
-            });
-            if (!response.ok) throw new Error("Unable to load audit logs");
-            const data = await response.json();
+            const [logsResponse, curseSelectionsResponse] = await Promise.all([
+                fetch(`${API_URL}/api/admin/logs`, { credentials: "include" }),
+                fetch(`${API_URL}/api/curse-players/admin-selections`, { credentials: "include" }),
+            ]);
+            if (!logsResponse.ok || !curseSelectionsResponse.ok) {
+                throw new Error("Unable to load admin logs");
+            }
+            const [data, selections] = await Promise.all([
+                logsResponse.json(),
+                curseSelectionsResponse.json(),
+            ]);
             setLogs(data.slice().reverse());
+            setCurseSelections(selections);
         } catch (loadError) {
             console.error(loadError);
             setError("Unable to load audit logs. Check the connection and try again.");
         } finally {
-            setIsLoading(false);
+            if (showLoading) setIsLoading(false);
         }
     }, []);
 
@@ -80,11 +106,23 @@ function AdminLogs() {
             void loadLogs();
         }, 0);
         const interval = window.setInterval(() => {
-            void loadLogs();
-        }, 5000);
+            void loadLogs(false);
+        }, 30000);
+        const client = new Client({
+            webSocketFactory: () => new SockJS(`${API_URL}/ws`),
+            reconnectDelay: 5000,
+        });
+        client.onConnect = () => {
+            client.subscribe("/topic/auction", () => {
+                void loadLogs(false);
+            });
+        };
+        client.activate();
+
         return () => {
             window.clearTimeout(initialLoad);
             window.clearInterval(interval);
+            void client.deactivate({ force: true });
         };
     }, [loadLogs]);
 
@@ -100,10 +138,7 @@ function AdminLogs() {
         if (response.ok) setLogs([]);
     };
 
-    const protectionLogs = logs.filter(log => protectionActions.includes(log.actionType));
-    const valueBetLogs = logs.filter(log => valueBetActions.includes(log.actionType));
-    const generalLogs = logs.filter(log => !protectionActions.includes(log.actionType)
-        && !valueBetActions.includes(log.actionType));
+    const generalLogs = logs.filter(log => log.actionType !== "CURSE_SELECTED");
 
     return (
         <div className="app-container">
@@ -126,8 +161,7 @@ function AdminLogs() {
             {isLoading && logs.length === 0 && !error ? <p>Loading audit logs...</p> : null}
 
             <div className="admin-log-sections">
-                <LogSection title="Protection Players" icon="🛡️" logs={protectionLogs} emptyMessage="No protection-player activity yet." />
-                <LogSection title="Value Bets" icon="💰" logs={valueBetLogs} emptyMessage="No Value Bet activity yet." />
+                <CurseSelectionSection selections={curseSelections} />
                 <LogSection title="General Auction Logs" icon="📋" logs={generalLogs} emptyMessage="No general admin activity yet." />
             </div>
         </div>

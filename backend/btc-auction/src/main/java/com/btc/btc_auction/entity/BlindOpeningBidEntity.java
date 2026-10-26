@@ -24,6 +24,12 @@ public class BlindOpeningBidEntity {
 
     private boolean passed;
 
+    private boolean bonusEligible;
+
+    private boolean bonusAwarded;
+
+    private int bonusAwardedAmount;
+
     public Long getId() {
         return id;
     }
@@ -66,5 +72,29 @@ public class BlindOpeningBidEntity {
 
     public void setPassed(boolean passed) {
         this.passed = passed;
+    }
+
+    public boolean isBonusEligible() {
+        return bonusEligible;
+    }
+
+    public void setBonusEligible(boolean bonusEligible) {
+        this.bonusEligible = bonusEligible;
+    }
+
+    public boolean isBonusAwarded() {
+        return bonusAwarded;
+    }
+
+    public void setBonusAwarded(boolean bonusAwarded) {
+        this.bonusAwarded = bonusAwarded;
+    }
+
+    public int getBonusAwardedAmount() {
+        return bonusAwardedAmount;
+    }
+
+    public void setBonusAwardedAmount(int bonusAwardedAmount) {
+        this.bonusAwardedAmount = bonusAwardedAmount;
     }
 }

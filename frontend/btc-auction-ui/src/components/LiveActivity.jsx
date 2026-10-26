@@ -10,13 +10,17 @@ const eventNames = {
     RTM_TRIGGERED: "🔄 RTM Pressed",
     RTM_ACCEPTED: "✅ RTM Accepted",
     RTM_DECLINED: "❌ RTM Declined",
+    RTM_LOCKDOWN: "🚫 NO MERCY",
     PLAYER_SOLD: "🏆 Player Sold",
+    PURSE_FLUSH: "💸 Auction Purse Flush",
     MARKET_CRASH: "📉 Market Crash",
     STARTING_BID_SUBMITTED: "🎯 Starting Bid Submitted",
     STARTING_BID_WINNER: "🏆 Highest Starting Bid",
-    VALUE_BET_REVEALED: "💰 Value Bet",
-    VALUE_BET_REWARD: "💰 Value Bet Winner",
-    PROTECTION_REVEALED: "🛡️ Protection Revealed",
+    CURSE_REVEALED: "🎯 Curse Triggered",
+    CURSE_CANCELLED: "🎯 Curse Cancelled",
+    BLIND_BID_BONUS: "🏆 Blind Bid Bonus",
+    BLIND_BONANZA: "🎊 Blind Bonanza",
+    BLIND_BONANZA_REWARDED: "🎊 Blind Bonanza Award",
     SILENT_BID_SOLD: "🤐 Silent Auction Winner",
     WILDCARD_TRIGGERED: "🃏 Wildcard Triggered",
 };
@@ -26,11 +30,16 @@ const overlayEvents = {
     RTM_TRIGGERED: true,
     RTM_ACCEPTED: true,
     RTM_DECLINED: true,
+    RTM_LOCKDOWN: true,
     PLAYER_SOLD: true,
+    PURSE_FLUSH: true,
     MARKET_CRASH: true,
     STARTING_BID_WINNER: true,
-    VALUE_BET_REWARD: true,
-    PROTECTION_REVEALED: true,
+    CURSE_REVEALED: true,
+    CURSE_CANCELLED: true,
+    BLIND_BID_BONUS: true,
+    BLIND_BONANZA: true,
+    BLIND_BONANZA_REWARDED: true,
     SILENT_BID_SOLD: true,
     WILDCARD_TRIGGERED: true
 };
@@ -40,12 +49,20 @@ const formatEventAmount = event => {
         return "";
     }
 
-    if (event.eventType === "VALUE_BET_REVEALED") {
-        return ` Prediction ₹${event.amount}`;
+    if (["CURSE_REVEALED", "CURSE_CANCELLED"].includes(event.eventType)) {
+        return ` ${event.amount} tournament points`;
     }
 
-    if (event.eventType === "VALUE_BET_REWARD") {
-        return ` Bonus +₹${event.amount} each`;
+    if (["BLIND_BID_BONUS", "BLIND_BONANZA_REWARDED"].includes(event.eventType)) {
+        return ` +${event.amount} tournament points`;
+    }
+
+    if (event.eventType === "PURSE_FLUSH") {
+        return ` ₹${event.amount} auction purse for every captain`;
+    }
+
+    if (event.eventType === "BLIND_BONANZA") {
+        return ` Up to +${event.amount} tournament points`;
     }
 
     return ` Final ₹${event.amount > 0 ? "+" : ""}${event.amount}`;

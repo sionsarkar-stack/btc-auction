@@ -4,7 +4,7 @@ import SockJS from "sockjs-client";
 
 import { API_URL } from "../config";
 import SilentBidManager from "./SilentBidManager";
-import CasinoReel from "../components/CasinoReel";
+import PlayerWalkout from "../components/PlayerWalkout";
 import LiveActivity from "../components/LiveActivity";
 
 function AuctionManager() {
@@ -30,7 +30,7 @@ function AuctionManager() {
     const [allCaptainsPassed, setAllCaptainsPassed] = useState(false);
     const [openingBidTie, setOpeningBidTie] = useState(null);
     const [openingBids, setOpeningBids] = useState([]);
-    const [protectionPlayers, setProtectionPlayers] = useState([]);
+    const [curseSelectionCounts, setCurseSelectionCounts] = useState({});
     const previousNominatedPlayer = useRef(null);
 
     const loadData = useCallback(async () => {
@@ -50,8 +50,7 @@ function AuctionManager() {
             );
 
             const statusResponse = await fetch(`${API_URL}/api/auction/status`);
-            const protectionResponse = await fetch(`${API_URL}/api/protection-players`);
-
+            const curseReadinessResponse = await fetch(`${API_URL}/api/curse-players/readiness`);
             const clubbedPairResponse = await fetch(
                 `${API_URL}/api/auction/clubbed-pair`
             );
@@ -72,6 +71,7 @@ function AuctionManager() {
                 await currentAuctionResponse.json();
 
             const statusData = await statusResponse.json();
+            const curseReadiness = await curseReadinessResponse.json();
             const nominatedPlayer = currentAuction?.currentPlayer;
             const allPassed = statusData?.auctionPhase === "BLIND_OPENING_BID" && nominatedPlayer
                 ? await fetch(`${API_URL}/api/auction/blind-opening-bid/${encodeURIComponent(nominatedPlayer)}/all-passed`)
@@ -81,8 +81,6 @@ function AuctionManager() {
                 ? await fetch(`${API_URL}/api/auction/blind-opening-bid/${encodeURIComponent(nominatedPlayer)}`)
                     .then(response => response.json())
                 : [];
-            const protectionData = await protectionResponse.json();
-
             const clubbedPairData =
                 await clubbedPairResponse.json();
 
@@ -120,10 +118,10 @@ function AuctionManager() {
             }
             setCurrentAuction(currentAuction);
             setAuctionStatus(statusData);
+            setCurseSelectionCounts(curseReadiness || {});
             setAllCaptainsPassed(allPassed);
             setOpeningBidTie(latestOpeningBidTie);
             setOpeningBids(Array.isArray(currentOpeningBids) ? currentOpeningBids : []);
-            setProtectionPlayers(protectionData);
             setClubbedPairs(Array.isArray(clubbedPairData) ? clubbedPairData : []);
             setRandomEvents(randomEventsData);
         } catch (error) {
@@ -168,6 +166,17 @@ function AuctionManager() {
             client.deactivate();
         };
     }, [loadData]);
+
+    useEffect(() => {
+        if (auctionStatus?.auctionPhase !== "SPINNING") {
+            return undefined;
+        }
+
+        const intervalId = window.setInterval(() => {
+            void loadData();
+        }, 500);
+        return () => window.clearInterval(intervalId);
+    }, [auctionStatus?.auctionPhase, loadData]);
 
     const callSold = async () => {
 
@@ -358,10 +367,10 @@ function AuctionManager() {
         }
     };
 
-    const enableProtectionSelection = async () => {
+    const enableCurseSelection = async () => {
         setIsBusy(true);
         try {
-            const response = await fetch(`${API_URL}/api/admin/protection-selection/enable`, { method: "POST" });
+            const response = await fetch(`${API_URL}/api/curse-players/selection/enable`, { method: "POST" });
             setMessage(await response.text());
             await loadData();
         } finally {
@@ -369,22 +378,16 @@ function AuctionManager() {
         }
     };
 
-    const autoSelectProtectionPlayers = async () => {
+    const autoSelectCursePlayers = async () => {
         setIsBusy(true);
         try {
-            const response = await fetch(`${API_URL}/api/protection-players/auto-select`, { method: "POST" });
+            const response = await fetch(`${API_URL}/api/curse-players/auto-select`, { method: "POST" });
             setMessage(await response.text());
             await loadData();
         } finally {
             setIsBusy(false);
         }
     };
-
-    const protectionReady = auctionStatus?.protectionSelectionEnabled
-        && teams.length > 0
-        && teams.every(team => protectionPlayers.filter(
-            item => item.captainName === team.captainName
-        ).length === 2);
 
     const startReAuction = async () => {
         if (!window.confirm("Restart the auction? All unsold players will return to the wheel at half their original base price.")) {
@@ -514,6 +517,9 @@ function AuctionManager() {
         )
     );
     const isWheelSpinning = auctionStatus?.auctionPhase === "SPINNING";
+    const cursesReady = auctionStatus?.curseSelectionEnabled
+        && teams.length > 0
+        && teams.every(team => curseSelectionCounts[team.captainName] === 2);
 
     return (
         <>
@@ -536,7 +542,7 @@ function AuctionManager() {
                         <button
                             className="button"
                             onClick={startAuction}
-                            disabled={isBusy || !protectionReady}
+                            disabled={isBusy || !cursesReady}
                         >
                             🚀 Start Auction
                         </button>
@@ -544,24 +550,24 @@ function AuctionManager() {
                         <button
                             className="button-secondary"
                             type="button"
-                            onClick={enableProtectionSelection}
-                            disabled={isBusy || auctionStatus?.protectionSelectionEnabled || auctionStatus?.auctionStarted}
+                            onClick={enableCurseSelection}
+                            disabled={isBusy || auctionStatus?.curseSelectionEnabled || auctionStatus?.auctionStarted}
                         >
-                            🛡️ Enable Selection of Protection Player
+                            Enable Curse Selection
                         </button>
 
                         <button
                             className="button-secondary"
                             type="button"
-                            onClick={autoSelectProtectionPlayers}
+                            onClick={autoSelectCursePlayers}
                             disabled={isBusy || auctionStatus?.auctionStarted}
                         >
-                            🧪 Bypass: Auto-select Protection Players
+                            Bypass: Auto-select Curses
                         </button>
 
-                        {protectionReady && (
+                        {cursesReady && (
                             <div className="message-success protection-ready-message">
-                                Protection players are ready for every captain. Start Auction is enabled.
+                                All captains have secretly selected two Curse players.
                             </div>
                         )}
 
@@ -592,15 +598,18 @@ function AuctionManager() {
                                 {randomEvents.map((event) => {
                                     const isCurrentRandomEvent =
                                         auctionStatus?.pendingRandomEventType === event.type;
+                                    const eventName = event.type === "RTM_LOCKDOWN"
+                                        ? "NO MERCY"
+                                        : event.type.replaceAll("_", " ");
 
                                     return (
                                         <div
                                             key={event.id}
                                             className={`random-event-library-item${isCurrentRandomEvent ? " is-active" : ""}`}
-                                            aria-label={isCurrentRandomEvent ? `${event.type} is active` : undefined}
+                                            aria-label={isCurrentRandomEvent ? `${eventName} is active` : undefined}
                                         >
                                             <div className="random-event-library-item-heading">
-                                                <strong>{event.type}</strong>
+                                                <strong>{eventName}</strong>
                                                 {isCurrentRandomEvent && (
                                                     <span className="random-event-active-badge">
                                                         Active now{auctionStatus?.pendingRandomEventPlayer
@@ -685,22 +694,24 @@ function AuctionManager() {
                                 title={currentAuction?.currentPlayer ? "Resolve the active player before spinning again." : undefined}
                                 style={{ width: "100%", marginBottom: "14px" }}
                             >
-                                🎡 Spin Wheel
+                                Call Next Player
                             </button>
-                            <CasinoReel
+                            <PlayerWalkout
                                 players={wheelPlayers}
+                                walkoutPlayers={auctionStatus?.walkoutPlayerNames}
                                 selectedPlayer={currentAuction?.currentPlayer}
                                 spinStartedAt={auctionStatus?.wheelSpinStartedAt}
                                 spinEndsAt={auctionStatus?.wheelSpinEndsAt}
+                                serverTime={auctionStatus?.serverTime}
                                 seasonName={auctionStatus?.seasonName}
                             />
                         </div>
 
                         <div>
-                            <h3 style={{ margin: "0 0 10px", color: "#d97706" }}>💎 {auctionStatus?.seasonName || "BTC Season 12"} Auction Reel</h3>
-                            <p style={{ margin: "0 0 8px" }}>Every unsold player is in the live spinning drum. High-roller slot easing locks onto nominees automatically.</p>
+                            <h3 style={{ margin: "0 0 10px" }}>{auctionStatus?.seasonName || "Auction"} Player Walkout</h3>
+                            <p style={{ margin: "0 0 8px" }}>The stadium lights sweep the available roster before the selected player walks onto the pitch.</p>
                             <p style={{ fontSize: "13px", color: "#64748b", margin: 0 }}>
-                                {wheelPlayers.length} player{wheelPlayers.length === 1 ? "" : "s"} remaining in wheel drum.
+                                {wheelPlayers.length} player{wheelPlayers.length === 1 ? "" : "s"} waiting in the tunnel.
                             </p>
                         </div>
 

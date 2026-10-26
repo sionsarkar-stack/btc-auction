@@ -5,6 +5,8 @@ import com.btc.btc_auction.entity.RandomEventEntity;
 import com.btc.btc_auction.entity.TeamEntity;
 import com.btc.btc_auction.enums.RandomEventType;
 import com.btc.btc_auction.repository.RandomEventRepository;
+import jakarta.annotation.PostConstruct;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
@@ -18,21 +20,41 @@ public class RandomEventService {
     private final TeamService teamService;
     private final AuctionEventService auctionEventService;
     private final AuctionConfigService auctionConfigService;
+    private final JdbcTemplate jdbcTemplate;
 
     private static final Random RNG = new Random();
 
     public RandomEventService(RandomEventRepository repository, TeamService teamService,
             AuctionEventService auctionEventService) {
-        this(repository, teamService, auctionEventService, null);
+        this(repository, teamService, auctionEventService, null, null);
+    }
+
+    public RandomEventService(RandomEventRepository repository, TeamService teamService,
+            AuctionEventService auctionEventService, AuctionConfigService auctionConfigService) {
+        this(repository, teamService, auctionEventService, auctionConfigService, null);
     }
 
     @org.springframework.beans.factory.annotation.Autowired
     public RandomEventService(RandomEventRepository repository, TeamService teamService,
-            AuctionEventService auctionEventService, AuctionConfigService auctionConfigService) {
+            AuctionEventService auctionEventService, AuctionConfigService auctionConfigService,
+            JdbcTemplate jdbcTemplate) {
         this.repository = repository;
         this.teamService = teamService;
         this.auctionEventService = auctionEventService;
         this.auctionConfigService = auctionConfigService;
+        this.jdbcTemplate = jdbcTemplate;
+    }
+
+    @PostConstruct
+    public void migrateLegacyRandomEvents() {
+        if (jdbcTemplate != null) {
+            jdbcTemplate.update("DELETE FROM random_events WHERE type = ?", "VALUE_BET");
+            jdbcTemplate.update(
+                    "UPDATE random_events SET title = ?, description = ? WHERE type = ?",
+                    eventTitle(RandomEventType.RTM_LOCKDOWN),
+                    buildDescription(RandomEventType.RTM_LOCKDOWN),
+                    RandomEventType.RTM_LOCKDOWN.name());
+        }
     }
 
     public List<RandomEventEntity> getActiveEvents() {
@@ -45,7 +67,7 @@ public class RandomEventService {
             if (!existingTypes.contains(type)) {
                 RandomEventEntity event = new RandomEventEntity();
                 event.setType(type);
-                event.setTitle(type.name().replace("_", " ").toLowerCase());
+                event.setTitle(eventTitle(type));
                 event.setDescription(buildDescription(type));
                 event.setAmount(defaultAmount(type));
                 event.setActive(true);
@@ -67,7 +89,7 @@ public class RandomEventService {
         for (RandomEventType type : RandomEventType.values()) {
             RandomEventEntity event = new RandomEventEntity();
             event.setType(type);
-            event.setTitle(type.name().replace("_", " ").toLowerCase());
+            event.setTitle(eventTitle(type));
             event.setDescription(buildDescription(type));
             event.setAmount(defaultAmount(type));
             event.setCaptainName(null);
@@ -107,7 +129,7 @@ public class RandomEventService {
                     null,
                     null,
                     event.getAmount(),
-                    "RTM cannot be used on the next player.");
+                    buildDescription(RandomEventType.RTM_LOCKDOWN));
             return;
         }
 
@@ -166,12 +188,12 @@ public class RandomEventService {
             case RTM_LOCKDOWN -> {
                 return;
             }
+            case BLIND_BONANZA -> {
+                return;
+            }
             case SILENT_AUCTION -> {
                 target.setPurse(target.getPurse() + (event.getAmount() == null ? 0 : event.getAmount()));
                 teamService.saveTeam(target);
-            }
-            case VALUE_BET -> {
-                return;
             }
             default -> {
             }
@@ -189,10 +211,10 @@ public class RandomEventService {
         return switch (type) {
             case MARKET_BOOM -> "Next player's final price increases by 100 points.";
             case MARKET_CRASH -> "When SOLD is called, the player's final price decreases by 100 points.";
-            case RTM_LOCKDOWN -> "RTM cannot be used on the next player.";
+            case BLIND_BONANZA ->
+                "The unique highest blind bidder receives +500 tournament points instead of +300 if they win the player.";
+            case RTM_LOCKDOWN -> "RTM and Wild Pick cannot be used on the next player.";
             case SILENT_AUCTION -> "No live bidding for the next player. All captains submit one secret bid.";
-            case VALUE_BET ->
-                "Before bidding, captains predict the final price. The closest prediction earns +200.";
         };
     }
 
@@ -200,9 +222,15 @@ public class RandomEventService {
         return switch (type) {
             case MARKET_BOOM -> 100;
             case MARKET_CRASH -> 100;
+            case BLIND_BONANZA -> 500;
             case RTM_LOCKDOWN -> 0;
             case SILENT_AUCTION -> 0;
-            case VALUE_BET -> 200;
         };
+    }
+
+    private String eventTitle(RandomEventType type) {
+        return type == RandomEventType.RTM_LOCKDOWN
+                ? "NO MERCY"
+                : type.name().replace("_", " ").toLowerCase();
     }
 }

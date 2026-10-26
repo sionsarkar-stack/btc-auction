@@ -53,17 +53,15 @@ public class DashboardController {
                                                         .map(player -> player.getName())
                                                         .toList();
 
-                                        int maxBid = teamService.getMaxBid(team);
-
                                         boolean rtmAvailable = !rtmRepository.existsByCaptainNameAndUsedTrue(
                                                         team.getCaptainName());
 
                                         return new TeamDashboardDto(
                                                         team.getCaptainName(),
                                                         team.getPurse(),
+                                                        team.getTournamentPoints(),
                                                         team.getPlayersBought(),
                                                         team.getPlayersLeft(),
-                                                        maxBid,
                                                         squad,
                                                         rtmAvailable);
                                 })

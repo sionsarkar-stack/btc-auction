@@ -19,6 +19,11 @@ export default defineConfig({
       "/api": {
         target: backendUrl,
         changeOrigin: true,
+        configure: proxy => {
+          proxy.on("proxyReq", proxyRequest => {
+            proxyRequest.removeHeader("origin");
+          });
+        },
       },
       "/ws": {
         target: backendUrl,

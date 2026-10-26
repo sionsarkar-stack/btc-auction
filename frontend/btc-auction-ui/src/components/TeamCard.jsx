@@ -10,6 +10,10 @@ function TeamCard({ team }) {
         </span>
 
         <span className="stat-badge">
+          Points {team.tournamentPoints ?? 0}
+        </span>
+
+        <span className="stat-badge">
           Bought {team.playersBought}
         </span>
 
@@ -17,10 +21,6 @@ function TeamCard({ team }) {
           Left {team.playersLeft}
         </span>
       </div>
-      <p>
-        <strong>Max Bid:</strong> ₹{team.maxBid}
-      </p>
-
       <div className="squad-title">
         Squad
       </div>

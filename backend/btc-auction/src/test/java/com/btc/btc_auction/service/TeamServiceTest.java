@@ -24,24 +24,6 @@ class TeamServiceTest {
     }
 
     @Test
-    void getMaxBidReservesOneHundredForEachPlayerAfterTheRequiredTwo() {
-        TeamEntity team = new TeamEntity();
-        team.setPurse(1500);
-        team.setPlayersLeft(5);
-
-        assertEquals(1200, teamService.getMaxBid(team));
-    }
-
-    @Test
-    void getMaxBidDoesNotReserveNegativeSlots() {
-        TeamEntity team = new TeamEntity();
-        team.setPurse(1500);
-        team.setPlayersLeft(1);
-
-        assertEquals(1500, teamService.getMaxBid(team));
-    }
-
-    @Test
     void bidIncrementsUseFiftyUpToOneThousandAndOneHundredAbove() {
         assertEquals(true, teamService.isValidBidIncrement(1000));
         assertEquals(true, teamService.isValidBidIncrement(1100));

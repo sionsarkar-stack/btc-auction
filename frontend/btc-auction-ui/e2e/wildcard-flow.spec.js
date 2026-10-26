@@ -43,12 +43,12 @@ async function spinWheel(page) {
     await expect(spinButton).toBeEnabled();
     await spinButton.click();
     await expect(playerInput).toHaveValue("Wheel spinning...");
-    await expect(page.locator(".casino-reel")).toHaveClass(/spinning/);
+    await expect(page.locator(".player-walkout")).toHaveClass(/is-walking-out/);
     await expect(spinButton).toBeDisabled();
     await expect(playerInput).not.toHaveValue("Wheel spinning...");
     await expect(playerInput).not.toHaveValue("No player nominated");
     const selectedPlayer = await playerInput.inputValue();
-    await expect(page.locator(".casino-reel-result .casino-result-name")).toHaveText(selectedPlayer);
+    await expect(page.locator(".walkout-player-name")).toHaveText(selectedPlayer);
     return selectedPlayer;
 }
 
@@ -81,7 +81,23 @@ test.beforeAll(async ({ request }) => {
 
 test.beforeEach(async ({ request }) => {
     await assertSuccessful(await request.post(`${BACKEND_URL}/api/auction/reset`));
-    await assertSuccessful(await request.post(`${BACKEND_URL}/api/protection-players/auto-select`));
+    const availablePlayersResponse = await request.get(`${BACKEND_URL}/api/players/available`);
+    await assertSuccessful(availablePlayersResponse);
+    const availablePlayerNames = new Set((await availablePlayersResponse.json()).map(player => player.name));
+    for (const player of players) {
+        if (!availablePlayerNames.has(player.name)) {
+            await assertSuccessful(await request.post(`${BACKEND_URL}/api/players`, {
+                data: {
+                    ...player,
+                    category: "E2E",
+                },
+            }));
+        }
+    }
+    await assertSuccessful(await request.post(`${BACKEND_URL}/api/login`, {
+        data: { username: "auctioneer", password: "Sarkar" },
+    }));
+    await assertSuccessful(await request.post(`${BACKEND_URL}/api/curse-players/auto-select`));
     const startResponse = await request.post(`${BACKEND_URL}/api/auction/start`);
     expect(await startResponse.text()).toBe("Auction Started Successfully.");
 });
@@ -101,19 +117,15 @@ test("requires a captain session and ignores a supplied captain name", async ({ 
     expect(adminAttempt.status()).toBe(403);
 });
 
-test("reset clears protections and disables Start Auction", async ({ browser, request }) => {
+test("reset clears auction state and requires new curse picks", async ({ browser, request }) => {
     const admin = await login(browser, "auctioneer", "Sarkar");
 
     try {
         await assertSuccessful(await request.post(`${BACKEND_URL}/api/auction/reset`));
 
-        const protectionsResponse = await request.get(`${BACKEND_URL}/api/protection-players`);
-        await assertSuccessful(protectionsResponse);
-        expect(await protectionsResponse.json()).toEqual([]);
-
         const statusResponse = await request.get(`${BACKEND_URL}/api/auction/status`);
         await assertSuccessful(statusResponse);
-        expect((await statusResponse.json()).protectionSelectionEnabled).toBeFalsy();
+        expect((await statusResponse.json()).curseSelectionEnabled).toBeFalsy();
 
         await admin.page.reload();
         await admin.page.getByRole("button", { name: "BTC Control Room" }).click();
@@ -123,27 +135,31 @@ test("reset clears protections and disables Start Auction", async ({ browser, re
     }
 });
 
-test("spins every reel together and reveals one nominee", async ({ browser }) => {
+test("walks every screen through the same nomination reveal", async ({ browser }) => {
+    test.setTimeout(60_000);
     const admin = await login(browser, "auctioneer", "Sarkar");
     const captain = await login(browser, captains[0], "e2e-password");
     const viewer = await login(browser, "viewer", "viewer");
 
     try {
         await admin.page.getByRole("button", { name: "BTC Control Room" }).click();
+        await Promise.all([admin.page, captain.page, viewer.page].map(page =>
+            page.locator(".bottle-draw-webgl[data-render-state=ready]").waitFor()
+        ));
         const spinButton = admin.page.getByTestId("spin-wheel");
         await spinButton.click();
 
         await expect(admin.page.getByTestId("current-nominated-player")).toHaveValue("Wheel spinning...");
-        await expect(admin.page.locator(".casino-reel")).toHaveClass(/spinning/);
-        await expect(captain.page.locator(".casino-reel")).toHaveClass(/spinning/);
-        await expect(viewer.page.locator(".casino-reel")).toHaveClass(/spinning/);
+        await expect(admin.page.locator(".player-walkout")).toHaveClass(/is-walking-out/);
+        await expect(captain.page.locator(".player-walkout")).toHaveClass(/is-walking-out/);
+        await expect(viewer.page.locator(".player-walkout")).toHaveClass(/is-walking-out/);
 
         await expect(admin.page.getByTestId("current-nominated-player")).not.toHaveValue("Wheel spinning...");
         const selectedPlayer = await admin.page.getByTestId("current-nominated-player").inputValue();
 
-        await expect(admin.page.locator(".casino-reel-result .casino-result-name")).toHaveText(selectedPlayer);
-        await expect(captain.page.locator(".casino-reel-result .casino-result-name")).toHaveText(selectedPlayer);
-        await expect(viewer.page.locator(".casino-reel-result .casino-result-name")).toHaveText(selectedPlayer);
+        await expect(admin.page.locator(".walkout-player-name")).toHaveText(selectedPlayer);
+        await expect(captain.page.locator(".walkout-player-name")).toHaveText(selectedPlayer);
+        await expect(viewer.page.locator(".walkout-player-name")).toHaveText(selectedPlayer);
     } finally {
         await closeContexts(viewer.context, captain.context, admin.context);
     }

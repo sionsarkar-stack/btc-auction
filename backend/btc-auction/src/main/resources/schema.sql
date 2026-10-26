@@ -22,19 +22,22 @@ ALTER TABLE IF EXISTS auction_config
     ADD COLUMN IF NOT EXISTS market_adjustment INTEGER DEFAULT 0;
 
 ALTER TABLE IF EXISTS auction_config
-    ADD COLUMN IF NOT EXISTS protection_bonus INTEGER DEFAULT 300;
+    ADD COLUMN IF NOT EXISTS curse_selection_enabled BOOLEAN DEFAULT FALSE;
 
 ALTER TABLE IF EXISTS auction_config
-    ADD COLUMN IF NOT EXISTS protection_penalty INTEGER DEFAULT 200;
+    ADD COLUMN IF NOT EXISTS blind_bonanza_awards_used INTEGER DEFAULT 0;
 
-ALTER TABLE IF EXISTS auction_config
-    ADD COLUMN IF NOT EXISTS protection_selection_enabled BOOLEAN DEFAULT FALSE;
+ALTER TABLE IF EXISTS teams
+    ADD COLUMN IF NOT EXISTS tournament_points INTEGER DEFAULT 0;
 
-ALTER TABLE IF EXISTS auction_config
-    ADD COLUMN IF NOT EXISTS value_bet_player VARCHAR(255);
+ALTER TABLE IF EXISTS blind_opening_bids
+    ADD COLUMN IF NOT EXISTS bonus_eligible BOOLEAN DEFAULT FALSE;
 
-ALTER TABLE IF EXISTS auction_config
-    ADD COLUMN IF NOT EXISTS value_bet_events_used INTEGER DEFAULT 0;
+ALTER TABLE IF EXISTS blind_opening_bids
+    ADD COLUMN IF NOT EXISTS bonus_awarded BOOLEAN DEFAULT FALSE;
+
+ALTER TABLE IF EXISTS blind_opening_bids
+    ADD COLUMN IF NOT EXISTS bonus_awarded_amount INTEGER DEFAULT 0;
 
 ALTER TABLE IF EXISTS auction_config
     ADD COLUMN IF NOT EXISTS pending_silent_auction_player VARCHAR(255);

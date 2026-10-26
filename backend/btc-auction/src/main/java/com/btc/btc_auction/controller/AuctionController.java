@@ -10,13 +10,14 @@ import com.btc.btc_auction.service.AuctionConfigService;
 import com.btc.btc_auction.service.AuctionService;
 import com.btc.btc_auction.service.AuctionSocketService;
 import com.btc.btc_auction.service.ClubbedPlayerPairService;
+import com.btc.btc_auction.service.CursePlayerService;
 import com.btc.btc_auction.service.TeamService;
 import com.btc.btc_auction.service.PlayerService;
-import com.btc.btc_auction.service.ProtectionPlayerService;
 import com.btc.btc_auction.security.SessionAttributes;
 
 import jakarta.servlet.http.HttpSession;
 import java.util.List;
+import java.util.Objects;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -43,20 +44,19 @@ public class AuctionController {
     private final PlayerService playerService;
 
     private final ClubbedPlayerPairService clubbedPlayerPairService;
-
-    private final ProtectionPlayerService protectionPlayerService;
+    private final CursePlayerService cursePlayerService;
 
     public AuctionController(AuctionService auctionService, AuctionConfigService auctionConfigService,
             AuctionSocketService auctionSocketService, TeamService teamService,
-            ClubbedPlayerPairService clubbedPlayerPairService,
-            PlayerService playerService, ProtectionPlayerService protectionPlayerService) {
+            ClubbedPlayerPairService clubbedPlayerPairService, PlayerService playerService,
+            CursePlayerService cursePlayerService) {
         this.auctionService = auctionService;
         this.auctionConfigService = auctionConfigService;
         this.auctionSocketService = auctionSocketService;
         this.teamService = teamService;
         this.playerService = playerService;
-        this.protectionPlayerService = protectionPlayerService;
         this.clubbedPlayerPairService = clubbedPlayerPairService;
+        this.cursePlayerService = cursePlayerService;
     }
 
     @GetMapping("/api/auction/current")
@@ -67,11 +67,6 @@ public class AuctionController {
     @PostMapping("/api/auction/spin-wheel")
     public String spinWheel() {
         return auctionService.spinWheel();
-    }
-
-    @PostMapping("/api/admin/protection-selection/enable")
-    public String enableProtectionSelection() {
-        return auctionService.enableProtectionSelection();
     }
 
     @PostMapping("/api/auction/re-auction/start")
@@ -233,12 +228,8 @@ public class AuctionController {
             return "Cannot start auction. Configure captain teams first.";
         }
 
-        List<String> missingProtection = configuredTeams.stream()
-                .filter(team -> protectionPlayerService.getByCaptain(team.getCaptainName()).size() != 2)
-                .map(team -> team.getCaptainName() + " (needs 2 protection players)")
-                .toList();
-        if (!missingProtection.isEmpty()) {
-            return "Cannot start auction. Missing protection players: " + String.join(", ", missingProtection);
+        if (!cursePlayerService.areAllCaptainsReady(configuredTeams)) {
+            return "Cannot start auction. Every captain must select two curse players first.";
         }
 
         config.setAuctionStarted(true);
@@ -257,9 +248,36 @@ public class AuctionController {
 
     @GetMapping("/api/auction/status")
     public AuctionConfigEntity getStatus() {
+        auctionService.completeWheelSpinWhenDue();
+        AuctionConfigEntity config = auctionConfigService.getConfig();
+        config.setServerTime(System.currentTimeMillis());
 
-        return auctionConfigService.getConfig();
+        if (config.getAuctionPhase() == com.btc.btc_auction.enums.AuctionPhase.SPINNING) {
+            List<PlayerEntity> availablePlayers = playerService.getUnsoldPlayers();
+            if (config.getAuctionRound() == 2) {
+                availablePlayers = availablePlayers.stream()
+                        .filter(player -> !player.isReAuctioned())
+                        .toList();
+            } else {
+                availablePlayers = availablePlayers.stream()
+                        .filter(player -> !player.isDeferredToReAuction())
+                        .toList();
+            }
+            config.setWalkoutPlayerNames(availablePlayers.stream()
+                    .filter(Objects::nonNull)
+                    .filter(player -> player.getName() != null)
+                    .filter(player -> !clubbedPlayerPairService.isPlayerTwo(player.getName()))
+                    .map(player -> player.getName())
+                    .sorted((first, second) -> {
+                        int caseInsensitiveOrder = first.compareToIgnoreCase(second);
+                        return caseInsensitiveOrder == 0 ? first.compareTo(second) : caseInsensitiveOrder;
+                    })
+                    .toList());
+        } else {
+            config.setWalkoutPlayerNames(List.of());
+        }
 
+        return config;
     }
 
     @PostMapping("/api/auction/call-sold")

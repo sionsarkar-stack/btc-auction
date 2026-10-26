@@ -57,10 +57,6 @@ public class AuctionConfigService {
 
         config.setStealPenalty(200);
 
-        config.setProtectionBonus(300);
-
-        config.setProtectionPenalty(200);
-
         config.setAuctionStarted(false);
 
         repository.save(config);

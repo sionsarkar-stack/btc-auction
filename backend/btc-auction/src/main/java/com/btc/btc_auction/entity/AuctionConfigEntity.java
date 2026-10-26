@@ -10,6 +10,9 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import jakarta.persistence.Transient;
+
+import java.util.List;
 
 @Entity
 @Table(name = "auction_config")
@@ -31,13 +34,11 @@ public class AuctionConfigEntity {
 
     private int stealPenalty;
 
-    private Integer protectionBonus;
-
-    private Integer protectionPenalty;
-
     private boolean auctionStarted;
 
-    private boolean protectionSelectionEnabled;
+    private boolean curseSelectionEnabled;
+
+    private int blindBonanzaAwardsUsed;
 
     private int auctionRound = 1;
 
@@ -46,10 +47,6 @@ public class AuctionConfigEntity {
     private String marketAdjustmentPlayer;
 
     private Integer marketAdjustment;
-
-    private String valueBetPlayer;
-
-    private int valueBetEventsUsed;
 
     private String pendingSilentAuctionPlayer;
 
@@ -68,6 +65,12 @@ public class AuctionConfigEntity {
     private Long wheelSpinStartedAt;
 
     private Long wheelSpinEndsAt;
+
+    @Transient
+    private Long serverTime;
+
+    @Transient
+    private List<String> walkoutPlayerNames;
 
     @Enumerated(EnumType.STRING)
     private AuctionPhase auctionPhase = AuctionPhase.NO_AUCTION;
@@ -125,22 +128,6 @@ public class AuctionConfigEntity {
         this.stealPenalty = stealPenalty;
     }
 
-    public int getProtectionBonus() {
-        return protectionBonus == null ? 300 : protectionBonus;
-    }
-
-    public void setProtectionBonus(int protectionBonus) {
-        this.protectionBonus = protectionBonus;
-    }
-
-    public int getProtectionPenalty() {
-        return protectionPenalty == null ? 200 : protectionPenalty;
-    }
-
-    public void setProtectionPenalty(int protectionPenalty) {
-        this.protectionPenalty = protectionPenalty;
-    }
-
     public boolean isAuctionStarted() {
         return auctionStarted;
     }
@@ -149,12 +136,20 @@ public class AuctionConfigEntity {
         this.auctionStarted = auctionStarted;
     }
 
-    public boolean isProtectionSelectionEnabled() {
-        return protectionSelectionEnabled;
+    public boolean isCurseSelectionEnabled() {
+        return curseSelectionEnabled;
     }
 
-    public void setProtectionSelectionEnabled(boolean protectionSelectionEnabled) {
-        this.protectionSelectionEnabled = protectionSelectionEnabled;
+    public void setCurseSelectionEnabled(boolean curseSelectionEnabled) {
+        this.curseSelectionEnabled = curseSelectionEnabled;
+    }
+
+    public int getBlindBonanzaAwardsUsed() {
+        return blindBonanzaAwardsUsed;
+    }
+
+    public void setBlindBonanzaAwardsUsed(int blindBonanzaAwardsUsed) {
+        this.blindBonanzaAwardsUsed = blindBonanzaAwardsUsed;
     }
 
     public int getAuctionRound() {
@@ -187,22 +182,6 @@ public class AuctionConfigEntity {
 
     public void setMarketAdjustment(int marketAdjustment) {
         this.marketAdjustment = marketAdjustment;
-    }
-
-    public String getValueBetPlayer() {
-        return valueBetPlayer;
-    }
-
-    public void setValueBetPlayer(String valueBetPlayer) {
-        this.valueBetPlayer = valueBetPlayer;
-    }
-
-    public int getValueBetEventsUsed() {
-        return valueBetEventsUsed;
-    }
-
-    public void setValueBetEventsUsed(int valueBetEventsUsed) {
-        this.valueBetEventsUsed = valueBetEventsUsed;
     }
 
     public String getPendingSilentAuctionPlayer() {
@@ -283,6 +262,22 @@ public class AuctionConfigEntity {
 
     public void setWheelSpinEndsAt(Long wheelSpinEndsAt) {
         this.wheelSpinEndsAt = wheelSpinEndsAt;
+    }
+
+    public Long getServerTime() {
+        return serverTime;
+    }
+
+    public void setServerTime(Long serverTime) {
+        this.serverTime = serverTime;
+    }
+
+    public List<String> getWalkoutPlayerNames() {
+        return walkoutPlayerNames;
+    }
+
+    public void setWalkoutPlayerNames(List<String> walkoutPlayerNames) {
+        this.walkoutPlayerNames = walkoutPlayerNames;
     }
 
     public AuctionPhase getAuctionPhase() {

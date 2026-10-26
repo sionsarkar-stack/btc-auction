@@ -22,33 +22,18 @@ public class SilentBidService {
 
     private final AuctionSocketService auctionSocketService;
 
-    private final AuctionConfigService auctionConfigService;
-
     public SilentBidService(
             SilentBidRepository repository,
             TeamService teamService, AuctionService auctionService,
 
             AuctionEventService auctionEventService,
             AuctionSocketService auctionSocketService) {
-        this(repository, teamService, auctionService, auctionEventService, auctionSocketService, null);
-    }
-
-    @org.springframework.beans.factory.annotation.Autowired
-    public SilentBidService(
-            SilentBidRepository repository,
-            TeamService teamService, AuctionService auctionService,
-
-            AuctionEventService auctionEventService,
-            AuctionSocketService auctionSocketService,
-            AuctionConfigService auctionConfigService) {
         this.repository = repository;
         this.teamService = teamService;
         this.auctionService = auctionService;
 
         this.auctionEventService = auctionEventService;
         this.auctionSocketService = auctionSocketService;
-        this.auctionConfigService = auctionConfigService;
-
     }
 
     public void startRound(
@@ -122,10 +107,6 @@ public class SilentBidService {
         TeamEntity team = teamService.getTeam(captainName);
         if (team == null) {
             return "Captain not found.";
-        }
-
-        if (amount > 0 && hasMaximumBidLimit() && amount > teamService.getMaxBid(team)) {
-            return "Bid exceeds the captain's maximum bid.";
         }
 
         bid.setBidAmount(amount);
@@ -335,9 +316,4 @@ public class SilentBidService {
 
     }
 
-    private boolean hasMaximumBidLimit() {
-        return auctionConfigService == null
-                || auctionConfigService.getConfig() == null
-                || auctionConfigService.getConfig().getAuctionRound() != 2;
-    }
 }

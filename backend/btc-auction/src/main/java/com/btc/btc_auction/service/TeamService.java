@@ -42,23 +42,6 @@ public class TeamService {
         return teamRepository.findAll();
     }
 
-    public int getMaxBid(
-            TeamEntity team) {
-
-        if (team == null) {
-
-            return 0;
-
-        }
-
-        int playersToBuy = Math.max(0, team.getPlayersLeft());
-        int reserveSlots = Math.max(0, playersToBuy - 2);
-        return Math.max(0,
-                team.getPurse()
-                        - (100 * reserveSlots));
-
-    }
-
     public boolean isValidBidIncrement(int amount) {
         return amount > 0 && (amount <= 1000 ? amount % 50 == 0 : amount % 100 == 0);
     }
@@ -67,6 +50,7 @@ public class TeamService {
         TeamEntity team = new TeamEntity();
         team.setCaptainName(captainName);
         team.setPurse(totalPoints);
+        team.setTournamentPoints(0);
         team.setPlayersBought(0);
         team.setWildPickUsed(false);
         team.setPlayersLeft(9);

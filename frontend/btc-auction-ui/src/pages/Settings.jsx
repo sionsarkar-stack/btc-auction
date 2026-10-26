@@ -79,48 +79,13 @@ function Settings() {
                 Auction Settings
             </h2>
 
-            <h3>Protection Rules</h3>
+            <h3>Season Details</h3>
 
             <div className="form-field">
                 <label>Season Name</label>
                 <input className="input" value={config.seasonName || ""}
                     onChange={event => setConfig({ ...config, seasonName: event.target.value })} />
             </div>
-
-            {[
-                "protectionBonus",
-                "protectionPenalty"
-            ].map(field => (
-
-                <div
-                    key={field}
-                    className="form-field"
-                >
-
-                    <label>
-                        {field === "protectionBonus"
-                            ? "Protection Purse Bonus"
-                            : "Protection Purse Penalty"}
-                    </label>
-
-                    <input
-                        type="number"
-                        className="input"
-                        value={config[field]}
-                        onChange={(e) =>
-                            setConfig({
-                                ...config,
-                                [field]:
-                                    Number(
-                                        e.target.value
-                                    )
-                            })
-                        }
-                    />
-
-                </div>
-
-            ))}
 
             <button
                 className="button"

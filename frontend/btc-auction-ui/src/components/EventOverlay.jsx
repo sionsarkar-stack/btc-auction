@@ -27,6 +27,42 @@ function EventOverlay({ event }) {
             message = `${event.playerName} · FINAL ₹${event.amount}${event.details ? ` · ${event.details}` : ""}`;
             break;
 
+        case "PURSE_FLUSH":
+            icon = "💸";
+            title = "AUCTION PURSE REFILLED";
+            message = `Every captain received ₹${event.amount} for bidding.`;
+            break;
+
+        case "CURSE_REVEALED":
+            icon = "🎯";
+            title = "CURSE TRIGGERED";
+            message = `${event.playerName} · ${event.details || `Transfer ${event.amount} tournament points`}`;
+            break;
+
+        case "CURSE_CANCELLED":
+            icon = "🎯";
+            title = "CURSE CANCELLED";
+            message = `${event.playerName} · ${event.details}`;
+            break;
+
+        case "BLIND_BID_BONUS":
+            icon = "🏆";
+            title = "BLIND BID BONUS";
+            message = `${event.captainName} · +${event.amount} tournament points`;
+            break;
+
+        case "BLIND_BONANZA":
+            icon = "🎊";
+            title = "BLIND BONANZA IN PLAY";
+            message = "Highest blind bidder can earn +500 tournament points if they buy the player.";
+            break;
+
+        case "BLIND_BONANZA_REWARDED":
+            icon = "🎊";
+            title = "BLIND BONANZA AWARDED";
+            message = `${event.captainName} · +${event.amount} tournament points`;
+            break;
+
         case "MARKET_CRASH":
 
             icon = "📉";
@@ -34,11 +70,10 @@ function EventOverlay({ event }) {
             message = `${event.playerName || "Current player"} · Price reduced when SOLD was called`;
             break;
 
-        case "PROTECTION_REVEALED":
-
-            icon = "🛡️";
-            title = "PROTECTION REVEALED";
-            message = `${event.playerName} · ${event.details || "Protection price adjustment applied"}`;
+        case "RTM_LOCKDOWN":
+            icon = "🚫";
+            title = "NO MERCY";
+            message = event.details || "RTM and Wild Pick are banned for this player.";
             break;
 
         case "STARTING_BID_WINNER":
@@ -53,22 +88,6 @@ function EventOverlay({ event }) {
             icon = "⚖️";
             title = "OPENING BID TIE";
             message = `${event.captainName} · ₹${event.amount}. Submit again or pass.`;
-            break;
-
-        case "VALUE_BET_REWARD":
-
-            icon = "💰";
-            title = event.captainName?.includes(",")
-                ? "VALUE BET WINNERS"
-                : "VALUE BET WINNER";
-            message = "";
-            break;
-
-        case "VALUE_BET":
-
-            icon = "💰";
-            title = "VALUE BET ENABLED";
-            message = `${event.playerName || "Next player"} · Submit your prediction`;
             break;
 
         case "WILDCARD_TRIGGERED":

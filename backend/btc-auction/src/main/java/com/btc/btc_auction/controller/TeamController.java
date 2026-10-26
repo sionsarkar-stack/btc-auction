@@ -6,6 +6,7 @@ import com.btc.btc_auction.dto.CaptainConfigDto;
 import com.btc.btc_auction.model.CaptainConfigRequest;
 import com.btc.btc_auction.service.UserService;
 import com.btc.btc_auction.service.PlayerService;
+import com.btc.btc_auction.service.CursePlayerService;
 import com.btc.btc_auction.service.TeamService;
 import org.springframework.web.bind.annotation.*;
 
@@ -24,11 +25,14 @@ public class TeamController {
     private final TeamService teamService;
     private final UserService userService;
     private final PlayerService playerService;
+    private final CursePlayerService cursePlayerService;
 
-    public TeamController(TeamService teamService, UserService userService, PlayerService playerService) {
+    public TeamController(TeamService teamService, UserService userService, PlayerService playerService,
+            CursePlayerService cursePlayerService) {
         this.teamService = teamService;
         this.userService = userService;
         this.playerService = playerService;
+        this.cursePlayerService = cursePlayerService;
     }
 
     @GetMapping("/api/teams")
@@ -39,7 +43,11 @@ public class TeamController {
     @GetMapping("/api/admin/captains")
     public List<CaptainConfigDto> getCaptains() {
         return teamService.getAllTeams().stream()
-                .map(team -> new CaptainConfigDto(team.getCaptainName(), team.getCaptainName(), team.getPurse()))
+                .map(team -> new CaptainConfigDto(
+                        team.getCaptainName(),
+                        team.getCaptainName(),
+                        team.getPurse(),
+                        team.getTournamentPoints()))
                 .toList();
     }
 
@@ -52,6 +60,7 @@ public class TeamController {
         }
         teamService.deleteCaptain(captainName);
         userService.deleteUser(captainName);
+        cursePlayerService.deleteForCaptain(captainName);
         return "Captain deleted.";
     }
 
@@ -93,6 +102,7 @@ public class TeamController {
         team.setPurse(request.getTotalPoints());
         teamService.saveTeam(team);
         playerService.renameTeamReferences(currentName, request.getCaptainName().trim());
+        cursePlayerService.renameCaptain(currentName, request.getCaptainName().trim());
         user.setUsername(request.getCaptainName().trim());
         if (request.getPassword() != null && !request.getPassword().isBlank()) {
             user.setPassword(request.getPassword());

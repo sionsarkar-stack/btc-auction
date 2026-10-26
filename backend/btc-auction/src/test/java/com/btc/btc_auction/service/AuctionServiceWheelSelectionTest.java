@@ -11,7 +11,6 @@ import com.btc.btc_auction.model.Auction;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -25,7 +24,6 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -59,9 +57,7 @@ class AuctionServiceWheelSelectionTest {
     @Mock
     private BlindOpeningBidService blindOpeningBidService;
     @Mock
-    private ProtectionPlayerService protectionPlayerService;
-    @Mock
-    private ValueBetService valueBetService;
+    private CursePlayerService cursePlayerService;
     @Mock
     private SilentBidService silentBidService;
     @Mock
@@ -74,7 +70,7 @@ class AuctionServiceWheelSelectionTest {
     void setUp() {
         config = new AuctionConfigEntity();
         config.setAuctionStarted(true);
-        when(auctionConfigService.getConfig()).thenReturn(config);
+        lenient().when(auctionConfigService.getConfig()).thenReturn(config);
 
         PlayerEntity first = new PlayerEntity();
         first.setName("Rohit Sharma");
@@ -157,7 +153,6 @@ class AuctionServiceWheelSelectionTest {
         team.setCaptainName("Sen");
         team.setPlayersLeft(5);
         when(teamService.getTeam("Sen")).thenReturn(team);
-        when(teamService.getMaxBid(team)).thenReturn(1000);
 
         auctionService.spinWheel();
         completeCurrentWheelSpin();
@@ -177,37 +172,7 @@ class AuctionServiceWheelSelectionTest {
 
         verifyNoInteractions(randomEventService);
         assertNull(config.getMarketAdjustmentPlayer());
-        assertNull(config.getValueBetPlayer());
         assertNull(config.getRtmLockdownPlayer());
-    }
-
-    @Test
-    void keepsValueBetActivationPrivateUntilThePlayerIsSold() {
-        RandomEventEntity valueBet = randomEvent(RandomEventType.VALUE_BET);
-        when(randomEventService.getActiveEvents()).thenReturn(List.of(valueBet));
-        auctionService = auctionServiceWithRandomEvents(new SequenceDoubleSupplier(0.0, 0.0, 0.0));
-
-        auctionService.spinWheel();
-        completeCurrentWheelSpin();
-
-        assertEquals("Rohit Sharma", config.getValueBetPlayer());
-        assertEquals(1, config.getValueBetEventsUsed());
-        verifyNoInteractions(auctionEventService);
-    }
-
-    @Test
-    void doesNotScheduleValueBetAfterThreeUses() {
-        config.setValueBetEventsUsed(3);
-        RandomEventEntity valueBet = randomEvent(RandomEventType.VALUE_BET);
-        when(randomEventService.getActiveEvents()).thenReturn(List.of(valueBet));
-        auctionService = auctionServiceWithRandomEvents(new SequenceDoubleSupplier(0.0, 0.0, 0.0));
-
-        auctionService.spinWheel();
-        completeCurrentWheelSpin();
-
-        assertNull(config.getValueBetPlayer());
-        assertEquals(3, config.getValueBetEventsUsed());
-        verifyNoInteractions(auctionEventService);
     }
 
     @Test
@@ -219,7 +184,6 @@ class AuctionServiceWheelSelectionTest {
         team.setCaptainName("Sen");
         team.setPlayersLeft(5);
         when(teamService.getTeam("Sen")).thenReturn(team);
-        when(teamService.getMaxBid(team)).thenReturn(1000);
 
         auctionService.spinWheel();
         completeCurrentWheelSpin();
@@ -231,7 +195,7 @@ class AuctionServiceWheelSelectionTest {
     }
 
     @Test
-    void settlesValueBetsAfterLoggingThePlayerSale() {
+    void settlesCurseAndBlindBonusUsingFinalMarketAdjustedSalePrice() {
         TeamEntity team = new TeamEntity();
         team.setCaptainName("Sen");
         team.setPurse(1000);
@@ -242,8 +206,9 @@ class AuctionServiceWheelSelectionTest {
         player.setBasePrice(300);
         currentAuctionService.setCurrentAuction(new Auction("Rohit Sharma", "A", 500, "Sen", 300));
         config.setAuctionPhase(AuctionPhase.SOLD);
+        config.setMarketAdjustmentPlayer("Rohit Sharma");
+        config.setMarketAdjustment(100);
         when(teamService.getTeam("Sen")).thenReturn(team);
-        when(teamService.getMaxBid(team)).thenReturn(1000);
         when(playerService.getPlayer("Rohit Sharma")).thenReturn(player);
         auctionService = new AuctionService(
                 teamService,
@@ -257,22 +222,84 @@ class AuctionServiceWheelSelectionTest {
                 currentAuctionService,
                 clubbedPlayerPairService,
                 null,
+                blindOpeningBidService,
                 null,
                 null,
-                valueBetService,
-                null,
-                () -> 0.75);
+                () -> 0.75,
+                cursePlayerService);
 
         auctionService.sellPlayer("Rohit Sharma", "Sen", 500);
 
-        InOrder eventOrder = inOrder(auctionEventService, valueBetService);
-        eventOrder.verify(auctionEventService).logEvent(
+        verify(auctionEventService).logEvent(
                 eq("PLAYER_SOLD"),
                 eq("Rohit Sharma"),
                 eq("Sen"),
-                eq(500),
+                eq(600),
                 anyString());
-        eventOrder.verify(valueBetService).applyRewards("Rohit Sharma", 500);
+        verify(cursePlayerService).settleSale("Rohit Sharma", "Sen", 600);
+        verify(blindOpeningBidService).awardBonusIfEligible("Rohit Sharma", "Sen");
+    }
+
+    @Test
+    void flushesEveryPurseToThreeThousandWhenAllCaptainsAreExhausted() {
+        TeamEntity buyer = new TeamEntity();
+        buyer.setCaptainName("Sen");
+        buyer.setPurse(100);
+        buyer.setPlayersLeft(5);
+        TeamEntity otherCaptain = new TeamEntity();
+        otherCaptain.setCaptainName("Alpha");
+        otherCaptain.setPurse(-50);
+        PlayerEntity player = new PlayerEntity();
+        player.setName("Rohit Sharma");
+        player.setSeed("A");
+        currentAuctionService.setCurrentAuction(new Auction("Rohit Sharma", "A", 100, "Sen", 300));
+        config.setAuctionPhase(AuctionPhase.SOLD);
+        when(teamService.getTeam("Sen")).thenReturn(buyer);
+        when(teamService.getAllTeams()).thenReturn(List.of(buyer, otherCaptain));
+        when(playerService.getPlayer("Rohit Sharma")).thenReturn(player);
+
+        String result = auctionService.sellPlayer("Rohit Sharma", "Sen", 100);
+
+        assertEquals(3000, buyer.getPurse());
+        assertEquals(3000, otherCaptain.getPurse());
+        assertTrue(result.contains("every captain's purse reset to ₹3000"));
+        verify(teamService).saveTeam(otherCaptain);
+        verify(auctionEventService).logEvent(
+                eq("PURSE_FLUSH"),
+                eq(null),
+                eq(null),
+                eq(3000),
+                anyString());
+    }
+
+    @Test
+    void doesNotFlushPursesWhileAnyCaptainStillHasFunds() {
+        TeamEntity buyer = new TeamEntity();
+        buyer.setCaptainName("Sen");
+        buyer.setPurse(500);
+        buyer.setPlayersLeft(5);
+        TeamEntity otherCaptain = new TeamEntity();
+        otherCaptain.setCaptainName("Alpha");
+        otherCaptain.setPurse(100);
+        PlayerEntity player = new PlayerEntity();
+        player.setName("Rohit Sharma");
+        player.setSeed("A");
+        currentAuctionService.setCurrentAuction(new Auction("Rohit Sharma", "A", 100, "Sen", 300));
+        config.setAuctionPhase(AuctionPhase.SOLD);
+        when(teamService.getTeam("Sen")).thenReturn(buyer);
+        when(teamService.getAllTeams()).thenReturn(List.of(buyer, otherCaptain));
+        when(playerService.getPlayer("Rohit Sharma")).thenReturn(player);
+
+        auctionService.sellPlayer("Rohit Sharma", "Sen", 100);
+
+        assertEquals(400, buyer.getPurse());
+        assertEquals(100, otherCaptain.getPurse());
+        verify(auctionEventService, never()).logEvent(
+                eq("PURSE_FLUSH"),
+                eq(null),
+                eq(null),
+                eq(3000),
+                anyString());
     }
 
     @Test
@@ -288,7 +315,6 @@ class AuctionServiceWheelSelectionTest {
         team.setCaptainName("Sen");
         team.setPlayersLeft(5);
         when(teamService.getTeam("Sen")).thenReturn(team);
-        when(teamService.getMaxBid(team)).thenReturn(1000);
 
         auctionService.restorePersistedRuntimeState();
 
@@ -325,8 +351,6 @@ class AuctionServiceWheelSelectionTest {
                 clubbedPlayerPairService,
                 randomEventService,
                 blindOpeningBidService,
-                null,
-                null,
                 silentBidService,
                 new SequenceDoubleSupplier(0.0, 0.0, 0.0));
 
@@ -360,7 +384,7 @@ class AuctionServiceWheelSelectionTest {
     }
 
     @Test
-    void resetAuctionClearsProtectionAssignmentsAndAnyActiveSilentBidRound() {
+    void resetAuctionClearsAnyActiveSilentBidRound() {
         auctionService = new AuctionService(
                 teamService,
                 playerService,
@@ -374,8 +398,6 @@ class AuctionServiceWheelSelectionTest {
                 clubbedPlayerPairService,
                 null,
                 null,
-                protectionPlayerService,
-                null,
                 silentBidService,
                 () -> 0.75);
         PlayerEntity deferredPlayer = playerService.getPlayer("Rohit Sharma");
@@ -385,8 +407,6 @@ class AuctionServiceWheelSelectionTest {
         auctionService.resetAuction();
 
         verify(silentBidService).clearRound();
-        verify(protectionPlayerService).clearAll();
-        assertFalse(config.isProtectionSelectionEnabled());
         assertFalse(deferredPlayer.isDeferredToReAuction());
     }
 
@@ -408,6 +428,19 @@ class AuctionServiceWheelSelectionTest {
         completeCurrentWheelSpin();
         String secondResult = auctionService.useWildPick("Sen");
         assertEquals("Wild Pick has already been used.", secondResult);
+    }
+
+    @Test
+    void noMercyPreventsWildPickForTheSelectedPlayer() {
+        TeamEntity team = new TeamEntity();
+        team.setCaptainName("Sen");
+        currentAuctionService.setCurrentAuction(new Auction("Rohit Sharma", "A", 300, "Sen", 300));
+        config.setAuctionPhase(AuctionPhase.OPENING_BID);
+        config.setRtmLockdownPlayer("Rohit Sharma");
+
+        assertEquals("NO MERCY bans RTM and Wild Pick for this player.", auctionService.useWildPick("Sen"));
+        assertFalse(team.isWildPickUsed());
+        assertEquals("Rohit Sharma", currentAuctionService.getCurrentAuction().getCurrentPlayer());
     }
 
     @Test
@@ -532,8 +565,6 @@ class AuctionServiceWheelSelectionTest {
                 null,
                 null,
                 null,
-                null,
-                null,
                 reAuctionSnapshotService,
                 () -> 0.75);
 
@@ -549,12 +580,12 @@ class AuctionServiceWheelSelectionTest {
     }
 
     @Test
-    void reAuctionAllowsLiveBidsAboveTheNormalMaximumBid() {
+    void liveBidsCanExceedThePurseBasedMaximumBid() {
         TeamEntity team = new TeamEntity();
         team.setCaptainName("Sen");
         team.setPlayersLeft(4);
         currentAuctionService.setCurrentAuction(new Auction("Rohit Sharma", "A", 300, "None", 300));
-        config.setAuctionRound(2);
+        config.setAuctionRound(1);
         config.setAuctionPhase(AuctionPhase.BIDDING);
         when(teamService.getTeam("Sen")).thenReturn(team);
         when(teamService.isValidBidIncrement(5000)).thenReturn(true);
@@ -563,7 +594,6 @@ class AuctionServiceWheelSelectionTest {
 
         assertEquals("Sen", currentAuctionService.getCurrentAuction().getLeader());
         assertEquals(5000, currentAuctionService.getCurrentAuction().getCurrentBid());
-        verify(teamService, never()).getMaxBid(team);
     }
 
     private AuctionService auctionServiceWithRandomEvents(DoubleSupplier randomValueSupplier) {
@@ -579,7 +609,6 @@ class AuctionServiceWheelSelectionTest {
                 currentAuctionService,
                 clubbedPlayerPairService,
                 randomEventService,
-                null,
                 null,
                 null,
                 null,
@@ -600,7 +629,6 @@ class AuctionServiceWheelSelectionTest {
                 clubbedPlayerPairService,
                 null,
                 blindOpeningBidService,
-                null,
                 null,
                 null,
                 () -> 0.75);

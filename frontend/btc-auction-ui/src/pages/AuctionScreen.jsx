@@ -4,12 +4,10 @@ import SockJS from "sockjs-client";
 import axios from "axios";
 
 import { API_URL } from "../config";
-import CasinoReel from "../components/CasinoReel";
-import EventOverlay from "../components/EventOverlay";
+import PlayerWalkout from "../components/PlayerWalkout";
 
 const lastScreenEventStorageKey = "btc-auction:last-screen-event-id";
 const lastSilentWinnerStorageKey = "btc-auction:last-silent-winner-event-id";
-const lastValueBetWinnerStorageKey = "btc-auction:last-value-bet-winner-event-id";
 
 function AuctionScreen() {
 
@@ -34,22 +32,13 @@ function AuctionScreen() {
     const [silentWinner, setSilentWinner] =
         useState(null);
 
-    const [valueBetWinner, setValueBetWinner] =
-        useState(null);
-
     const lastProcessedEventId =
         useRef(window.localStorage.getItem(lastSilentWinnerStorageKey));
 
     const lastScreenEventId =
         useRef(window.localStorage.getItem(lastScreenEventStorageKey));
 
-    const lastValueBetWinnerEventId =
-        useRef(window.localStorage.getItem(lastValueBetWinnerStorageKey));
-
     const previousAuctionPhase = useRef(null);
-
-    const valueBetWinnerTimer =
-        useRef(null);
 
     const [auctionStatus, setAuctionStatus] =
         useState(null);
@@ -59,9 +48,6 @@ function AuctionScreen() {
 
     const [eventPulse, setEventPulse] =
         useState(false);
-
-    const [valueBetPrediction, setValueBetPrediction] =
-        useState("");
 
     const [team, setTeam] =
         useState(null);
@@ -74,6 +60,9 @@ function AuctionScreen() {
 
     const username =
         localStorage.getItem("username");
+
+    const noMercyActive = auctionStatus?.rtmLockdownPlayer?.toLowerCase()
+        === auction?.currentPlayer?.toLowerCase();
 
 
 
@@ -179,27 +168,6 @@ function AuctionScreen() {
 
                         }
 
-                        if (
-                            latest &&
-                            latest.eventType === "VALUE_BET_REWARD" &&
-                            String(latest.id) !== String(lastValueBetWinnerEventId.current)
-                        ) {
-
-                            lastValueBetWinnerEventId.current =
-                                String(latest.id);
-                            window.localStorage.setItem(lastValueBetWinnerStorageKey, String(latest.id));
-
-                            setValueBetWinner(latest);
-
-                            window.clearTimeout(valueBetWinnerTimer.current);
-
-                            valueBetWinnerTimer.current = window.setTimeout(() => {
-
-                                setValueBetWinner(null);
-
-                            }, 5000);
-
-                        }
                     }
 
                 });
@@ -256,7 +224,6 @@ function AuctionScreen() {
 
         return () => {
 
-            window.clearTimeout(valueBetWinnerTimer.current);
             client.deactivate();
 
         };
@@ -287,22 +254,6 @@ function AuctionScreen() {
         }));
     };
 
-    const submitValueBet = async () => {
-        if (!valueBetPrediction || Number(valueBetPrediction) <= 0) {
-            return;
-        }
-
-        const response = await axios.post(`${API_URL}/api/value-bet/submit`, {
-            playerName: auction?.currentPlayer,
-            captainName: username,
-            predictedPrice: Number(valueBetPrediction)
-        });
-        window.dispatchEvent(new CustomEvent("auction-toast", {
-            detail: { type: "success", message: response.data }
-        }));
-        setValueBetPrediction("");
-    };
-
     if (!auction) {
 
         return (
@@ -324,17 +275,10 @@ function AuctionScreen() {
     const isWheelSpinning =
         auctionStatus?.auctionPhase === "SPINNING";
 
-    const valueBetActive =
-        role === "CAPTAIN"
-        && ["OPENING_BID", "BLIND_OPENING_BID"].includes(auctionStatus?.auctionPhase)
-        && auctionStatus?.valueBetPlayer?.toLowerCase() === auction.currentPlayer?.toLowerCase()
-        && auction.currentPlayer;
-
     const reelPlayers = availablePlayers.filter(player => !player.sold);
 
     return (
         <>
-            <EventOverlay event={valueBetWinner} />
             {showSilentWinner &&
                 silentWinner && (
 
@@ -430,7 +374,7 @@ function AuctionScreen() {
 
                 <div className="auction-phase-bar">
                     <span className="auction-phase-label">{auctionStatus?.auctionPhase || "WAITING"}</span>
-                    <span>{isWheelSpinning ? "Reel spinning" : silentBidActive ? "Confidential bids in progress" : waitingForLastStrike ? "RTM / last-strike decision window" : "Bidding is open"}</span>
+                    <span>{isWheelSpinning ? "Player walking out" : silentBidActive ? "Confidential bids in progress" : waitingForLastStrike ? "RTM / last-strike decision window" : "Bidding is open"}</span>
                 </div>
 
                 {!silentBidActive &&
@@ -514,7 +458,7 @@ function AuctionScreen() {
                     >
 
                         {isWheelSpinning
-                            ? "REEL SPINNING..."
+                            ? "PLAYER WALKING OUT..."
                             : auction.currentPlayer ||
                             "No Player Nominated"}
 
@@ -526,12 +470,14 @@ function AuctionScreen() {
 
                     </div>
 
-                    <CasinoReel
+                    <PlayerWalkout
                         players={reelPlayers}
+                        walkoutPlayers={auctionStatus?.walkoutPlayerNames}
                         selectedPlayer={auction.currentPlayer}
                         spinStartedAt={auctionStatus?.wheelSpinStartedAt}
                         spinEndsAt={auctionStatus?.wheelSpinEndsAt}
-                        className="viewer-casino-reel"
+                        serverTime={auctionStatus?.serverTime}
+                        className="viewer-player-walkout"
                         seasonName={auctionStatus?.seasonName}
                     />
 
@@ -543,29 +489,16 @@ function AuctionScreen() {
                                     className="button-secondary"
                                     type="button"
                                     onClick={useWildPick}
-                                    disabled={team?.wildPickUsed}
+                                    disabled={team?.wildPickUsed || noMercyActive}
                                 >
-                                    {team?.wildPickUsed ? "Wild Pick Used" : "Return Player with Wild Pick"}
+                                    {noMercyActive
+                                        ? "Wild Pick banned by NO MERCY"
+                                        : team?.wildPickUsed
+                                            ? "Wild Pick Used"
+                                            : "Return Player with Wild Pick"}
                                 </button>
                             </div>
                         )}
-
-                    {valueBetActive && (
-                        <div style={{ marginTop: "20px", display: "flex", gap: "8px", maxWidth: "320px", width: "100%" }}>
-                            <input
-                                className="input"
-                                type="number"
-                                min="1"
-                                step={Number(valueBetPrediction) > 1000 ? 100 : 50}
-                                placeholder="Predict final price"
-                                value={valueBetPrediction}
-                                onChange={event => setValueBetPrediction(event.target.value)}
-                            />
-                            <button className="button" type="button" onClick={submitValueBet}>
-                                Submit Value Bet
-                            </button>
-                        </div>
-                    )}
 
                     {!silentBidActive && (
 

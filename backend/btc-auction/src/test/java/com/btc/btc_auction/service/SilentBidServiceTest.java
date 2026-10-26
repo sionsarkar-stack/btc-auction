@@ -31,13 +31,9 @@ class SilentBidServiceTest {
     private AuctionEventService auctionEventService;
     @Mock
     private AuctionSocketService auctionSocketService;
-    @Mock
-    private AuctionConfigService auctionConfigService;
 
     @Test
-    void reAuctionAllowsSilentBidsAboveTheNormalMaximumBid() {
-        AuctionConfigEntity config = new AuctionConfigEntity();
-        config.setAuctionRound(2);
+    void silentBidsCanExceedThePurseBasedMaximumBid() {
         TeamEntity team = new TeamEntity();
         SilentBidEntity bid = new SilentBidEntity();
         bid.setPlayerName("Player X");
@@ -49,17 +45,14 @@ class SilentBidServiceTest {
                 teamService,
                 auctionService,
                 auctionEventService,
-                auctionSocketService,
-                auctionConfigService);
+                auctionSocketService);
 
-        when(auctionConfigService.getConfig()).thenReturn(config);
         when(repository.findByPlayerNameAndCaptainName("Player X", "Sen")).thenReturn(Optional.of(bid));
         when(teamService.getTeam("Sen")).thenReturn(team);
         when(teamService.isValidBidIncrement(5000)).thenReturn(true);
 
         assertEquals("Bid submitted.", service.submitBid("Player X", "Sen", 5000));
         assertEquals(5000, bid.getBidAmount());
-        verify(teamService, never()).getMaxBid(team);
     }
 
     @Test
@@ -81,8 +74,7 @@ class SilentBidServiceTest {
                 teamService,
                 auctionService,
                 auctionEventService,
-                auctionSocketService,
-                auctionConfigService);
+                auctionSocketService);
         when(repository.findAll()).thenReturn(java.util.List.of(first, second));
 
         var result = service.getResult();
