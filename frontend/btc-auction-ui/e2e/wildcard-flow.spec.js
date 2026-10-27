@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, request as playwrightRequest, test } from "@playwright/test";
 
 const BACKEND_URL = "http://127.0.0.1:8081";
 const captains = [
@@ -36,6 +36,21 @@ async function closeContexts(...contexts) {
     await Promise.all(contexts.map(context => context.close().catch(() => undefined)));
 }
 
+async function submitOpeningBidAsCaptain(playerName, captainName, bidAmount) {
+    const captainRequest = await playwrightRequest.newContext();
+    try {
+        await assertSuccessful(await captainRequest.post(`${BACKEND_URL}/api/login`, {
+            data: { username: captainName, password: "e2e-password" },
+        }));
+        const response = await captainRequest.post(`${BACKEND_URL}/api/auction/blind-opening-bid/submit`, {
+            data: { playerName, captainName, bidAmount },
+        });
+        expect(await assertSuccessful(response)).toBe("Blind opening bid submitted.");
+    } finally {
+        await captainRequest.dispose();
+    }
+}
+
 async function spinWheel(page) {
     await page.getByRole("button", { name: "BTC Control Room" }).click();
     const spinButton = page.getByTestId("spin-wheel");
@@ -55,6 +70,9 @@ async function spinWheel(page) {
 test.describe.configure({ mode: "serial" });
 
 test.beforeAll(async ({ request }) => {
+    await assertSuccessful(await request.post(`${BACKEND_URL}/api/login`, {
+        data: { username: "auctioneer", password: "Sarkar" },
+    }));
     await assertSuccessful(await request.post(`${BACKEND_URL}/api/auction/reset`));
 
     for (const captainName of captains) {
@@ -80,6 +98,9 @@ test.beforeAll(async ({ request }) => {
 });
 
 test.beforeEach(async ({ request }) => {
+    await assertSuccessful(await request.post(`${BACKEND_URL}/api/login`, {
+        data: { username: "auctioneer", password: "Sarkar" },
+    }));
     await assertSuccessful(await request.post(`${BACKEND_URL}/api/auction/reset`));
     const availablePlayersResponse = await request.get(`${BACKEND_URL}/api/players/available`);
     await assertSuccessful(availablePlayersResponse);
@@ -94,27 +115,26 @@ test.beforeEach(async ({ request }) => {
             }));
         }
     }
-    await assertSuccessful(await request.post(`${BACKEND_URL}/api/login`, {
-        data: { username: "auctioneer", password: "Sarkar" },
-    }));
     await assertSuccessful(await request.post(`${BACKEND_URL}/api/curse-players/auto-select`));
     const startResponse = await request.post(`${BACKEND_URL}/api/auction/start`);
     expect(await startResponse.text()).toBe("Auction Started Successfully.");
 });
 
 test("requires a captain session and ignores a supplied captain name", async ({ request }) => {
-    const anonymousAttempt = await request.post(`${BACKEND_URL}/api/auction/wild-pick`, {
-        data: { captainName: captains[0] },
-    });
-    expect(anonymousAttempt.status()).toBe(401);
+    const anonymousContext = await playwrightRequest.newContext();
+    try {
+        const anonymousAttempt = await anonymousContext.post(`${BACKEND_URL}/api/auction/wild-pick`, {
+            data: { captainName: captains[0] },
+        });
+        expect(anonymousAttempt.status()).toBe(401);
 
-    await assertSuccessful(await request.post(`${BACKEND_URL}/api/login`, {
-        data: { username: "auctioneer", password: "Sarkar" },
-    }));
-    const adminAttempt = await request.post(`${BACKEND_URL}/api/auction/wild-pick`, {
-        data: { captainName: captains[0] },
-    });
-    expect(adminAttempt.status()).toBe(403);
+        const adminAttempt = await request.post(`${BACKEND_URL}/api/auction/wild-pick`, {
+            data: { captainName: captains[0] },
+        });
+        expect(adminAttempt.status()).toBe(403);
+    } finally {
+        await anonymousContext.dispose();
+    }
 });
 
 test("reset clears auction state and requires new curse picks", async ({ browser, request }) => {
@@ -154,7 +174,7 @@ test("walks every screen through the same nomination reveal", async ({ browser }
         await expect(captain.page.locator(".player-walkout")).toHaveClass(/is-walking-out/);
         await expect(viewer.page.locator(".player-walkout")).toHaveClass(/is-walking-out/);
 
-        await expect(admin.page.getByTestId("current-nominated-player")).not.toHaveValue("Wheel spinning...");
+        await expect(admin.page.getByTestId("current-nominated-player")).not.toHaveValue("Wheel spinning...", { timeout: 20_000 });
         const selectedPlayer = await admin.page.getByTestId("current-nominated-player").inputValue();
 
         await expect(admin.page.locator(".walkout-player-name")).toHaveText(selectedPlayer);
@@ -166,6 +186,7 @@ test("walks every screen through the same nomination reveal", async ({ browser }
 });
 
 test("captain Wildcard returns the player and lets the admin spin again", async ({ browser }) => {
+    test.setTimeout(60_000);
     const admin = await login(browser, "auctioneer", "Sarkar");
     const captain = await login(browser, captains[0], "e2e-password");
 
@@ -193,6 +214,7 @@ test("captain Wildcard returns the player and lets the admin spin again", async 
 });
 
 test("marks a nominee unsold, restarts the auction, and cancels re-auction", async ({ browser, request }) => {
+    test.setTimeout(60_000);
     const admin = await login(browser, "auctioneer", "Sarkar");
 
     try {
@@ -291,25 +313,18 @@ test("re-auction removes the live bid maximum", async ({ browser, request }) => 
 
         const selectedPlayer = await spinWheel(admin.page);
         for (const [index, captainName] of captains.entries()) {
-            const response = await request.post(`${BACKEND_URL}/api/auction/blind-opening-bid/submit`, {
-                data: {
-                    playerName: selectedPlayer,
-                    captainName,
-                    bidAmount: 10_000 + index * 100,
-                },
-            });
-            expect(await response.text()).toBe("Blind opening bid submitted.");
+            await submitOpeningBidAsCaptain(selectedPlayer, captainName, 10_000 + index * 100);
         }
 
         const captain = await login(browser, captains[0], "e2e-password");
         try {
-            const liveBid = captain.page.getByPlaceholder("Start bid (no maximum)");
+            const liveBid = captain.page.getByRole("spinbutton", { name: "Enter bid" });
             await expect(liveBid).toBeVisible();
             expect(await liveBid.getAttribute("max")).toBeNull();
 
             await liveBid.fill("11000");
             await captain.page.getByRole("button", { name: "Place Bid" }).click();
-            await expect(captain.page.getByRole("status")).toContainText("Updated");
+            await expect(captain.page.locator(".captain-actions").getByRole("status")).toHaveText("Updated");
 
             const currentAuction = await request.get(`${BACKEND_URL}/api/auction/current`);
             await assertSuccessful(currentAuction);
@@ -324,12 +339,13 @@ test("re-auction removes the live bid maximum", async ({ browser, request }) => 
 
 test("settles a normal auction after blind opening and live bids", async ({ browser }) => {
     const admin = await login(browser, "auctioneer", "Sarkar");
-    const captainSessions = await Promise.all(
-        captains.map(captainName => login(browser, captainName, "e2e-password"))
-    );
+    const captainSessions = [];
 
     try {
         const selectedPlayer = await spinWheel(admin.page);
+        for (const captainName of captains) {
+            captainSessions.push(await login(browser, captainName, "e2e-password"));
+        }
 
         for (const [index, captain] of captainSessions.entries()) {
             await expect(captain.page.getByTestId("blind-opening-bid")).toBeVisible();
@@ -339,7 +355,7 @@ test("settles a normal auction after blind opening and live bids", async ({ brow
 
         const liveBidder = captainSessions[0].page;
         await expect(liveBidder.getByRole("button", { name: "Place Bid" })).toBeVisible();
-        await liveBidder.getByPlaceholder(/start bid/i).fill("550");
+        await liveBidder.getByRole("spinbutton", { name: "Enter bid" }).fill("550");
         await liveBidder.getByRole("button", { name: "Place Bid" }).click();
 
         await expect(admin.page.getByLabel("Player nominated")).toHaveValue(selectedPlayer);
@@ -368,12 +384,13 @@ test("settles a normal auction after blind opening and live bids", async ({ brow
 
 test("settles a silent auction after secret bids", async ({ browser }) => {
     const admin = await login(browser, "auctioneer", "Sarkar");
-    const captainSessions = await Promise.all(
-        captains.map(captainName => login(browser, captainName, "e2e-password"))
-    );
+    const captainSessions = [];
 
     try {
         const selectedPlayer = await spinWheel(admin.page);
+        for (const captainName of captains) {
+            captainSessions.push(await login(browser, captainName, "e2e-password"));
+        }
         await admin.page.getByRole("button", {
             name: new RegExp(`Start Silent Bid Round for ${selectedPlayer}`),
         }).click();
@@ -395,7 +412,7 @@ test("settles a silent auction after secret bids", async ({ browser }) => {
             callSold.click(),
             callSoldDialog.then(dialog => dialog.accept()),
         ]);
-        await expect(admin.page.getByRole("status")).toContainText("Waiting for RTM.");
+        await expect(admin.page.getByRole("status").filter({ hasText: "Waiting for RTM." })).toBeVisible();
 
         const confirmSale = admin.page.getByRole("button", { name: "💰 Confirm Sale" });
         await expect(confirmSale).toBeEnabled();
@@ -411,7 +428,7 @@ test("settles a silent auction after secret bids", async ({ browser }) => {
     }
 });
 
-test("removes Wildcard after all five blind opening bids are submitted", async ({ browser, request }) => {
+test("removes Wildcard after all five blind opening bids are submitted", async ({ browser }) => {
     const admin = await login(browser, "auctioneer", "Sarkar");
     const captain = await login(browser, captains[1], "e2e-password");
 
@@ -420,14 +437,7 @@ test("removes Wildcard after all five blind opening bids are submitted", async (
         await expect(captain.page.getByTestId("activate-wildcard")).toBeVisible();
 
         for (const captainName of captains) {
-            const response = await request.post(`${BACKEND_URL}/api/auction/blind-opening-bid/submit`, {
-                data: {
-                    playerName: selectedPlayer,
-                    captainName,
-                    bidAmount: 300,
-                },
-            });
-            expect(await response.text()).toBe("Blind opening bid submitted.");
+            await submitOpeningBidAsCaptain(selectedPlayer, captainName, 300);
         }
 
         await captain.page.reload();

@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { Client } from "@stomp/stompjs";
 import SockJS from "sockjs-client";
 
@@ -6,6 +6,9 @@ import { API_URL } from "../config";
 import LiveActivity from "../components/LiveActivity";
 import PlayerWalkout from "../components/PlayerWalkout";
 import { showToast } from "../services/toast";
+import ActionFeedback from "../services/ActionFeedback";
+import { useActionRequest } from "../services/useActionRequest";
+import { apiRequest } from "../services/apiClient";
 
 const RANDOM_EVENT_BANTER = {
     MARKET_BOOM: "The price elevator has skipped the safety briefing.",
@@ -55,6 +58,41 @@ function Dashboard() {
 
     const [auctionEnded, setAuctionEnded] =
         useState(false);
+
+    const [isDashboardLoading, setIsDashboardLoading] = useState(true);
+    const [isDashboardRefreshing, setIsDashboardRefreshing] = useState(false);
+    const [dashboardError, setDashboardError] = useState(null);
+    const [lastSuccessfulRefresh, setLastSuccessfulRefresh] = useState(null);
+    const [outcomeRefreshStatus, setOutcomeRefreshStatus] = useState("needed");
+    const refreshGeneration = useRef(0);
+    const refreshController = useRef(null);
+
+    const {
+        acknowledgeOutcome,
+        feedback: actionFeedback,
+        outcomeUnknown,
+        pendingAction,
+        runAction,
+    } = useActionRequest();
+    const actionPending = Boolean(pendingAction);
+    const actionsDisabled = actionPending || outcomeUnknown || isDashboardRefreshing || Boolean(dashboardError);
+
+    const postAuctionAction = async (label, path, body, isSuccessful) => {
+        const action = await runAction(
+            label,
+            `${API_URL}${path}`,
+            {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(body),
+            },
+            isSuccessful
+        );
+        if (action.started) {
+            loadDashboard();
+        }
+        return action;
+    };
 
     const role =
         localStorage.getItem("role");
@@ -122,95 +160,81 @@ function Dashboard() {
     const [playerCategory, setPlayerCategory] =
         useState("ALL");
 
-    const loadDashboard = useCallback(() => {
-        fetch(`${API_URL}/api/dashboard`)
-            .then(r => r.json())
-            .then(setDashboard);
+    const loadDashboard = useCallback(async () => {
+        const requestGeneration = ++refreshGeneration.current;
+        refreshController.current?.abort();
+        const controller = new AbortController();
+        refreshController.current = controller;
+        setIsDashboardRefreshing(true);
 
-        fetch(`${API_URL}/api/events`)
-            .then(r => r.json())
-            .then(data =>
-                setEvents(
-                    data.slice().reverse().slice(0, 20)
-                ));
+        try {
+            const [dashboardData, eventsData, statusData, playersData, clubbedPairData, captainsData] = await Promise.all([
+                apiRequest("/api/dashboard", { signal: controller.signal }),
+                apiRequest("/api/events", { signal: controller.signal }),
+                apiRequest("/api/auction/status", { signal: controller.signal }),
+                apiRequest("/api/players", { signal: controller.signal }),
+                apiRequest("/api/auction/clubbed-pair", { signal: controller.signal }),
+                apiRequest("/api/teams", { signal: controller.signal }),
+            ]);
 
-        fetch(`${API_URL}/api/auction/status`)
-            .then(r => r.json())
-            .then(setAuctionStatus);
+            const [curseData, rtmData, silentActive] = await Promise.all([
+                isCaptain
+                    ? apiRequest("/api/curse-players/mine", { signal: controller.signal })
+                    : Promise.resolve([]),
+                apiRequest("/api/rtm/current", { signal: controller.signal }),
+                apiRequest("/api/silent-bid/active", { signal: controller.signal }),
+            ]);
 
-        fetch(`${API_URL}/api/players`)
-            .then(r => r.json())
-            .then(setPlayers);
+            const [allSilentBidData, captainSilentData, openingBidData] = await Promise.all([
+                silentActive
+                    ? apiRequest("/api/silent-bid/all", { signal: controller.signal })
+                    : Promise.resolve([]),
+                isCaptain && silentActive
+                    ? apiRequest(`/api/silent-bid/${encodeURIComponent(username)}`, { signal: controller.signal })
+                    : Promise.resolve(null),
+                isCaptain && statusData.auctionPhase === "BLIND_OPENING_BID"
+                    ? apiRequest("/api/auction/current", { signal: controller.signal }).then(current =>
+                        current?.currentPlayer
+                            ? apiRequest(
+                                `/api/auction/blind-opening-bid/${encodeURIComponent(current.currentPlayer)}/${encodeURIComponent(username)}`,
+                                { signal: controller.signal }
+                            )
+                            : null
+                    )
+                    : Promise.resolve(null),
+            ]);
 
-        fetch(`${API_URL}/api/auction/clubbed-pair`)
-            .then(r => r.json())
-            .then(data => setClubbedPairs(Array.isArray(data) ? data : []))
-            .catch(() => setClubbedPairs([]));
+            if (requestGeneration !== refreshGeneration.current) {
+                return false;
+            }
 
-        fetch(`${API_URL}/api/teams`)
-            .then(r => r.json())
-            .then(setCaptains);
-
-        if (isCaptain) {
-            fetch(`${API_URL}/api/curse-players/mine`)
-                .then(r => r.json())
-                .then(data => setCurseSelections(Array.isArray(data) ? data : []))
-                .catch(() => setCurseSelections([]));
+            setDashboard(dashboardData);
+            setEvents(Array.isArray(eventsData) ? eventsData.slice().reverse().slice(0, 20) : []);
+            setAuctionStatus(statusData);
+            setPlayers(Array.isArray(playersData) ? playersData : []);
+            setClubbedPairs(Array.isArray(clubbedPairData) ? clubbedPairData : []);
+            setCaptains(Array.isArray(captainsData) ? captainsData : []);
+            setCurseSelections(Array.isArray(curseData) ? curseData : []);
+            setRtm(rtmData || null);
+            setSilentBidActive(Boolean(silentActive));
+            setAllSilentBids(Array.isArray(allSilentBidData) ? allSilentBidData : []);
+            setSilentRound(captainSilentData || null);
+            setOpeningBidStatus(openingBidData || null);
+            setDashboardError(null);
+            setLastSuccessfulRefresh(Date.now());
+            return true;
+        } catch (error) {
+            if (error.name === "AbortError" || requestGeneration !== refreshGeneration.current) {
+                return false;
+            }
+            setDashboardError(error.message || "Unable to refresh auction data. Retry to get the latest state.");
+            return false;
+        } finally {
+            if (requestGeneration === refreshGeneration.current) {
+                setIsDashboardLoading(false);
+                setIsDashboardRefreshing(false);
+            }
         }
-
-        fetch(`${API_URL}/api/rtm/current`)
-            .then(async r => {
-                if (!r.ok) {
-                    setRtm(null);
-                    return;
-                }
-                setRtm(await r.json());
-            })
-            .catch(() => setRtm(null));
-
-        fetch(`${API_URL}/api/silent-bid/active`)
-            .then(response => response.json())
-            .then(active => {
-                setSilentBidActive(active);
-                if (active) {
-                    fetch(`${API_URL}/api/silent-bid/all`)
-                        .then(r => r.json())
-                        .then(data => setAllSilentBids(data || []))
-                        .catch(() => setAllSilentBids([]));
-
-                    if (isCaptain) {
-                        return fetch(`${API_URL}/api/silent-bid/${encodeURIComponent(username)}`)
-                            .then(response => response.json())
-                            .then(setSilentRound);
-                    }
-                } else {
-                    setAllSilentBids([]);
-                }
-                setSilentRound(null);
-                return null;
-            })
-            .catch(() => {
-                setSilentBidActive(false);
-                setSilentRound(null);
-                setAllSilentBids([]);
-            });
-
-        fetch(`${API_URL}/api/auction/status`)
-            .then(response => response.json())
-            .then(status => {
-                if (isCaptain && status.auctionPhase === "BLIND_OPENING_BID") {
-                    return fetch(`${API_URL}/api/auction/current`)
-                        .then(response => response.json())
-                        .then(current => current?.currentPlayer
-                            ? fetch(`${API_URL}/api/auction/blind-opening-bid/${encodeURIComponent(current.currentPlayer)}/${encodeURIComponent(username)}`)
-                                .then(response => response.json())
-                                .then(setOpeningBidStatus)
-                            : setOpeningBidStatus(null));
-                }
-                setOpeningBidStatus(null);
-                return null;
-            })
-            .catch(() => setOpeningBidStatus(null));
     }, [isCaptain, username]);
 
     useEffect(() => {
@@ -234,6 +258,7 @@ function Dashboard() {
         client.activate();
 
         return () => {
+            refreshController.current?.abort();
             client.deactivate();
         };
     }, [loadDashboard]);
@@ -251,200 +276,102 @@ function Dashboard() {
     };
 
     const claimRtm = async () => {
-
-        if (navigator.vibrate) {
-
-            navigator.vibrate(300);
-
-        }
-
-        const audio = new Audio("/sounds/veto.mp3");
-
-        audio.play();
-
-        const response = await fetch(
-            `${API_URL}/api/rtm/claim`,
-            {
-                method: "POST",
-                headers: {
-                    "Content-Type":
-                        "application/json"
-                },
-                body: JSON.stringify({
-
-                    captainName:
-                        username
-
-                })
-            }
+        const action = await postAuctionAction(
+            "Claiming RTM",
+            "/api/rtm/claim",
+            { captainName: username },
+            result => result === "RTM claimed."
         );
-
-        const text = await response.text();
-
-        showToast(text);
-
-        loadDashboard();
-
+        if (action.success) {
+            if (navigator.vibrate) navigator.vibrate(300);
+            new Audio("/sounds/veto.mp3").play().catch(() => { });
+        }
 
     };
 
     const submitRtmBid = async () => {
-
-        const response = await fetch(
-
-            `${API_URL}/api/rtm/bid`,
-
-            {
-
-                method: "POST",
-
-                headers: {
-
-                    "Content-Type": "application/json"
-
-                },
-
-                body: JSON.stringify({
-
-                    bidAmount: Number(rtmBid)
-
-                })
-
-            }
-
+        await postAuctionAction(
+            "Submitting RTM bid",
+            "/api/rtm/bid",
+            { bidAmount: Number(rtmBid) },
+            result => result === "RTM bid submitted."
         );
-
-        showToast(await response.text());
-
-        loadDashboard();
-
     };
 
     const submitLiveBid = async () => {
         if (!liveBid || Number(liveBid) <= 0) return;
-        const response = await fetch(`${API_URL}/api/auction/update-current`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ captainName: username, currentBid: Number(liveBid) })
-        });
-        showToast(await response.text());
-        setLiveBid("");
-        loadDashboard();
+        const action = await postAuctionAction(
+            "Placing bid",
+            "/api/auction/update-current",
+            { captainName: username, currentBid: Number(liveBid) },
+            result => result === "Updated"
+        );
+        if (action.success) setLiveBid("");
     };
 
     const acceptRtm = async () => {
-
-        const response = await fetch(
-
-            `${API_URL}/api/rtm/accept`,
-
-            {
-
-                method: "POST",
-
-                headers: {
-
-                    "Content-Type": "application/json"
-
-                },
-
-                body: JSON.stringify({
-
-                    captainName: username
-
-                })
-
-            }
-
+        const playerName = currentAuction?.currentPlayer || "Player";
+        await postAuctionAction(
+            "Accepting RTM",
+            "/api/rtm/accept",
+            { captainName: username },
+            result => result.startsWith(`${playerName} sold to `)
         );
-
-        showToast(await response.text());
-
-        loadDashboard();
-
     };
 
     const declineRtm = async () => {
-
-        const response = await fetch(
-
-            `${API_URL}/api/rtm/decline`,
-
-            {
-
-                method: "POST",
-
-                headers: {
-
-                    "Content-Type": "application/json"
-
-                },
-
-                body: JSON.stringify({
-
-                    captainName: username
-
-                })
-
-            }
-
+        const playerName = currentAuction?.currentPlayer || "Player";
+        await postAuctionAction(
+            "Declining RTM",
+            "/api/rtm/decline",
+            { captainName: username },
+            result => result.startsWith(`${playerName} sold to `)
         );
-
-        showToast(await response.text());
-
-        loadDashboard();
-
     };
 
     const submitSilentBid = async () => {
         if (!silentRound || silentBid === "" || Number(silentBid) < 0) return;
-        const response = await fetch(`${API_URL}/api/silent-bid/submit`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
+        const action = await postAuctionAction(
+            "Submitting silent bid",
+            "/api/silent-bid/submit",
+            {
                 playerName: silentRound.playerName,
                 captainName: username,
                 bidAmount: Number(silentBid)
-            })
-        });
-        const result = await response.text();
-        const bidAccepted = result === "Bid submitted.";
-        showToast(result, bidAccepted ? "success" : "error");
-        if (bidAccepted) {
+            },
+            result => result === "Bid submitted."
+        );
+        if (action.success) {
             setSilentBid("");
         }
-        loadDashboard();
     };
 
     const submitOpeningBid = async () => {
         if (!openingBid || Number(openingBid) <= 0 || !dashboard.currentAuction.currentPlayer) return;
-        const response = await fetch(`${API_URL}/api/auction/blind-opening-bid/submit`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
+        const action = await postAuctionAction(
+            "Submitting opening bid",
+            "/api/auction/blind-opening-bid/submit",
+            {
                 playerName: dashboard.currentAuction.currentPlayer,
                 captainName: username,
                 bidAmount: Number(openingBid)
-            })
-        });
-        showToast(await response.text());
-        setOpeningBid("");
-        loadDashboard();
+            },
+            result => result === "Blind opening bid submitted."
+        );
+        if (action.success) setOpeningBid("");
     };
 
     const passOpeningBid = async () => {
         if (!dashboard.currentAuction.currentPlayer) return;
-        const response = await fetch(`${API_URL}/api/auction/blind-opening-bid/pass`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
+        await postAuctionAction(
+            "Passing on opening bid",
+            "/api/auction/blind-opening-bid/pass",
+            {
                 playerName: dashboard.currentAuction.currentPlayer,
                 captainName: username
-            })
-        });
-        const result = await response.text();
-        showToast(result, result === "Blind opening bid passed." ? "success" : "error");
-        loadDashboard();
+            },
+            result => result === "Blind opening bid passed."
+        );
     };
 
     const endAuction = async () => {
@@ -452,10 +379,13 @@ function Dashboard() {
             return;
         }
 
-        const response = await fetch(`${API_URL}/api/auction/end`, { method: "POST" });
-        const result = await response.text();
-        showToast(result, response.ok ? "success" : "error");
-        if (response.ok) {
+        const action = await runAction(
+            "Ending auction",
+            `${API_URL}/api/auction/end`,
+            { method: "POST" },
+            result => result === "Auction ended and secret targets settled."
+        );
+        if (action.success) {
             setAuctionEnded(true);
             loadDashboard();
         }
@@ -470,25 +400,41 @@ function Dashboard() {
             return;
         }
 
-        const response = await fetch(`${API_URL}/api/auction/wild-pick`, {
-            method: "POST",
-            credentials: "include"
-        });
-        const message = await response.text();
-        const activated = message.includes("activated Wildcard");
-
-        showToast(message, activated ? "success" : "error");
-        if (activated) {
+        const action = await runAction(
+            "Activating Wildcard",
+            `${API_URL}/api/auction/wild-pick`,
+            { method: "POST", credentials: "include" },
+            result => result.includes("activated Wildcard")
+        );
+        if (action.success) {
             setOpeningBid("");
+            loadDashboard();
         }
-        loadDashboard();
+    };
+
+    const refreshBeforeRetry = async () => {
+        setOutcomeRefreshStatus("refreshing");
+        const refreshed = await loadDashboard();
+        setOutcomeRefreshStatus(refreshed ? "refreshed" : "needed");
+    };
+
+    const acknowledgeReviewedState = () => {
+        acknowledgeOutcome();
+        setOutcomeRefreshStatus("needed");
     };
 
     if (!dashboard) {
-
         return (
-            <div>
-                Loading...
+            <div className="app-container">
+                {isDashboardLoading && <p role="status">Loading auction data...</p>}
+                {dashboardError && (
+                    <section className="message-error" role="alert">
+                        <p>{dashboardError}</p>
+                        <button className="button-secondary" type="button" onClick={loadDashboard} disabled={isDashboardRefreshing}>
+                            {isDashboardRefreshing ? "Retrying..." : "Retry refresh"}
+                        </button>
+                    </section>
+                )}
             </div>
         );
     }
@@ -576,16 +522,46 @@ function Dashboard() {
 
         <div>
 
+            <section
+                className={`dashboard-freshness${dashboardError ? " is-stale" : isDashboardRefreshing ? " is-refreshing" : " is-live"}`}
+                aria-label="Dashboard data freshness"
+            >
+                <span className="dashboard-freshness-indicator" aria-hidden="true" />
+                <span className="dashboard-freshness-copy" role={dashboardError ? "alert" : "status"} aria-live={dashboardError ? "assertive" : "polite"}>
+                    <strong>{dashboardError ? "Data may be stale" : isDashboardRefreshing ? "Refreshing auction" : "Auction data current"}</strong>
+                    {lastSuccessfulRefresh && (
+                        <span>Last updated {new Date(lastSuccessfulRefresh).toLocaleTimeString()}.</span>
+                    )}
+                    {dashboardError && <span>{dashboardError}</span>}
+                </span>
+                {dashboardError && (
+                    <button className="button-secondary" type="button" onClick={loadDashboard} disabled={isDashboardRefreshing}>
+                        {isDashboardRefreshing ? "Retrying..." : "Retry refresh"}
+                    </button>
+                )}
+            </section>
+
+            {dashboardError && (
+                <p className="dashboard-refresh-detail">The displayed auction snapshot is retained, but actions are disabled until refresh succeeds.</p>
+            )}
+
             {isAdmin && (
                 <div className="section-card admin-auction-controls">
-                    <button className="button" type="button" onClick={endAuction} disabled={auctionEnded}>
-                        {auctionEnded ? "Auction Ended" : "End Auction"}
+                    <button className="button" type="button" onClick={endAuction} disabled={auctionEnded || actionsDisabled}>
+                        {auctionEnded ? "Auction Ended" : pendingAction === "Ending auction" ? "Ending auction..." : "End Auction"}
                     </button>
                     {auctionEnded && (
                         <button className="button-secondary" type="button" onClick={exportFinalTeamsPdf}>
                             Export Final Teams PDF
                         </button>
                     )}
+                    <ActionFeedback
+                        feedback={actionFeedback}
+                        onRefresh={refreshBeforeRetry}
+                        recoveryStatus={outcomeRefreshStatus}
+                        onAcknowledge={acknowledgeReviewedState}
+                        acknowledgementLabel="I reviewed the refreshed state"
+                    />
                 </div>
             )}
 
@@ -623,13 +599,22 @@ function Dashboard() {
             {isCaptain && dashboardView === "overview" && (
                 <div className="section-card captain-actions" style={{ marginBottom: "18px" }}>
                     <h2>Auction Actions</h2>
+                    <ActionFeedback
+                        feedback={actionFeedback}
+                        onRefresh={refreshBeforeRetry}
+                        onAcknowledge={acknowledgeReviewedState}
+                        recoveryStatus={outcomeRefreshStatus}
+                        acknowledgementLabel="I reviewed the refreshed state"
+                    />
                     {silentBidActive && silentRound && !silentRound.submitted && (
                         <div className="captain-action-row silent-action-row" style={{ display: "flex", gap: "8px", marginBottom: "12px" }}>
                             <input className="input" type="number" min="1"
                                 step={Number(silentBid) > 1000 ? 100 : 50}
-                                placeholder="Secret silent bid"
+                                placeholder={pendingAction === "Submitting silent bid" ? "Submitting..." : "Secret silent bid"}
                                 value={silentBid} onChange={event => setSilentBid(event.target.value)} />
-                            <button className="button" onClick={submitSilentBid}>Submit Silent Bid</button>
+                            <button className="button" onClick={submitSilentBid} disabled={actionsDisabled}>
+                                {pendingAction === "Submitting silent bid" ? "Submitting..." : "Submit Silent Bid"}
+                            </button>
                         </div>
                     )}
                     {silentBidActive && silentRound?.submitted && (
@@ -641,7 +626,9 @@ function Dashboard() {
                                 step={Number(liveBid) > 1000 ? 100 : 50}
                                 placeholder="Enter bid"
                                 value={liveBid} onChange={event => setLiveBid(event.target.value)} />
-                            <button className="button" onClick={submitLiveBid}>Place Bid</button>
+                            <button className="button" onClick={submitLiveBid} disabled={actionsDisabled}>
+                                {pendingAction === "Placing bid" ? "Placing bid..." : "Place Bid"}
+                            </button>
                         </div>
                     )}
                     {auctionStatus?.auctionPhase === "BLIND_OPENING_BID" && (
@@ -654,14 +641,18 @@ function Dashboard() {
                                         placeholder="Opening bid"
                                         value={openingBid}
                                         onChange={event => setOpeningBid(event.target.value)} />
-                                    <button className="button" data-testid="place-blind-opening-bid" onClick={submitOpeningBid}>Place Blind Opening Bid</button>
-                                    <button className="button-secondary" data-testid="pass-blind-opening-bid" onClick={passOpeningBid}>Pass</button>
+                                    <button className="button" data-testid="place-blind-opening-bid" onClick={submitOpeningBid} disabled={actionsDisabled}>
+                                        {pendingAction === "Submitting opening bid" ? "Submitting..." : "Place Blind Opening Bid"}
+                                    </button>
+                                    <button className="button-secondary" data-testid="pass-blind-opening-bid" onClick={passOpeningBid} disabled={actionsDisabled}>
+                                        {pendingAction === "Passing on opening bid" ? "Passing..." : "Pass"}
+                                    </button>
                                 </>
                             )}
                             {currentTeam && (
                                 <button className="button-secondary" type="button" data-testid="activate-wildcard" onClick={activateWildcard}
-                                    disabled={currentTeam.wildPickUsed || rtmLocked}>
-                                    {rtmLocked ? "Wild Pick banned by NO MERCY" : currentTeam.wildPickUsed ? "Wild Pick Used" : "Activate Wildcard"}
+                                    disabled={actionsDisabled || currentTeam.wildPickUsed || rtmLocked}>
+                                    {pendingAction === "Activating Wildcard" ? "Activating..." : rtmLocked ? "Wild Pick banned by NO MERCY" : currentTeam.wildPickUsed ? "Wild Pick Used" : "Activate Wildcard"}
                                 </button>
                             )}
                         </div>
@@ -675,7 +666,9 @@ function Dashboard() {
                             </p>
                         )}
                     {auctionStatus?.auctionPhase === "SOLD" && !isCurrentHighestBidder && !rtmLocked && !rtm && !rtmAlreadyUsed && (
-                        <button className="button" onClick={claimRtm}>Claim RTM</button>
+                        <button className="button" onClick={claimRtm} disabled={actionsDisabled}>
+                            {pendingAction === "Claiming RTM" ? "Claiming..." : "Claim RTM"}
+                        </button>
                     )}
                     {rtmLocked && <p>NO MERCY bans RTM and Wild Pick for this player.</p>}
                     {isRtmCaptain && rtm?.status === "CLAIMED" && (
@@ -683,14 +676,22 @@ function Dashboard() {
                             <input className="input" type="number" min={currentAuction.currentBid + 100}
                                 value={rtmBid}
                                 onChange={event => setRtmBid(event.target.value)} placeholder="RTM price" />
-                            <button className="button" onClick={submitRtmBid}>Submit RTM Price</button>
+                            <button className="button" onClick={submitRtmBid} disabled={actionsDisabled}>
+                                {pendingAction === "Submitting RTM bid" ? "Submitting..." : "Submit RTM Price"}
+                            </button>
                         </div>
                     )}
                     {isOriginalCaptain && rtm?.status === "BID_SUBMITTED" && (
                         <div>
                             <p>RTM price: <strong>₹{rtm.bidAmount}</strong></p>
-                            <button className="button" onClick={acceptRtm}>Accept</button>
-                            <button className="button-secondary" onClick={declineRtm} style={{ marginLeft: "8px" }}>Reject</button>
+                            <div className="captain-action-row rtm-decision-row">
+                                <button className="button" onClick={acceptRtm} disabled={actionsDisabled}>
+                                    {pendingAction === "Accepting RTM" ? "Accepting..." : "Accept"}
+                                </button>
+                                <button className="button-secondary" onClick={declineRtm} disabled={actionsDisabled}>
+                                    {pendingAction === "Declining RTM" ? "Rejecting..." : "Reject"}
+                                </button>
+                            </div>
                         </div>
                     )}
                 </div>

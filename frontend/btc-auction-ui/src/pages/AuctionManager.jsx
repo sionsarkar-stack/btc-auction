@@ -6,6 +6,8 @@ import { API_URL } from "../config";
 import SilentBidManager from "./SilentBidManager";
 import PlayerWalkout from "../components/PlayerWalkout";
 import LiveActivity from "../components/LiveActivity";
+import ActionFeedback from "../services/ActionFeedback";
+import { useActionRequest } from "../services/useActionRequest";
 
 function AuctionManager() {
 
@@ -26,6 +28,14 @@ function AuctionManager() {
     const [pairPlayerTwo, setPairPlayerTwo] = useState("");
     const [isConnected, setIsConnected] = useState(false);
     const [isBusy, setIsBusy] = useState(false);
+    const {
+        acknowledgeOutcome,
+        feedback: actionFeedback,
+        outcomeUnknown,
+        pendingAction,
+        runAction,
+    } = useActionRequest();
+    const actionBusy = isBusy || Boolean(pendingAction);
     const [auctionStatus, setAuctionStatus] = useState(null);
     const [allCaptainsPassed, setAllCaptainsPassed] = useState(false);
     const [openingBidTie, setOpeningBidTie] = useState(null);
@@ -124,6 +134,7 @@ function AuctionManager() {
             setOpeningBids(Array.isArray(currentOpeningBids) ? currentOpeningBids : []);
             setClubbedPairs(Array.isArray(clubbedPairData) ? clubbedPairData : []);
             setRandomEvents(randomEventsData);
+            return true;
         } catch (error) {
 
             console.error(error);
@@ -131,6 +142,7 @@ function AuctionManager() {
             setMessage(
                 "Unable to load data."
             );
+            return false;
 
         }
     }, []);
@@ -178,7 +190,17 @@ function AuctionManager() {
         return () => window.clearInterval(intervalId);
     }, [auctionStatus?.auctionPhase, loadData]);
 
+    const refreshAndAcknowledgeOutcome = async () => {
+        if (await loadData()) {
+            acknowledgeOutcome();
+        }
+    };
+
     const callSold = async () => {
+
+        if (isBusy || outcomeUnknown) {
+            return;
+        }
 
         if (
             !playerName ||
@@ -198,37 +220,28 @@ function AuctionManager() {
             return;
         }
 
-        setIsBusy(true);
-        try {
-            const response = await fetch(
-                `${API_URL}/api/auction/call-sold`,
-                {
-                    method: "POST",
-                    headers: {
-                        "Content-Type": "application/json"
-                    },
-                    body: JSON.stringify({
-                        captainName,
-                        currentBid: Number(soldPrice)
-                    })
-                }
-            );
-
-            const result = await response.text();
-            setMessage(result);
-            if (response.ok && result.includes("Waiting for RTM")) {
-                setCallSoldPlayer(playerName);
-            }
-        } catch (error) {
-            console.error(error);
-            setMessage("Unable to call SOLD. Check the connection and try again.");
-        } finally {
-            setIsBusy(false);
+        const action = await runAction(
+            "Calling SOLD",
+            `${API_URL}/api/auction/call-sold`,
+            {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ captainName, currentBid: Number(soldPrice) }),
+            },
+            result => result.includes("Waiting for RTM")
+        );
+        if (action.success) {
+            setCallSoldPlayer(playerName);
+            await loadData();
         }
 
     };
 
     const sellPlayer = async () => {
+
+        if (isBusy || outcomeUnknown) {
+            return;
+        }
 
         if (
             !playerName ||
@@ -247,85 +260,46 @@ function AuctionManager() {
             return;
         }
 
-        try {
-            setIsBusy(true);
+        const soldPlayer = playerName;
+        const action = await runAction(
+            "Confirming sale",
+            `${API_URL}/api/auction/sold`,
+            {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ playerName, captainName, soldPrice: Number(soldPrice) }),
+            },
+            result => result.startsWith(`${soldPlayer} sold to `)
+        );
 
-            const response = await fetch(
-                `${API_URL}/api/auction/sold`,
-                {
-                    method: "POST",
-                    headers: {
-                        "Content-Type":
-                            "application/json",
-                    },
-                    body: JSON.stringify({
-                        playerName,
-                        captainName,
-                        soldPrice:
-                            Number(soldPrice),
-                    }),
-                }
-            );
-
-            const result =
-                await response.text();
-
-            setMessage(result);
-
+        if (action.success) {
             setPlayerName("");
             setCaptainName("");
             setSoldPrice("");
-
             await loadData();
-
-        } catch (error) {
-
-            console.error(error);
-
-            setMessage(
-                "Unable to sell player."
-            );
-        } finally {
-            setIsBusy(false);
-
         }
     };
 
     const undoSale = async () => {
+
+        if (isBusy || outcomeUnknown) {
+            return;
+        }
 
         if (!window.confirm("Undo the last sale? This changes team and player records.")) {
             return;
         }
 
 
-        try {
-            setIsBusy(true);
-
-            const response = await fetch(
-                `${API_URL}/api/auction/undo`,
-                {
-                    method: "POST",
-                }
-            );
-
-            const result =
-                await response.text();
-
-            setMessage(result);
+        const action = await runAction(
+            "Undoing sale",
+            `${API_URL}/api/auction/undo`,
+            { method: "POST" },
+            result => result === "Last sale undone"
+        );
+        if (action.success) {
             setCallSoldPlayer(null);
-
             await loadData();
-
-        } catch (error) {
-
-            console.error(error);
-
-            setMessage(
-                "Unable to undo sale."
-            );
-        } finally {
-            setIsBusy(false);
-
         }
     };
 
@@ -453,28 +427,6 @@ function AuctionManager() {
         } finally {
             setIsBusy(false);
         }
-    };
-
-    const updateCurrentAuction = async (captain, price) => {
-
-        if (!captain || !price) {
-            return;
-        }
-
-        await fetch(
-            `${API_URL}/api/auction/update-current`,
-            {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json"
-                },
-                body: JSON.stringify({
-                    captainName: captain,
-                    currentBid: Number(price)
-                })
-            }
-        );
-
     };
 
     const saveClubbedPair = async () => {
@@ -690,7 +642,7 @@ function AuctionManager() {
                                 type="button"
                                 onClick={spinWheel}
                                 data-testid="spin-wheel"
-                                disabled={isBusy || !auctionStatus?.auctionStarted || wheelPlayers.length === 0 || Boolean(currentAuction?.currentPlayer)}
+                                disabled={actionBusy || outcomeUnknown || !auctionStatus?.auctionStarted || wheelPlayers.length === 0 || Boolean(currentAuction?.currentPlayer)}
                                 title={currentAuction?.currentPlayer ? "Resolve the active player before spinning again." : undefined}
                                 style={{ width: "100%", marginBottom: "14px" }}
                             >
@@ -852,18 +804,7 @@ function AuctionManager() {
                                 className="select"
                                 value={captainName}
                                 disabled={isBusy || isWheelSpinning}
-                                onChange={async (e) => {
-
-                                    const captain = e.target.value;
-
-                                    setCaptainName(captain);
-
-                                    await updateCurrentAuction(
-                                        captain,
-                                        soldPrice
-                                    );
-
-                                }}
+                                onChange={(e) => setCaptainName(e.target.value)}
                             >
 
                                 <option value="">
@@ -905,18 +846,7 @@ function AuctionManager() {
                                 type="number"
                                 value={soldPrice}
                                 disabled={isBusy || isWheelSpinning}
-                                onChange={async (e) => {
-
-                                    const price = e.target.value;
-
-                                    setSoldPrice(price);
-
-                                    await updateCurrentAuction(
-                                        captainName,
-                                        price
-                                    );
-
-                                }}
+                                onChange={(e) => setSoldPrice(e.target.value)}
                             />
 
                         </div>
@@ -927,13 +857,14 @@ function AuctionManager() {
                                 className="button-secondary"
                                 type="button"
                                 onClick={callSold}
-                                disabled={isBusy
+                                disabled={actionBusy
+                                    || outcomeUnknown
                                     || isWheelSpinning
                                     || auctionStatus?.auctionPhase === "SOLD"
                                     || callSoldPlayer === currentAuction?.currentPlayer}
                             >
 
-                                🟢 CALL SOLD
+                                {pendingAction === "Calling SOLD" ? "Calling SOLD..." : "🟢 CALL SOLD"}
 
                             </button>
 
@@ -941,10 +872,10 @@ function AuctionManager() {
                             <button
                                 className="button"
                                 type="submit"
-                                disabled={isBusy || isWheelSpinning}
+                                disabled={actionBusy || outcomeUnknown || isWheelSpinning}
                             >
 
-                                ✅ CONFIRM SALE
+                                {pendingAction === "Confirming sale" ? "Confirming sale..." : "✅ CONFIRM SALE"}
 
                             </button>
 
@@ -952,7 +883,7 @@ function AuctionManager() {
                                 className="button-secondary"
                                 type="button"
                                 onClick={markUnsold}
-                                disabled={isBusy || isWheelSpinning || !currentAuction?.currentPlayer || auctionStatus?.auctionPhase === "SOLD"}
+                                disabled={actionBusy || outcomeUnknown || isWheelSpinning || !currentAuction?.currentPlayer || auctionStatus?.auctionPhase === "SOLD"}
                             >
                                 ◌ Mark Unsold
                             </button>
@@ -961,10 +892,10 @@ function AuctionManager() {
                                 className="button-secondary"
                                 type="button"
                                 onClick={undoSale}
-                                disabled={isBusy || isWheelSpinning}
+                                disabled={actionBusy || outcomeUnknown || isWheelSpinning}
                             >
 
-                                ↩️ UNDO LAST SALE
+                                {pendingAction === "Undoing sale" ? "Undoing sale..." : "↩️ UNDO LAST SALE"}
 
                             </button>
 
@@ -988,6 +919,11 @@ function AuctionManager() {
                         </div>
 
                     )}
+
+                    <ActionFeedback
+                        feedback={actionFeedback}
+                        onAcknowledge={refreshAndAcknowledgeOutcome}
+                    />
 
                 </div>
 

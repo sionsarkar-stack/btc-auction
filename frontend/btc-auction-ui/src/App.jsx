@@ -108,6 +108,19 @@ function App() {
     return () => window.removeEventListener("auction-toast", handleToast);
   }, []);
 
+  useEffect(() => {
+    const handleSessionExpired = () => {
+      localStorage.removeItem("role");
+      localStorage.removeItem("username");
+      setRole(null);
+      setScreen("dashboard");
+      setSessionChecked(true);
+    };
+
+    window.addEventListener("auction-session-expired", handleSessionExpired);
+    return () => window.removeEventListener("auction-session-expired", handleSessionExpired);
+  }, []);
+
   const logout = async () => {
     try {
       await fetch(`${API_URL}/api/logout`, {

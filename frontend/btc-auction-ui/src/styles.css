@@ -3152,6 +3152,70 @@ label {
     z-index: 1;
 }
 
+.dashboard-freshness {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px 12px;
+    margin: 0 0 14px;
+    padding: 10px 12px;
+    border: 1px solid var(--line);
+    border-left: 4px solid #16845b;
+    border-radius: 4px;
+    background: #f0faf5;
+    color: var(--ink);
+    font-size: 13px;
+}
+
+.dashboard-freshness.is-refreshing {
+    border-left-color: #2563a6;
+    background: #f1f7fc;
+}
+
+.dashboard-freshness.is-stale {
+    border-left-color: #b45309;
+    background: #fff8ed;
+}
+
+.dashboard-freshness-indicator {
+    width: 9px;
+    height: 9px;
+    flex: 0 0 9px;
+    border-radius: 50%;
+    background: currentColor;
+}
+
+.dashboard-freshness.is-live .dashboard-freshness-indicator {
+    color: #16845b;
+}
+
+.dashboard-freshness.is-refreshing .dashboard-freshness-indicator {
+    color: #2563a6;
+}
+
+.dashboard-freshness.is-stale .dashboard-freshness-indicator {
+    color: #b45309;
+}
+
+.dashboard-freshness .button-secondary {
+    margin-left: auto;
+}
+
+.dashboard-refresh-detail {
+    margin: -6px 0 14px;
+    color: #713f12;
+    font-size: 13px;
+}
+
+.captain-actions .message-success,
+.captain-actions .message-error,
+.captain-actions .message-warning,
+.admin-auction-controls .message-success,
+.admin-auction-controls .message-error,
+.admin-auction-controls .message-warning {
+    margin: 8px 0;
+}
+
 .live-random-event-live {
     display: inline-flex;
     align-items: center;
@@ -3237,27 +3301,53 @@ label {
 
     position: fixed;
 
-    inset: 0;
+    inset: max(12px, env(safe-area-inset-top)) 12px auto;
 
-    background:
-        radial-gradient(circle,
-            rgba(255, 255, 255, .12),
-            rgba(0, 0, 0, .92));
+    background: transparent;
 
-    backdrop-filter: blur(10px);
+    backdrop-filter: none;
 
     display: flex;
 
     justify-content: center;
 
-    align-items: center;
+    align-items: flex-start;
 
     z-index: 99999;
 
-    animation:
-        fadeIn .4s ease,
-        flashBg .8s ease;
+    pointer-events: none;
 
+    animation: none;
+
+}
+
+.event-overlay .event-card {
+    position: relative;
+    pointer-events: none;
+}
+
+.event-overlay-dismiss {
+    position: absolute;
+    top: 10px;
+    right: 12px;
+    width: 40px;
+    height: 40px;
+    display: grid;
+    place-items: center;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: rgba(15, 23, 42, .78);
+    color: #fff;
+    font-size: 28px;
+    line-height: 1;
+    cursor: pointer;
+    pointer-events: auto;
+}
+
+.event-overlay-dismiss:focus-visible {
+    outline: 3px solid #fff;
+    outline-offset: 3px;
 }
 
 .event-overlay.starting_bid_winner .event-card {
@@ -3313,6 +3403,64 @@ label {
 
 }
 
+.event-overlay .event-card {
+    width: min(620px, 100%);
+    max-width: 100%;
+    padding: 14px 56px 14px 18px;
+    overflow: visible;
+    border: 1px solid rgba(255, 255, 255, .2);
+    border-radius: 8px;
+    background: linear-gradient(110deg, #10243a, #164e63);
+    text-align: left;
+    box-shadow: 0 12px 30px rgba(15, 23, 42, .24);
+    animation: eventToastIn .24s ease-out;
+}
+
+.event-overlay .event-card::before {
+    display: none;
+}
+
+.event-overlay .event-icon {
+    display: none;
+}
+
+.event-overlay .event-title {
+    margin: 0;
+    font-size: 14px;
+    line-height: 1.3;
+    letter-spacing: 0;
+}
+
+.event-overlay .event-captain,
+.event-overlay .event-message {
+    margin-top: 5px;
+    font-size: 14px;
+    line-height: 1.35;
+    letter-spacing: 0;
+    text-shadow: none;
+    text-transform: none;
+}
+
+.event-overlay .event-captain {
+    font-weight: 700;
+}
+
+.event-overlay .event-message {
+    font-weight: 500;
+}
+
+@keyframes eventToastIn {
+    from {
+        opacity: 0;
+        transform: translateY(-6px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
 .event-card::before {
 
     content: "";
@@ -3356,6 +3504,21 @@ label {
 .event-overlay.player_sold .event-message {
     font-size: 1.45rem;
     font-weight: 800;
+}
+
+.event-overlay.player_sold .event-card {
+    animation: eventToastIn .24s ease-out;
+}
+
+.event-overlay.player_sold .event-title {
+    font-size: 14px;
+    letter-spacing: 0;
+}
+
+.event-overlay.player_sold .event-message {
+    font-size: 14px;
+    font-weight: 500;
+    text-transform: none;
 }
 
 @keyframes soldGrandEntrance {
@@ -4837,13 +5000,25 @@ body {
     }
 
     .captain-action-row {
-        flex-direction: column !important;
+        display: grid !important;
+        grid-template-columns: minmax(0, 1fr) minmax(118px, 42%);
         align-items: stretch;
+    }
+
+    .captain-action-row>.input {
+        grid-column: 1;
+        min-width: 0;
+        min-height: 48px;
     }
 
     .captain-action-row .button,
     .captain-action-row .button-secondary {
-        width: 100%;
+        width: auto;
+        min-width: 0;
+        min-height: 48px;
+        padding: 9px 10px;
+        line-height: 1.2;
+        white-space: normal;
     }
 
     .auction-metrics {
@@ -5040,6 +5215,16 @@ body {
 
     .event-columns {
         grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 380px) {
+    .captain-action-row {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .captain-action-row>* {
+        grid-column: 1;
     }
 }
 

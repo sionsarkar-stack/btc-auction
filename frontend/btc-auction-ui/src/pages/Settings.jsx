@@ -1,14 +1,23 @@
 import { useEffect, useState } from "react";
 
 import { API_URL } from "../config";
+import ActionFeedback from "../services/ActionFeedback";
+import { useActionRequest } from "../services/useActionRequest";
 
 function Settings() {
 
     const [config, setConfig] =
         useState(null);
 
-    const [message, setMessage] =
-        useState("");
+    const {
+        feedback,
+        outcomeUnknown,
+        pendingAction,
+        runAction,
+    } = useActionRequest();
+    const actionBusy = Boolean(pendingAction);
+
+    const refreshBeforeRetry = () => window.location.reload();
 
     const resetAuction = async () => {
 
@@ -20,18 +29,12 @@ function Settings() {
             return;
         }
 
-        const response =
-            await fetch(
-                `${API_URL}/api/auction/reset`,
-                {
-                    method: "POST"
-                }
-            );
-
-        const result =
-            await response.text();
-
-        setMessage(result);
+        await runAction(
+            "Resetting auction",
+            `${API_URL}/api/auction/reset`,
+            { method: "POST" },
+            result => result === "Auction Reset Successfully"
+        );
     };
 
     useEffect(() => {
@@ -46,25 +49,17 @@ function Settings() {
 
     const saveConfig = async () => {
 
-        const response =
-            await fetch(
-                `${API_URL}/api/config`,
-                {
-                    method: "POST",
-                    headers: {
-                        "Content-Type":
-                            "application/json"
-                    },
-                    body: JSON.stringify(config)
-                }
-            );
-
-        if (response.ok) {
-
-            setMessage(
-                "Settings Saved"
-            );
-        }
+        await runAction(
+            "Saving settings",
+            `${API_URL}/api/config`,
+            {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(config),
+            },
+            result => result.trim().length > 0,
+            () => "Settings saved."
+        );
     };
 
     if (!config) {
@@ -90,29 +85,26 @@ function Settings() {
             <button
                 className="button"
                 onClick={saveConfig}
+                disabled={actionBusy || outcomeUnknown}
             >
-                Save Settings
+                {pendingAction === "Saving settings" ? "Saving..." : "Save Settings"}
             </button>
 
             <button
                 className="button-secondary"
                 onClick={resetAuction}
+                disabled={actionBusy || outcomeUnknown}
             >
-                Reset Auction
+                {pendingAction === "Resetting auction" ? "Resetting..." : "Reset Auction"}
             </button>
 
             <hr style={{ marginTop: "30px", marginBottom: "30px" }} />
 
-            {message && (
-
-                <div
-                    className=
-                    "message-success"
-                >
-                    {message}
-                </div>
-
-            )}
+            <ActionFeedback
+                feedback={feedback}
+                onAcknowledge={refreshBeforeRetry}
+                acknowledgementLabel="Refresh and re-enable controls"
+            />
 
         </div>
 

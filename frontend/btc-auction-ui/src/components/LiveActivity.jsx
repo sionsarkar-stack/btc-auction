@@ -86,6 +86,11 @@ function LiveActivity({ showActivity = true }) {
 
     const eventRequestControllers = useRef(new Set());
 
+    const dismissOverlay = () => {
+        clearTimeout(overlayTimer.current);
+        setOverlayEvent(null);
+    };
+
     const loadEvents = useEffectEvent(() => {
         if (!isActive.current) {
             return;
@@ -208,7 +213,7 @@ function LiveActivity({ showActivity = true }) {
 
         <>
 
-            <EventOverlay event={overlayEvent} />
+            <EventOverlay event={overlayEvent} onDismiss={dismissOverlay} />
 
             {showActivity && <div className="section-card">
 

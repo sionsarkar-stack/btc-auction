@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 
 import { API_URL } from "../config";
+import ActionFeedback from "../services/ActionFeedback";
+import { useActionRequest } from "../services/useActionRequest";
 
 function ManualSale() {
 
@@ -11,7 +13,15 @@ function ManualSale() {
     const [newCaptain, setNewCaptain] = useState("");
     const [newPrice, setNewPrice] = useState("");
 
-    const [message, setMessage] = useState("");
+    const {
+        feedback,
+        outcomeUnknown,
+        pendingAction,
+        runAction,
+    } = useActionRequest();
+    const actionBusy = Boolean(pendingAction);
+
+    const refreshBeforeRetry = () => window.location.reload();
 
     useEffect(() => {
 
@@ -26,26 +36,21 @@ function ManualSale() {
     }, []);
 
     const applyManualSale = async () => {
-
-        const response =
-            await fetch(
-                `${API_URL}/api/auction/manual-sale`,
-                {
-                    method: "POST",
-                    headers: {
-                        "Content-Type": "application/json"
-                    },
-                    body: JSON.stringify({
-                        playerName,
-                        newCaptain,
-                        newPrice: Number(newPrice)
-                    })
-                }
-            );
-
-        const result = await response.text();
-
-        setMessage(result);
+        const action = await runAction(
+            "Applying sale adjustment",
+            `${API_URL}/api/auction/manual-sale`,
+            {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ playerName, newCaptain, newPrice: Number(newPrice) }),
+            },
+            result => result === "Manual Sale Updated"
+        );
+        if (action.success) {
+            setPlayerName("");
+            setNewCaptain("");
+            setNewPrice("");
+        }
     };
 
     const cancelSale = async () => {
@@ -53,13 +58,18 @@ function ManualSale() {
             return;
         }
 
-        const response = await fetch(`${API_URL}/api/auction/cancel-sale`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ playerName })
-        });
-        setMessage(await response.text());
-        if (response.ok) {
+        const saleToCancel = playerName;
+        const action = await runAction(
+            "Cancelling sale",
+            `${API_URL}/api/auction/cancel-sale`,
+            {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ playerName: saleToCancel }),
+            },
+            result => result === `Sale cancelled for ${saleToCancel}`
+        );
+        if (action.success) {
             const refreshed = await fetch(`${API_URL}/api/players`);
             setPlayers(await refreshed.json());
             setPlayerName("");
@@ -83,6 +93,7 @@ function ManualSale() {
                     <select
                         className="select"
                         value={playerName}
+                        disabled={actionBusy || outcomeUnknown}
                         onChange={(e) =>
                             setPlayerName(e.target.value)
                         }
@@ -109,6 +120,7 @@ function ManualSale() {
                     <select
                         className="select"
                         value={newCaptain}
+                        disabled={actionBusy || outcomeUnknown}
                         onChange={(e) =>
                             setNewCaptain(e.target.value)
                         }
@@ -136,6 +148,7 @@ function ManualSale() {
                         className="input"
                         type="number"
                         value={newPrice}
+                        disabled={actionBusy || outcomeUnknown}
                         onChange={(e) =>
                             setNewPrice(e.target.value)
                         }
@@ -145,26 +158,26 @@ function ManualSale() {
                 <button
                     className="button"
                     onClick={applyManualSale}
-                    disabled={!playerName || !newCaptain || newPrice === ""}
+                    disabled={actionBusy || outcomeUnknown || !playerName || !newCaptain || newPrice === ""}
                 >
-                    APPLY ADJUSTMENT
+                    {pendingAction === "Applying sale adjustment" ? "Applying..." : "APPLY ADJUSTMENT"}
                 </button>
 
                 <button
                     className="button-secondary"
                     type="button"
                     onClick={cancelSale}
-                    disabled={!playerName || !players.find(player => player.name === playerName)?.sold}
+                    disabled={actionBusy || outcomeUnknown || !playerName || !players.find(player => player.name === playerName)?.sold}
                     style={{ marginTop: "12px" }}
                 >
-                    CANCEL SELECTED SALE
+                    {pendingAction === "Cancelling sale" ? "Cancelling..." : "CANCEL SELECTED SALE"}
                 </button>
 
-                {message && (
-                    <div className="message-success">
-                        {message}
-                    </div>
-                )}
+                <ActionFeedback
+                    feedback={feedback}
+                    onAcknowledge={refreshBeforeRetry}
+                    acknowledgementLabel="Refresh and re-enable controls"
+                />
 
             </div>
 

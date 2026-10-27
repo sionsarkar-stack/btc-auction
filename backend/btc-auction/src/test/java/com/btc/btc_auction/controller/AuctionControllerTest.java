@@ -13,6 +13,7 @@ import com.btc.btc_auction.service.CursePlayerService;
 import com.btc.btc_auction.service.PlayerService;
 import com.btc.btc_auction.service.TeamService;
 import jakarta.servlet.http.HttpSession;
+import com.btc.btc_auction.model.UpdateAuctionRequest;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -20,13 +21,16 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.server.ResponseStatusException;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.never;
 import java.util.List;
+import java.util.Map;
 
 @ExtendWith(MockitoExtension.class)
 class AuctionControllerTest {
@@ -94,6 +98,8 @@ class AuctionControllerTest {
 
     @Test
     void preventsAuctionStartUntilEveryCaptainHasTwoCursePicks() {
+        when(session.getAttribute(SessionAttributes.USERNAME)).thenReturn("admin");
+        when(session.getAttribute(SessionAttributes.ROLE)).thenReturn("ADMIN");
         AuctionConfigEntity config = new AuctionConfigEntity();
         PlayerEntity player = new PlayerEntity();
         TeamEntity team = new TeamEntity();
@@ -104,12 +110,66 @@ class AuctionControllerTest {
         when(cursePlayerService.areAllCaptainsReady(java.util.List.of(team))).thenReturn(false);
 
         assertEquals("Cannot start auction. Every captain must select two curse players first.",
-                controller.startAuction());
+                controller.startAuction(session));
         verify(auctionSocketService, never()).broadcastRefresh();
     }
 
     @Test
+    void rejectsAuctionControlWithoutAnAdminSession() {
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> controller.spinWheel(session));
+
+        assertEquals(HttpStatus.UNAUTHORIZED, exception.getStatusCode());
+        verify(auctionService, never()).spinWheel();
+    }
+
+    @Test
+    void rejectsAuctionControlForCaptainSession() {
+        when(session.getAttribute(SessionAttributes.USERNAME)).thenReturn("Sen");
+        when(session.getAttribute(SessionAttributes.ROLE)).thenReturn("CAPTAIN");
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> controller.spinWheel(session));
+
+        assertEquals(HttpStatus.FORBIDDEN, exception.getStatusCode());
+        verify(auctionService, never()).spinWheel();
+    }
+
+    @Test
+    void liveBidUsesTheAuthenticatedCaptainInsteadOfTheRequestName() {
+        when(session.getAttribute(SessionAttributes.USERNAME)).thenReturn("Sen");
+        when(session.getAttribute(SessionAttributes.ROLE)).thenReturn("CAPTAIN");
+        UpdateAuctionRequest request = new UpdateAuctionRequest();
+        request.setCaptainName("Joy");
+        request.setCurrentBid(500);
+        when(auctionService.updateCurrentAuction("Sen", 500)).thenReturn("Bid updated.");
+
+        assertEquals("Bid updated.", controller.updateCurrentAuction(request, session));
+
+        verify(auctionService).updateCurrentAuction("Sen", 500);
+    }
+
+    @Test
+    void blindOpeningBidUsesTheAuthenticatedCaptainInsteadOfTheRequestName() {
+        when(session.getAttribute(SessionAttributes.USERNAME)).thenReturn("Sen");
+        when(session.getAttribute(SessionAttributes.ROLE)).thenReturn("CAPTAIN");
+        Map<String, Object> request = Map.of(
+                "playerName", "Player X",
+                "captainName", "Joy",
+                "bidAmount", 500);
+        when(auctionService.submitBlindOpeningBid("Player X", "Sen", 500)).thenReturn("Bid submitted.");
+
+        assertEquals("Bid submitted.", controller.submitBlindOpeningBid(request, session));
+
+        verify(auctionService).submitBlindOpeningBid("Player X", "Sen", 500);
+    }
+
+    @Test
     void statusProvidesServerTimeAndTheSortedEligibleWalkoutRoster() {
+        when(session.getAttribute(SessionAttributes.USERNAME)).thenReturn("viewer");
+        when(session.getAttribute(SessionAttributes.ROLE)).thenReturn("VIEWER");
         AuctionConfigEntity config = new AuctionConfigEntity();
         config.setAuctionPhase(AuctionPhase.SPINNING);
         config.setAuctionRound(1);
@@ -120,11 +180,21 @@ class AuctionControllerTest {
         when(auctionConfigService.getConfig()).thenReturn(config);
         when(playerService.getUnsoldPlayers()).thenReturn(List.of(zulu, deferred, alpha));
 
-        AuctionConfigEntity status = controller.getStatus();
+        AuctionConfigEntity status = controller.getStatus(session);
 
         verify(auctionService).completeWheelSpinWhenDue();
         assertNotNull(status.getServerTime());
         assertEquals(List.of("Alpha", "Zulu"), status.getWalkoutPlayerNames());
+    }
+
+    @Test
+    void statusPollingCannotAdvanceAuctionWithoutAnAuthenticatedSession() {
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> controller.getStatus(session));
+
+        assertEquals(HttpStatus.UNAUTHORIZED, exception.getStatusCode());
+        verify(auctionService, never()).completeWheelSpinWhenDue();
     }
 
     private PlayerEntity player(String name) {

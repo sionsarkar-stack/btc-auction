@@ -13,6 +13,7 @@ import com.btc.btc_auction.service.ClubbedPlayerPairService;
 import com.btc.btc_auction.service.CursePlayerService;
 import com.btc.btc_auction.service.TeamService;
 import com.btc.btc_auction.service.PlayerService;
+import com.btc.btc_auction.security.SessionAuthorization;
 import com.btc.btc_auction.security.SessionAttributes;
 
 import jakarta.servlet.http.HttpSession;
@@ -22,6 +23,7 @@ import java.util.Objects;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
 
 @RestController
 @CrossOrigin(origins = {
@@ -65,17 +67,20 @@ public class AuctionController {
     }
 
     @PostMapping("/api/auction/spin-wheel")
-    public String spinWheel() {
+    public String spinWheel(HttpSession session) {
+        requireRole(session, "ADMIN", "Admin access required.");
         return auctionService.spinWheel();
     }
 
     @PostMapping("/api/auction/re-auction/start")
-    public String startReAuction() {
+    public String startReAuction(HttpSession session) {
+        requireRole(session, "ADMIN", "Admin access required.");
         return auctionService.startReAuction();
     }
 
     @PostMapping("/api/auction/re-auction/cancel")
-    public String cancelReAuction() {
+    public String cancelReAuction(HttpSession session) {
+        requireRole(session, "ADMIN", "Admin access required.");
         return auctionService.cancelReAuction();
     }
 
@@ -93,7 +98,8 @@ public class AuctionController {
     }
 
     @PostMapping("/api/auction/blind-opening-bid/start")
-    public String startBlindOpeningBid(@RequestBody java.util.Map<String, String> request) {
+    public String startBlindOpeningBid(@RequestBody java.util.Map<String, String> request, HttpSession session) {
+        requireRole(session, "ADMIN", "Admin access required.");
         String playerName = request.get("playerName");
         if (playerName == null || playerName.isBlank()) {
             return "Player name is required.";
@@ -102,23 +108,48 @@ public class AuctionController {
     }
 
     @GetMapping("/api/auction/blind-opening-bid/{playerName}/{captainName}")
-    public Object getBlindOpeningBid(@PathVariable String playerName, @PathVariable String captainName) {
+    public Object getBlindOpeningBid(
+            @PathVariable String playerName,
+            @PathVariable String captainName,
+            HttpSession session) {
+        requireCaptainOrAdmin(session);
+        if (!SessionAuthorization.hasRole(session, "ADMIN")
+                && !SessionAuthorization.getUsername(session).equalsIgnoreCase(captainName)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Captains can only view their own bid.");
+        }
         return auctionService.getBlindOpeningBid(playerName, captainName);
     }
 
     @GetMapping("/api/auction/blind-opening-bid/{playerName}")
-    public Object getAllBlindOpeningBids(@PathVariable String playerName) {
+    public Object getAllBlindOpeningBids(@PathVariable String playerName, HttpSession session) {
+        requireRole(session, "ADMIN", "Admin access required.");
         return auctionService.getAllBlindOpeningBids(playerName);
     }
 
+    @GetMapping("/api/auction/blind-opening-bid/{playerName}/all-passed")
+    public boolean allBlindOpeningBidsPassed(@PathVariable String playerName, HttpSession session) {
+        requireRole(session, "ADMIN", "Admin access required.");
+        return auctionService.allBlindOpeningBidsPassed(playerName);
+    }
+
+    @PostMapping("/api/auction/blind-opening-bid/reveal")
+    public String revealBlindOpeningBid(@RequestBody java.util.Map<String, String> request, HttpSession session) {
+        requireRole(session, "ADMIN", "Admin access required.");
+        String playerName = request.get("playerName");
+        if (playerName == null || playerName.isBlank()) {
+            return "Player name is required.";
+        }
+        return auctionService.revealBlindOpeningBid(playerName);
+    }
+
     @PostMapping("/api/auction/blind-opening-bid/submit")
-    public String submitBlindOpeningBid(@RequestBody java.util.Map<String, Object> request) {
+    public String submitBlindOpeningBid(@RequestBody java.util.Map<String, Object> request, HttpSession session) {
+        requireRole(session, "CAPTAIN", "Captain access required.");
         String playerName = (String) request.get("playerName");
-        String captainName = (String) request.get("captainName");
         Object rawBid = request.get("bidAmount");
 
-        if (playerName == null || playerName.isBlank() || captainName == null || captainName.isBlank()) {
-            return "Player and captain names are required.";
+        if (playerName == null || playerName.isBlank()) {
+            return "Player name is required.";
         }
 
         if (rawBid == null) {
@@ -132,38 +163,27 @@ public class AuctionController {
             return "Bid amount must be a valid number.";
         }
 
-        return auctionService.submitBlindOpeningBid(playerName, captainName, bidAmount);
+        return auctionService.submitBlindOpeningBid(
+                playerName, SessionAuthorization.getUsername(session), bidAmount);
     }
 
     @PostMapping("/api/auction/blind-opening-bid/pass")
-    public String passBlindOpeningBid(@RequestBody java.util.Map<String, String> request) {
+    public String passBlindOpeningBid(@RequestBody java.util.Map<String, String> request, HttpSession session) {
+        requireRole(session, "CAPTAIN", "Captain access required.");
         String playerName = request.get("playerName");
-        String captainName = request.get("captainName");
 
-        if (playerName == null || playerName.isBlank() || captainName == null || captainName.isBlank()) {
-            return "Player and captain names are required.";
-        }
-
-        return auctionService.passBlindOpeningBid(playerName, captainName);
-    }
-
-    @GetMapping("/api/auction/blind-opening-bid/{playerName}/all-passed")
-    public boolean allBlindOpeningBidsPassed(@PathVariable String playerName) {
-        return auctionService.allBlindOpeningBidsPassed(playerName);
-    }
-
-    @PostMapping("/api/auction/blind-opening-bid/reveal")
-    public String revealBlindOpeningBid(@RequestBody java.util.Map<String, String> request) {
-        String playerName = request.get("playerName");
         if (playerName == null || playerName.isBlank()) {
             return "Player name is required.";
         }
-        return auctionService.revealBlindOpeningBid(playerName);
+
+        return auctionService.passBlindOpeningBid(playerName, SessionAuthorization.getUsername(session));
     }
 
     @PostMapping("/api/auction/sold")
     public String sellPlayer(
-            @RequestBody SellPlayerRequest request) {
+            @RequestBody SellPlayerRequest request,
+            HttpSession session) {
+        requireRole(session, "ADMIN", "Admin access required.");
 
         return auctionService.sellPlayer(
                 request.getPlayerName(),
@@ -172,19 +192,23 @@ public class AuctionController {
     }
 
     @PostMapping("/api/auction/mark-unsold")
-    public String markUnsold() {
+    public String markUnsold(HttpSession session) {
+        requireRole(session, "ADMIN", "Admin access required.");
         return auctionService.markCurrentPlayerUnsold();
     }
 
     @PostMapping("/api/auction/undo")
-    public String undoSale() {
+    public String undoSale(HttpSession session) {
+        requireRole(session, "ADMIN", "Admin access required.");
 
         return auctionService.undoLastSale();
     }
 
     @PostMapping("/api/auction/manual-sale")
     public String manualSale(
-            @RequestBody ManualSaleRequest request) {
+            @RequestBody ManualSaleRequest request,
+            HttpSession session) {
+        requireRole(session, "ADMIN", "Admin access required.");
 
         return auctionService.manualSale(
                 request.getPlayerName(),
@@ -193,7 +217,8 @@ public class AuctionController {
     }
 
     @PostMapping("/api/auction/cancel-sale")
-    public String cancelSale(@RequestBody java.util.Map<String, String> request) {
+    public String cancelSale(@RequestBody java.util.Map<String, String> request, HttpSession session) {
+        requireRole(session, "ADMIN", "Admin access required.");
         String playerName = request.get("playerName");
         if (playerName == null || playerName.isBlank()) {
             return "Player name is required.";
@@ -202,13 +227,15 @@ public class AuctionController {
     }
 
     @PostMapping("/api/auction/reset")
-    public String resetAuction() {
+    public String resetAuction(HttpSession session) {
+        requireRole(session, "ADMIN", "Admin access required.");
 
         return auctionService.resetAuction();
     }
 
     @PostMapping("/api/auction/start")
-    public String startAuction() {
+    public String startAuction(HttpSession session) {
+        requireRole(session, "ADMIN", "Admin access required.");
 
         AuctionConfigEntity config = auctionConfigService.getConfig();
 
@@ -242,12 +269,14 @@ public class AuctionController {
     }
 
     @PostMapping("/api/auction/end")
-    public String endAuction() {
+    public String endAuction(HttpSession session) {
+        requireRole(session, "ADMIN", "Admin access required.");
         return auctionService.endAuction();
     }
 
     @GetMapping("/api/auction/status")
-    public AuctionConfigEntity getStatus() {
+    public AuctionConfigEntity getStatus(HttpSession session) {
+        requireAuthenticated(session);
         auctionService.completeWheelSpinWhenDue();
         AuctionConfigEntity config = auctionConfigService.getConfig();
         config.setServerTime(System.currentTimeMillis());
@@ -282,7 +311,9 @@ public class AuctionController {
 
     @PostMapping("/api/auction/call-sold")
     public String callSold(
-            @RequestBody(required = false) UpdateAuctionRequest request) {
+            @RequestBody(required = false) UpdateAuctionRequest request,
+            HttpSession session) {
+        requireRole(session, "ADMIN", "Admin access required.");
 
         if (request == null) {
             return auctionService.callSold();
@@ -296,15 +327,22 @@ public class AuctionController {
 
     @PostMapping("/api/auction/update-current")
     public String updateCurrentAuction(
-            @RequestBody UpdateAuctionRequest request) {
+            @RequestBody UpdateAuctionRequest request,
+            HttpSession session) {
+        requireCaptainOrAdmin(session);
+
+        String captainName = SessionAuthorization.hasRole(session, "ADMIN")
+                ? request.getCaptainName()
+                : SessionAuthorization.getUsername(session);
 
         return auctionService.updateCurrentAuction(
-                request.getCaptainName(),
+                captainName,
                 request.getCurrentBid());
     }
 
     @PostMapping("/api/auction/random-event")
-    public String triggerRandomEvent() {
+    public String triggerRandomEvent(HttpSession session) {
+        requireRole(session, "ADMIN", "Admin access required.");
         return auctionService.triggerRandomEventNow();
     }
 
@@ -314,7 +352,8 @@ public class AuctionController {
     }
 
     @PostMapping("/api/auction/clubbed-pair")
-    public String createClubbedPair(@RequestBody java.util.Map<String, String> request) {
+    public String createClubbedPair(@RequestBody java.util.Map<String, String> request, HttpSession session) {
+        requireRole(session, "ADMIN", "Admin access required.");
         String playerOne = request.get("playerOne");
         String playerTwo = request.get("playerTwo");
 
@@ -340,14 +379,40 @@ public class AuctionController {
     }
 
     @DeleteMapping("/api/auction/clubbed-pair")
-    public String clearClubbedPair() {
+    public String clearClubbedPair(HttpSession session) {
+        requireRole(session, "ADMIN", "Admin access required.");
         clubbedPlayerPairService.clearPair();
         return "A + C pair cleared.";
     }
 
     @DeleteMapping("/api/auction/clubbed-pair/{id}")
-    public String deleteClubbedPair(@PathVariable Long id) {
+    public String deleteClubbedPair(@PathVariable Long id, HttpSession session) {
+        requireRole(session, "ADMIN", "Admin access required.");
         clubbedPlayerPairService.deletePair(id);
         return "A + C pair deleted.";
+    }
+
+    private void requireRole(HttpSession session, String expectedRole, String message) {
+        ResponseEntity<String> authorization = SessionAuthorization.requireRole(session, expectedRole, message);
+        if (authorization != null) {
+            throw new ResponseStatusException(
+                    HttpStatus.valueOf(authorization.getStatusCode().value()), authorization.getBody());
+        }
+    }
+
+    private void requireAuthenticated(HttpSession session) {
+        ResponseEntity<String> authorization = SessionAuthorization.requireAuthenticated(session);
+        if (authorization != null) {
+            throw new ResponseStatusException(
+                    HttpStatus.valueOf(authorization.getStatusCode().value()), authorization.getBody());
+        }
+    }
+
+    private void requireCaptainOrAdmin(HttpSession session) {
+        requireAuthenticated(session);
+        if (!SessionAuthorization.hasRole(session, "CAPTAIN")
+                && !SessionAuthorization.hasRole(session, "ADMIN")) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Captain or admin access required.");
+        }
     }
 }

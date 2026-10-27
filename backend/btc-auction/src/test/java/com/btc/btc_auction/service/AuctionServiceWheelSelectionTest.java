@@ -195,6 +195,15 @@ class AuctionServiceWheelSelectionTest {
     }
 
     @Test
+    void callSoldKeepsUnresolvedRtmClaimAvailable() {
+        currentAuctionService.setCurrentAuction(new Auction("Rohit Sharma", "A", 300, "Sen", 300));
+
+        assertEquals("Waiting for RTM.", auctionService.callSold());
+
+        verify(rtmService, never()).clearCurrentAuctionClaim();
+    }
+
+    @Test
     void settlesCurseAndBlindBonusUsingFinalMarketAdjustedSalePrice() {
         TeamEntity team = new TeamEntity();
         team.setCaptainName("Sen");

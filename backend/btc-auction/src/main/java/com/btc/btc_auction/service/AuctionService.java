@@ -1488,8 +1488,6 @@ public class AuctionService {
 
                 RandomEventEntity marketCrash = triggerMarketCrashForCurrentPlayer(auction, config);
 
-                rtmService.clearCurrentAuctionClaim();
-
                 config.setAuctionPhase(AuctionPhase.SOLD);
 
                 auctionConfigService.save(config);

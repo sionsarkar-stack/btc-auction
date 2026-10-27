@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 
-function EventOverlay({ event }) {
+function EventOverlay({ event, onDismiss }) {
 
     let icon = "📣";
     let title = "AUCTION UPDATE";
@@ -198,28 +198,40 @@ function EventOverlay({ event }) {
 
             <div className="event-card">
 
-                <div className="event-icon">
+                <button
+                    className="event-overlay-dismiss"
+                    type="button"
+                    onClick={onDismiss}
+                    aria-label="Dismiss event announcement"
+                    title="Dismiss announcement"
+                >
+                    ×
+                </button>
 
-                    {icon}
+                <div className="event-overlay-content" role="status" aria-live="polite">
+                    <div className="event-icon">
 
-                </div>
+                        {icon}
 
-                <div className="event-title">
+                    </div>
 
-                    {title}
+                    <div className="event-title">
 
-                </div>
+                        {title}
 
-                <div className="event-captain">
+                    </div>
 
-                    {captain}
+                    <div className="event-captain">
 
-                </div>
+                        {captain}
 
-                <div className="event-message">
+                    </div>
 
-                    {message}
+                    <div className="event-message">
 
+                        {message}
+
+                    </div>
                 </div>
 
             </div>
