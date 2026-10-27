@@ -233,7 +233,7 @@ function App() {
           )}
 
           {role === "ADMIN" && (
-            <details className={`app-nav-menu app-nav-settings-menu${["settings", "import-players", "captain-management"].includes(screen) ? " is-current" : ""}`}>
+            <details name="admin-navigation" className={`app-nav-menu app-nav-settings-menu${["settings", "import-players", "captain-management"].includes(screen) ? " is-current" : ""}`}>
               <summary className="app-nav-menu-trigger">
                 <span>Settings</span>
                 <span className="app-nav-menu-chevron" aria-hidden="true">⌄</span>
@@ -265,7 +265,7 @@ function App() {
           )}
 
           {role === "ADMIN" && (
-            <details className={`app-nav-menu app-nav-manage-menu${["manual-sale", "admin-logs"].includes(screen) ? " is-current" : ""}`}>
+            <details name="admin-navigation" className={`app-nav-menu app-nav-manage-menu${["manual-sale", "admin-logs"].includes(screen) ? " is-current" : ""}`}>
               <summary className="app-nav-menu-trigger">
                 <span>Manage</span>
                 <span className="app-nav-menu-chevron" aria-hidden="true">⌄</span>

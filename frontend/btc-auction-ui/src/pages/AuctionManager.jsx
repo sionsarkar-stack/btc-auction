@@ -8,6 +8,7 @@ import PlayerWalkout from "../components/PlayerWalkout";
 import LiveActivity from "../components/LiveActivity";
 import ActionFeedback from "../services/ActionFeedback";
 import { useActionRequest } from "../services/useActionRequest";
+import { apiRequest } from "../services/apiClient";
 
 function AuctionManager() {
 
@@ -21,6 +22,9 @@ function AuctionManager() {
     const [callSoldPlayer, setCallSoldPlayer] = useState(null);
 
     const [message, setMessage] = useState("");
+    const [isManagerDataReady, setIsManagerDataReady] = useState(false);
+    const [isManagerDataLoading, setIsManagerDataLoading] = useState(true);
+    const [managerDataError, setManagerDataError] = useState("");
 
     const [clubbedPairs, setClubbedPairs] = useState([]);
     const [randomEvents, setRandomEvents] = useState([]);
@@ -44,60 +48,31 @@ function AuctionManager() {
     const previousNominatedPlayer = useRef(null);
 
     const loadData = useCallback(async () => {
-
+        setIsManagerDataLoading(true);
         try {
+            const [teamsData, playersData, currentAuction, statusData, curseReadiness, clubbedPairData, randomEventsData, eventsData] = await Promise.all([
+                apiRequest("/api/teams"),
+                apiRequest("/api/players/available"),
+                apiRequest("/api/auction/current"),
+                apiRequest("/api/auction/status"),
+                apiRequest("/api/curse-players/readiness"),
+                apiRequest("/api/auction/clubbed-pair"),
+                apiRequest("/api/random-events"),
+                apiRequest("/api/events"),
+            ]);
 
-            const teamsResponse = await fetch(
-                `${API_URL}/api/teams`
-            );
+            if (!Array.isArray(teamsData) || !Array.isArray(playersData) || !Array.isArray(eventsData)) {
+                throw new Error("The server returned invalid captain, player, or event data. Retry the refresh.");
+            }
 
-            const playersResponse = await fetch(
-                `${API_URL}/api/players/available`
-            );
-
-            const currentAuctionResponse = await fetch(
-                `${API_URL}/api/auction/current`
-            );
-
-            const statusResponse = await fetch(`${API_URL}/api/auction/status`);
-            const curseReadinessResponse = await fetch(`${API_URL}/api/curse-players/readiness`);
-            const clubbedPairResponse = await fetch(
-                `${API_URL}/api/auction/clubbed-pair`
-            );
-
-            const randomEventsResponse = await fetch(
-                `${API_URL}/api/random-events`
-            );
-
-            const eventsResponse = await fetch(`${API_URL}/api/events`);
-
-            const teamsData =
-                await teamsResponse.json();
-
-            const playersData =
-                await playersResponse.json();
-
-            const currentAuction =
-                await currentAuctionResponse.json();
-
-            const statusData = await statusResponse.json();
-            const curseReadiness = await curseReadinessResponse.json();
             const nominatedPlayer = currentAuction?.currentPlayer;
-            const allPassed = statusData?.auctionPhase === "BLIND_OPENING_BID" && nominatedPlayer
-                ? await fetch(`${API_URL}/api/auction/blind-opening-bid/${encodeURIComponent(nominatedPlayer)}/all-passed`)
-                    .then(response => response.json())
-                : false;
-            const currentOpeningBids = statusData?.auctionPhase === "BLIND_OPENING_BID" && nominatedPlayer
-                ? await fetch(`${API_URL}/api/auction/blind-opening-bid/${encodeURIComponent(nominatedPlayer)}`)
-                    .then(response => response.json())
-                : [];
-            const clubbedPairData =
-                await clubbedPairResponse.json();
+            const [allPassed, currentOpeningBids] = statusData?.auctionPhase === "BLIND_OPENING_BID" && nominatedPlayer
+                ? await Promise.all([
+                    apiRequest(`/api/auction/blind-opening-bid/${encodeURIComponent(nominatedPlayer)}/all-passed`),
+                    apiRequest(`/api/auction/blind-opening-bid/${encodeURIComponent(nominatedPlayer)}`),
+                ])
+                : [false, []];
 
-            const randomEventsData =
-                await randomEventsResponse.json();
-
-            const eventsData = await eventsResponse.json();
             const latestEvent = eventsData.length > 0
                 ? eventsData[eventsData.length - 1]
                 : null;
@@ -134,16 +109,18 @@ function AuctionManager() {
             setOpeningBids(Array.isArray(currentOpeningBids) ? currentOpeningBids : []);
             setClubbedPairs(Array.isArray(clubbedPairData) ? clubbedPairData : []);
             setRandomEvents(randomEventsData);
+            setManagerDataError("");
+            setIsManagerDataReady(true);
             return true;
         } catch (error) {
-
             console.error(error);
-
-            setMessage(
-                "Unable to load data."
-            );
+            const errorMessage = error.message || "Unable to load auction data. Retry the refresh.";
+            setManagerDataError(errorMessage);
+            setIsManagerDataReady(false);
+            setMessage(errorMessage);
             return false;
-
+        } finally {
+            setIsManagerDataLoading(false);
         }
     }, []);
 
@@ -353,11 +330,20 @@ function AuctionManager() {
     };
 
     const autoSelectCursePlayers = async () => {
+        if (!canAutoSelectCurses) {
+            setMessage(autoSelectRequirement || "Add at least one captain and two available players first.");
+            return;
+        }
+
         setIsBusy(true);
         try {
-            const response = await fetch(`${API_URL}/api/curse-players/auto-select`, { method: "POST" });
-            setMessage(await response.text());
-            await loadData();
+            const result = await apiRequest("/api/curse-players/auto-select", { method: "POST" });
+            setMessage(result);
+            if (result === "Two curse players were auto-selected for every captain.") {
+                await loadData();
+            }
+        } catch (error) {
+            setMessage(error.message || "Unable to auto-select curse players.");
         } finally {
             setIsBusy(false);
         }
@@ -470,8 +456,21 @@ function AuctionManager() {
     );
     const isWheelSpinning = auctionStatus?.auctionPhase === "SPINNING";
     const cursesReady = auctionStatus?.curseSelectionEnabled
+        && isManagerDataReady
         && teams.length > 0
         && teams.every(team => curseSelectionCounts[team.captainName] === 2);
+    const messageIsError = /unable|cannot|required|at least|not found|failed|must/i.test(message);
+    const availableCursePlayerCount = players.filter(player => !player.sold && !player.deferredToReAuction).length;
+    const canAutoSelectCurses = isManagerDataReady
+        && !isManagerDataLoading
+        && teams.length > 0
+        && availableCursePlayerCount >= 2;
+    const autoSelectRequirements = [
+        !isManagerDataReady && isManagerDataLoading ? "Checking captain and player data..." : null,
+        isManagerDataReady && teams.length === 0 ? "Add at least one captain before bypassing curse selection." : null,
+        isManagerDataReady && availableCursePlayerCount < 2 ? "Import at least two available players before bypassing curse selection." : null,
+    ].filter(Boolean);
+    const autoSelectRequirement = autoSelectRequirements.join(" ");
 
     return (
         <>
@@ -494,7 +493,7 @@ function AuctionManager() {
                         <button
                             className="button"
                             onClick={startAuction}
-                            disabled={isBusy || !cursesReady}
+                            disabled={isBusy || !isManagerDataReady || !cursesReady}
                         >
                             🚀 Start Auction
                         </button>
@@ -503,7 +502,7 @@ function AuctionManager() {
                             className="button-secondary"
                             type="button"
                             onClick={enableCurseSelection}
-                            disabled={isBusy || auctionStatus?.curseSelectionEnabled || auctionStatus?.auctionStarted}
+                            disabled={isBusy || !isManagerDataReady || availableCursePlayerCount < 2 || auctionStatus?.curseSelectionEnabled || auctionStatus?.auctionStarted}
                         >
                             Enable Curse Selection
                         </button>
@@ -512,10 +511,26 @@ function AuctionManager() {
                             className="button-secondary"
                             type="button"
                             onClick={autoSelectCursePlayers}
-                            disabled={isBusy || auctionStatus?.auctionStarted}
+                            disabled={actionBusy || !canAutoSelectCurses || auctionStatus?.auctionStarted}
                         >
                             Bypass: Auto-select Curses
                         </button>
+
+                        {!auctionStatus?.auctionStarted && autoSelectRequirement && (
+                            <p className={isManagerDataReady ? "message-error" : "form-hint"}
+                                role={isManagerDataReady ? "alert" : "status"}>
+                                {autoSelectRequirement}
+                            </p>
+                        )}
+
+                        {managerDataError && (
+                            <div className="message-error" role="alert">
+                                <span>{managerDataError}</span>
+                                <button className="button-secondary" type="button" onClick={loadData} disabled={isManagerDataLoading}>
+                                    {isManagerDataLoading ? "Retrying..." : "Retry data refresh"}
+                                </button>
+                            </div>
+                        )}
 
                         {cursesReady && (
                             <div className="message-success protection-ready-message">
@@ -907,12 +922,7 @@ function AuctionManager() {
 
                         <div
                             className={
-                                message
-                                    .includes(
-                                        "Unable"
-                                    )
-                                    ? "message-error"
-                                    : "message-success"
+                                messageIsError ? "message-error" : "message-success"
                             }
                         >
                             {message}

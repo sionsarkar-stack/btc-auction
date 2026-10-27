@@ -155,6 +155,80 @@ test("reset clears auction state and requires new curse picks", async ({ browser
     }
 });
 
+test("admin navigation menus collapse each other", async ({ browser }) => {
+    const admin = await login(browser, "auctioneer", "Sarkar");
+    const settingsMenu = admin.page.locator(".app-nav-settings-menu");
+    const manageMenu = admin.page.locator(".app-nav-manage-menu");
+
+    try {
+        await admin.page.locator(".app-nav-settings-menu > summary").click();
+        await expect(settingsMenu).toHaveJSProperty("open", true);
+
+        await admin.page.locator(".app-nav-manage-menu > summary").click();
+        await expect(manageMenu).toHaveJSProperty("open", true);
+        await expect(settingsMenu).toHaveJSProperty("open", false);
+
+        await admin.page.locator(".app-nav-settings-menu > summary").click();
+        await expect(settingsMenu).toHaveJSProperty("open", true);
+        await expect(manageMenu).toHaveJSProperty("open", false);
+    } finally {
+        await closeContexts(admin.context);
+    }
+});
+
+test("bypass curse explains when no captain is configured", async ({ browser, request }) => {
+    await assertSuccessful(await request.post(`${BACKEND_URL}/api/auction/reset`));
+    const admin = await login(browser, "auctioneer", "Sarkar");
+
+    try {
+        await admin.page.route("**/api/teams", route => route.fulfill({ json: [] }));
+        await admin.page.getByRole("button", { name: "BTC Control Room" }).click();
+
+        const bypassButton = admin.page.getByRole("button", { name: "Bypass: Auto-select Curses" });
+        await expect(bypassButton).toBeDisabled();
+        await expect(admin.page.getByText("Add at least one captain before bypassing curse selection.")).toBeVisible();
+    } finally {
+        await closeContexts(admin.context);
+    }
+});
+
+test("bypass curse stays disabled when no players are imported", async ({ browser, request }) => {
+    await assertSuccessful(await request.post(`${BACKEND_URL}/api/auction/reset`));
+    const admin = await login(browser, "auctioneer", "Sarkar");
+
+    try {
+        await admin.page.route("**/api/players/available", route => route.fulfill({ json: [] }));
+        await admin.page.getByRole("button", { name: "BTC Control Room" }).click();
+
+        const bypassButton = admin.page.getByRole("button", { name: "Bypass: Auto-select Curses" });
+        await expect(bypassButton).toBeDisabled();
+        await expect(admin.page.getByRole("alert")).toContainText("Import at least two available players");
+        await expect(admin.page.getByRole("button", { name: "🚀 Start Auction" })).toBeDisabled();
+    } finally {
+        await closeContexts(admin.context);
+    }
+});
+
+test("manager keeps curse actions disabled when player data fails to load", async ({ browser, request }) => {
+    await assertSuccessful(await request.post(`${BACKEND_URL}/api/auction/reset`));
+    const admin = await login(browser, "auctioneer", "Sarkar");
+
+    try {
+        await admin.page.route("**/api/players/available", route => route.fulfill({
+            status: 503,
+            contentType: "application/json",
+            body: JSON.stringify({ message: "Player database is unavailable." }),
+        }));
+        await admin.page.getByRole("button", { name: "BTC Control Room" }).click();
+
+        await expect(admin.page.getByRole("alert")).toContainText("Player database is unavailable.");
+        await expect(admin.page.getByRole("button", { name: "Bypass: Auto-select Curses" })).toBeDisabled();
+        await expect(admin.page.getByRole("button", { name: "🚀 Start Auction" })).toBeDisabled();
+    } finally {
+        await closeContexts(admin.context);
+    }
+});
+
 test("walks every screen through the same nomination reveal", async ({ browser }) => {
     test.setTimeout(60_000);
     const admin = await login(browser, "auctioneer", "Sarkar");
