@@ -8,10 +8,7 @@ import com.btc.btc_auction.model.SellPlayerRequest;
 import com.btc.btc_auction.model.UpdateAuctionRequest;
 import com.btc.btc_auction.service.AuctionConfigService;
 import com.btc.btc_auction.service.AuctionService;
-import com.btc.btc_auction.service.AuctionSocketService;
 import com.btc.btc_auction.service.ClubbedPlayerPairService;
-import com.btc.btc_auction.service.CursePlayerService;
-import com.btc.btc_auction.service.TeamService;
 import com.btc.btc_auction.service.PlayerService;
 import com.btc.btc_auction.security.SessionAuthorization;
 import com.btc.btc_auction.security.SessionAttributes;
@@ -39,26 +36,16 @@ public class AuctionController {
 
     private final AuctionConfigService auctionConfigService;
 
-    private final AuctionSocketService auctionSocketService;
-
-    private final TeamService teamService;
-
     private final PlayerService playerService;
 
     private final ClubbedPlayerPairService clubbedPlayerPairService;
-    private final CursePlayerService cursePlayerService;
 
     public AuctionController(AuctionService auctionService, AuctionConfigService auctionConfigService,
-            AuctionSocketService auctionSocketService, TeamService teamService,
-            ClubbedPlayerPairService clubbedPlayerPairService, PlayerService playerService,
-            CursePlayerService cursePlayerService) {
+            ClubbedPlayerPairService clubbedPlayerPairService, PlayerService playerService) {
         this.auctionService = auctionService;
         this.auctionConfigService = auctionConfigService;
-        this.auctionSocketService = auctionSocketService;
-        this.teamService = teamService;
         this.playerService = playerService;
         this.clubbedPlayerPairService = clubbedPlayerPairService;
-        this.cursePlayerService = cursePlayerService;
     }
 
     @GetMapping("/api/auction/current")
@@ -236,36 +223,50 @@ public class AuctionController {
     @PostMapping("/api/auction/start")
     public String startAuction(HttpSession session) {
         requireRole(session, "ADMIN", "Admin access required.");
+        return auctionService.startNominationAuction();
+    }
 
-        AuctionConfigEntity config = auctionConfigService.getConfig();
-
-        if (config.isAuctionStarted()) {
-
-            return "Auction already started.";
-
+    @PostMapping("/api/auction/nominate")
+    public String nominatePlayer(@RequestBody java.util.Map<String, String> request, HttpSession session) {
+        requireRole(session, "CAPTAIN", "Captain access required.");
+        String playerName = request.get("playerName");
+        if (playerName == null || playerName.isBlank()) {
+            return "Player name is required.";
         }
+        return auctionService.nominatePlayer(playerName, SessionAuthorization.getUsername(session));
+    }
 
-        int playerCount = playerService.getAllPlayers().size();
-        if (playerCount == 0) {
-            return "Cannot start auction. No players found.";
+    @PostMapping("/api/auction/bid/increase")
+    public String increaseLiveBid(HttpSession session) {
+        requireRole(session, "CAPTAIN", "Captain access required.");
+        return auctionService.increaseLiveBid(SessionAuthorization.getUsername(session));
+    }
+
+    @PostMapping("/api/auction/bid/custom")
+    public String placeCustomLiveBid(@RequestBody java.util.Map<String, Object> request, HttpSession session) {
+        requireRole(session, "CAPTAIN", "Captain access required.");
+        Object rawBid = request.get("bidAmount");
+        if (rawBid == null) {
+            return "Enter a valid bid amount.";
         }
-
-        List<com.btc.btc_auction.entity.TeamEntity> configuredTeams = teamService.getAllTeams();
-        if (configuredTeams.isEmpty()) {
-            return "Cannot start auction. Configure captain teams first.";
+        try {
+            return auctionService.placeCustomLiveBid(
+                    SessionAuthorization.getUsername(session), Integer.parseInt(rawBid.toString()));
+        } catch (NumberFormatException exception) {
+            return "Bid amount must be a whole number.";
         }
+    }
 
-        if (!cursePlayerService.areAllCaptainsReady(configuredTeams)) {
-            return "Cannot start auction. Every captain must select two curse players first.";
-        }
+    @PostMapping("/api/auction/bid/pass")
+    public String passOnPlayer(HttpSession session) {
+        requireRole(session, "CAPTAIN", "Captain access required.");
+        return auctionService.passOnPlayer(SessionAuthorization.getUsername(session));
+    }
 
-        config.setAuctionStarted(true);
-
-        auctionConfigService.save(config);
-
-        auctionSocketService.broadcastRefresh();
-
-        return "Auction Started Successfully.";
+    @PostMapping("/api/auction/timeout")
+    public String callAuctionTimeout(HttpSession session) {
+        requireRole(session, "CAPTAIN", "Captain access required.");
+        return auctionService.callAuctionTimeout(SessionAuthorization.getUsername(session));
     }
 
     @PostMapping("/api/auction/end")

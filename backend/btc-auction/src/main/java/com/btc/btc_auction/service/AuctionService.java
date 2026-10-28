@@ -31,6 +31,12 @@ public class AuctionService {
         private static final long WHEEL_SPIN_MIN_DURATION_MILLIS = 5000;
         private static final long WHEEL_SPIN_MAX_DURATION_MILLIS = 7000;
         private static final int WHEEL_SPIN_MAX_PLAYERS = 35;
+        private static final int LIVE_BID_INCREMENT = 50;
+        private static final int PASSES_TO_CLOSE_LOT = 3;
+        private static final int CAPTAIN_TIMEOUT_LIMIT = 3;
+        private static final long CAPTAIN_TIMEOUT_MILLIS = 45_000;
+        private static final int AUCTIONS_PER_BREAK = 18;
+        private static final long AUCTION_BREAK_MILLIS = 180_000;
         @Value("${btc.auction.random-event-probability:0.75}")
         private double randomEventProbability = RANDOM_EVENT_PROBABILITY;
 
@@ -221,6 +227,439 @@ public class AuctionService {
 
         }
 
+        public synchronized String startNominationAuction() {
+                AuctionConfigEntity config = auctionConfigService.getConfig();
+                List<TeamEntity> captains = orderedCaptains();
+                if (captains.isEmpty()) {
+                        return "Add at least one captain before starting the auction.";
+                }
+                if (playerService.getUnsoldPlayers().isEmpty()) {
+                        return "Import at least one available player before starting the auction.";
+                }
+                if (config.isAuctionStarted()) {
+                        return "Auction already started.";
+                }
+
+                config.setAuctionStarted(true);
+                config.setAuctionRound(1);
+                config.setNextNominationCaptain(captains.get(0).getCaptainName());
+                config.setBidDeadlineAt(null);
+                config.setAuctionsSinceLastBreak(0);
+                config.setAuctionBreakEndsAt(null);
+                clearTimeoutState(config, true);
+                config.getPassedCaptains().clear();
+                config.setAuctionPhase(AuctionPhase.NO_AUCTION);
+                auctionConfigService.save(config);
+                auctionSocketService.broadcastRefresh();
+                return "Auction started. " + captains.get(0).getCaptainName() + " nominates first.";
+        }
+
+        public synchronized String nominatePlayer(String playerName, String captainName) {
+                AuctionConfigEntity config = auctionConfigService.getConfig();
+                if (config.getAuctionBreakEndsAt() != null) {
+                        if (System.currentTimeMillis() < config.getAuctionBreakEndsAt()) {
+                                return "The auction is on a scheduled three-minute break.";
+                        }
+                        finishAuctionBreak(config);
+                }
+                Auction activeAuction = currentAuctionService.getCurrentAuction();
+                if (!config.isAuctionStarted()) {
+                        return "Start the auction before nominating a player.";
+                }
+                if (activeAuction != null && !activeAuction.getCurrentPlayer().isBlank()) {
+                        return "Finish the current player before nominating another.";
+                }
+                List<TeamEntity> captains = orderedCaptains();
+                if (captains.isEmpty()) {
+                        return "Add at least one captain before nominating a player.";
+                }
+                if (config.getNextNominationCaptain() == null || config.getNextNominationCaptain().isBlank()) {
+                        config.setNextNominationCaptain(captains.get(0).getCaptainName());
+                }
+                if (!config.getNextNominationCaptain().equalsIgnoreCase(captainName)) {
+                        return "It is " + config.getNextNominationCaptain() + "'s turn to nominate.";
+                }
+                PlayerEntity player = playerService.getPlayer(playerName);
+                if (player == null || player.isSold() || player.isDeferredToReAuction()) {
+                        return "Select an available player.";
+                }
+
+                currentAuctionService.setCurrentAuction(new Auction(
+                                player.getName(), player.getSeed(), player.getBasePrice(), "None",
+                                player.getBasePrice()));
+                config.setAuctionPhase(AuctionPhase.BIDDING);
+                config.setBidDeadlineAt(null);
+                config.getPassedCaptains().clear();
+                auctionConfigService.save(config);
+                auctionEventService.logEvent("PLAYER_NOMINATED", player.getName(), captainName, player.getBasePrice(),
+                                captainName + " nominated " + player.getName() + " at the CSV base price.");
+                auctionSocketService.broadcastRefresh();
+                return player.getName() + " nominated at ₹" + player.getBasePrice() + ".";
+        }
+
+        public synchronized String increaseLiveBid(String captainName) {
+                Auction auction = currentAuctionService.getCurrentAuction();
+                if (auction == null) {
+                        return "No live bidding is active.";
+                }
+                return placeLiveBid(captainName, auction.getCurrentBid() + LIVE_BID_INCREMENT, false);
+        }
+
+        public synchronized String placeCustomLiveBid(String captainName, Integer bidAmount) {
+                if (bidAmount == null) {
+                        return "Enter a valid bid amount.";
+                }
+                return placeLiveBid(captainName, bidAmount, true);
+        }
+
+        public int calculateMaxBid(TeamEntity team) {
+                if (team == null || team.getPlayersLeft() <= 0) {
+                        return 0;
+                }
+                return Math.max(0, team.getPurse() - ((team.getPlayersLeft() - 1) * 100));
+        }
+
+        private String placeLiveBid(String captainName, int bidAmount, boolean customBid) {
+                resolveLiveAuctionWhenDue();
+                Auction auction = currentAuctionService.getCurrentAuction();
+                AuctionConfigEntity config = auctionConfigService.getConfig();
+                if (auction == null || auction.getCurrentPlayer().isBlank()
+                                || config.getAuctionPhase() != AuctionPhase.BIDDING) {
+                        return "No live bidding is active.";
+                }
+                if (isTimeoutActive(config)) {
+                        return "Bidding is paused during " + config.getTimeoutCaptainName() + "'s timeout.";
+                }
+                TeamEntity team = teamService.getTeam(captainName);
+                if (team == null) {
+                        return "Captain not found.";
+                }
+                if (auction.getLeader().equalsIgnoreCase(captainName)) {
+                        return "You already hold the highest bid.";
+                }
+                if (bidAmount <= auction.getCurrentBid()) {
+                        return "Bid must be greater than the current bid of ₹" + auction.getCurrentBid() + ".";
+                }
+                if (customBid && bidAmount % LIVE_BID_INCREMENT != 0) {
+                        return "Custom bid must be a multiple of ₹50.";
+                }
+
+                int maxBid = calculateMaxBid(team);
+                if (bidAmount > maxBid) {
+                        return "Maximum bid is ₹" + maxBid + " based on remaining points and squad slots.";
+                }
+
+                auction.setCurrentBid(bidAmount);
+                auction.setLeader(captainName);
+                removeCaptain(config.getPassedCaptains(), team.getCaptainName());
+                currentAuctionService.saveCurrentAuction();
+                config.setBidDeadlineAt(System.currentTimeMillis() + bidWindowMillis(config));
+                auctionConfigService.save(config);
+                auctionEventService.logEvent("LIVE_BID_INCREASED", auction.getCurrentPlayer(), captainName,
+                                bidAmount, captainName + " placed a live bid.");
+                auctionSocketService.broadcastRefresh();
+                return "Bid increased to ₹" + bidAmount + ".";
+        }
+
+        @Transactional
+        public synchronized String passOnPlayer(String captainName) {
+                resolveLiveAuctionWhenDue();
+                Auction auction = currentAuctionService.getCurrentAuction();
+                AuctionConfigEntity config = auctionConfigService.getConfig();
+                if (auction == null || auction.getCurrentPlayer().isBlank()
+                                || config.getAuctionPhase() != AuctionPhase.BIDDING) {
+                        return "No live bidding is active.";
+                }
+                if (isTimeoutActive(config)) {
+                        return "Bidding is paused during " + config.getTimeoutCaptainName() + "'s timeout.";
+                }
+                TeamEntity team = teamService.getTeam(captainName);
+                if (team == null) {
+                        return "Captain not found.";
+                }
+                String teamCaptainName = team.getCaptainName();
+                if (removeCaptain(config.getPassedCaptains(), teamCaptainName)) {
+                        auctionConfigService.save(config);
+                        auctionEventService.logEvent("LIVE_BID_PASS_WITHDRAWN", auction.getCurrentPlayer(),
+                                        teamCaptainName, 0, teamCaptainName + " rejoined bidding.");
+                        auctionSocketService.broadcastRefresh();
+                        return "Pass withdrawn. You can bid again.";
+                }
+
+                config.getPassedCaptains().add(teamCaptainName);
+                if (config.getPassedCaptains().size() >= PASSES_TO_CLOSE_LOT) {
+                        String playerName = auction.getCurrentPlayer();
+                        String leader = auction.getLeader();
+                        int currentBid = auction.getCurrentBid();
+                        if (leader != null && !leader.isBlank() && !"None".equalsIgnoreCase(leader)) {
+                                if (finalizeNominationSale(playerName, leader, currentBid, config)) {
+                                        return PASSES_TO_CLOSE_LOT + " captains passed. " + playerName
+                                                        + " sold to " + leader + " for ₹" + currentBid + ".";
+                                }
+                                return "Could not finalize the current player sale.";
+                        }
+
+                        advanceNominationTurn(config);
+                        auctionEventService.logEvent("PLAYER_UNSOLD", playerName, null, 0,
+                                        "Three captains passed and no bids were placed.");
+                        recordCompletedAuction(config, playerName);
+                        clearLiveAuctionState(config);
+                        auctionSocketService.broadcastRefresh();
+                        return "Three captains passed with no bids. " + playerName + " marked unsold.";
+                }
+
+                if (auction.getLeader().isBlank() || "None".equalsIgnoreCase(auction.getLeader())) {
+                        if (allCaptainsPassed(config)) {
+                                config.setBidDeadlineAt(System.currentTimeMillis() + bidWindowMillis(config));
+                        }
+                } else if (allOtherCaptainsPassed(config, auction.getLeader())) {
+                        config.setBidDeadlineAt(System.currentTimeMillis() + bidWindowMillis(config));
+                }
+                auctionConfigService.save(config);
+                auctionEventService.logEvent("LIVE_BID_PASSED", auction.getCurrentPlayer(), captainName, 0,
+                                captainName + " passed on " + auction.getCurrentPlayer() + ".");
+                auctionSocketService.broadcastRefresh();
+                return "Passed on " + auction.getCurrentPlayer() + ".";
+        }
+
+        public synchronized String callAuctionTimeout(String captainName) {
+                resolveLiveAuctionWhenDue();
+                AuctionConfigEntity config = auctionConfigService.getConfig();
+                Auction auction = currentAuctionService.getCurrentAuction();
+                if (auction == null || auction.getCurrentPlayer().isBlank()
+                                || config.getAuctionPhase() != AuctionPhase.BIDDING) {
+                        return "A timeout is only available during live bidding.";
+                }
+                if (isTimeoutActive(config)) {
+                        return "A timeout is already active.";
+                }
+
+                TeamEntity team = teamService.getTeam(captainName);
+                if (team == null) {
+                        return "Captain not found.";
+                }
+                String teamCaptainName = team.getCaptainName();
+                int timeoutsUsed = timeoutUsageFor(config, teamCaptainName);
+                if (timeoutsUsed >= CAPTAIN_TIMEOUT_LIMIT) {
+                        return "You have used all 3 timeouts for this auction.";
+                }
+
+                long now = System.currentTimeMillis();
+                Long deadline = config.getBidDeadlineAt();
+                config.setPausedBidTimeRemainingMillis(deadline == null ? null : Math.max(0, deadline - now));
+                config.setBidDeadlineAt(null);
+                config.setAuctionTimeoutEndsAt(now + CAPTAIN_TIMEOUT_MILLIS);
+                config.setTimeoutCaptainName(teamCaptainName);
+                config.getTimeoutUsage().put(teamCaptainName, timeoutsUsed + 1);
+                auctionConfigService.save(config);
+                auctionEventService.logEvent("TIMEOUT_CALLED", auction.getCurrentPlayer(), teamCaptainName,
+                                timeoutsUsed + 1, teamCaptainName + " called a 45-second timeout.");
+                auctionSocketService.broadcastRefresh();
+                return "Timeout called. The auction is paused for 45 seconds. "
+                                + (CAPTAIN_TIMEOUT_LIMIT - timeoutsUsed - 1) + " timeouts remaining.";
+        }
+
+        @Scheduled(fixedDelay = 250)
+        @Transactional
+        public synchronized void resolveLiveAuctionWhenDue() {
+                AuctionConfigEntity config = auctionConfigService.getConfig();
+                if (config.getAuctionBreakEndsAt() != null) {
+                        if (System.currentTimeMillis() < config.getAuctionBreakEndsAt()) {
+                                return;
+                        }
+                        finishAuctionBreak(config);
+                        return;
+                }
+                if (config.getAuctionTimeoutEndsAt() != null) {
+                        if (System.currentTimeMillis() < config.getAuctionTimeoutEndsAt()) {
+                                return;
+                        }
+                        resumeAuctionAfterTimeout(config, System.currentTimeMillis());
+                        return;
+                }
+                Long deadline = config.getBidDeadlineAt();
+                if (config.getAuctionPhase() != AuctionPhase.BIDDING || deadline == null
+                                || System.currentTimeMillis() < deadline) {
+                        return;
+                }
+
+                Auction auction = currentAuctionService.getCurrentAuction();
+                if (auction == null || auction.getCurrentPlayer().isBlank()) {
+                        clearLiveAuctionState(config);
+                        return;
+                }
+
+                String playerName = auction.getCurrentPlayer();
+                String leader = auction.getLeader();
+                int currentBid = auction.getCurrentBid();
+                if (leader == null || leader.isBlank() || "None".equalsIgnoreCase(leader)) {
+                        advanceNominationTurn(config);
+                        auctionEventService.logEvent("PLAYER_UNSOLD", playerName, null, 0,
+                                        "No captain bid on the nominated player.");
+                        recordCompletedAuction(config, playerName);
+                        clearLiveAuctionState(config);
+                        auctionSocketService.broadcastRefresh();
+                        return;
+                }
+
+                config.setAuctionPhase(AuctionPhase.SOLD);
+                auctionConfigService.save(config);
+                if (!finalizeNominationSale(playerName, leader, currentBid, config)) {
+                        config.setAuctionPhase(AuctionPhase.BIDDING);
+                        config.setBidDeadlineAt(System.currentTimeMillis() + bidWindowMillis(config));
+                        auctionConfigService.save(config);
+                }
+        }
+
+        private long bidWindowMillis(AuctionConfigEntity config) {
+                return config.getBidTimerSeconds() * 1000L;
+        }
+
+        private void resumeAuctionAfterTimeout(AuctionConfigEntity config, long now) {
+                Long remainingMillis = config.getPausedBidTimeRemainingMillis();
+                config.setAuctionTimeoutEndsAt(null);
+                config.setPausedBidTimeRemainingMillis(null);
+                config.setTimeoutCaptainName(null);
+                if (remainingMillis != null) {
+                        config.setBidDeadlineAt(now + remainingMillis);
+                }
+                auctionConfigService.save(config);
+                auctionEventService.logEvent("TIMEOUT_ENDED", null, null, null,
+                                "The auction resumed after the 45-second timeout.");
+                auctionSocketService.broadcastRefresh();
+        }
+
+        private boolean isTimeoutActive(AuctionConfigEntity config) {
+                return config.getAuctionTimeoutEndsAt() != null
+                                && System.currentTimeMillis() < config.getAuctionTimeoutEndsAt();
+        }
+
+        private int timeoutUsageFor(AuctionConfigEntity config, String captainName) {
+                for (java.util.Map.Entry<String, Integer> entry : config.getTimeoutUsage().entrySet()) {
+                        if (entry.getKey().equalsIgnoreCase(captainName)) {
+                                return entry.getValue() == null ? 0 : entry.getValue();
+                        }
+                }
+                return 0;
+        }
+
+        private void clearTimeoutState(AuctionConfigEntity config, boolean clearUsage) {
+                config.setAuctionTimeoutEndsAt(null);
+                config.setPausedBidTimeRemainingMillis(null);
+                config.setTimeoutCaptainName(null);
+                if (clearUsage) {
+                        config.getTimeoutUsage().clear();
+                }
+        }
+
+        private boolean finalizeNominationSale(
+                        String playerName,
+                        String captainName,
+                        int soldPrice,
+                        AuctionConfigEntity config) {
+                PlayerEntity player = playerService.getPlayer(playerName);
+                if (player == null || player.isSold() || teamService.getTeam(captainName) == null) {
+                        return false;
+                }
+
+                advanceNominationTurn(config);
+                recordCompletedAuction(config, playerName);
+                clearLiveAuctionState(config);
+
+                player.setSold(true);
+                player.setSoldPrice(soldPrice);
+                player.setFinalPrice(soldPrice);
+                player.setTeam(captainName);
+                playerService.savePlayer(player);
+
+                TeamEntity winningTeam = teamService.getTeam(captainName);
+                winningTeam.setPurse(winningTeam.getPurse() - soldPrice);
+                winningTeam.setPlayersBought(winningTeam.getPlayersBought() + 1);
+                winningTeam.setPlayersLeft(winningTeam.getPlayersLeft() - 1);
+                teamService.saveTeam(winningTeam);
+
+                AuctionLogEntity log = new AuctionLogEntity();
+                log.setPlayerName(playerName);
+                log.setCaptainName(captainName);
+                log.setSoldPrice(soldPrice);
+                auctionLogService.addLog(log);
+                auctionEventService.logEvent("PLAYER_SOLD", playerName, captainName, soldPrice,
+                                "Sold at the winning live bid.");
+
+                auctionSocketService.broadcastRefresh();
+                return true;
+        }
+
+        private void clearLiveAuctionState(AuctionConfigEntity config) {
+                config.setBidDeadlineAt(null);
+                config.getPassedCaptains().clear();
+                config.setAuctionPhase(AuctionPhase.NO_AUCTION);
+                currentAuctionService.setCurrentAuction(new Auction("", "", 0, "None", 0));
+                auctionConfigService.save(config);
+        }
+
+        private void recordCompletedAuction(AuctionConfigEntity config, String playerName) {
+                int completedAuctions = config.getAuctionsSinceLastBreak() + 1;
+                if (completedAuctions >= AUCTIONS_PER_BREAK) {
+                        config.setAuctionsSinceLastBreak(0);
+                        config.setAuctionBreakEndsAt(System.currentTimeMillis() + AUCTION_BREAK_MILLIS);
+                        auctionEventService.logEvent("AUCTION_BREAK_STARTED", playerName, null,
+                                        (int) (AUCTION_BREAK_MILLIS / 1000),
+                                        "The auction paused for three minutes after 18 completed player auctions.");
+                } else {
+                        config.setAuctionsSinceLastBreak(completedAuctions);
+                }
+        }
+
+        private void finishAuctionBreak(AuctionConfigEntity config) {
+                config.setAuctionBreakEndsAt(null);
+                auctionConfigService.save(config);
+                auctionEventService.logEvent("AUCTION_BREAK_ENDED", null, null, null,
+                                "The auction resumed after the scheduled three-minute break.");
+                auctionSocketService.broadcastRefresh();
+        }
+
+        private void advanceNominationTurn(AuctionConfigEntity config) {
+                List<TeamEntity> captains = orderedCaptains();
+                if (captains.isEmpty()) {
+                        config.setNextNominationCaptain(null);
+                        return;
+                }
+                int currentIndex = -1;
+                for (int index = 0; index < captains.size(); index++) {
+                        if (captains.get(index).getCaptainName().equalsIgnoreCase(config.getNextNominationCaptain())) {
+                                currentIndex = index;
+                                break;
+                        }
+                }
+                config.setNextNominationCaptain(captains.get((currentIndex + 1) % captains.size()).getCaptainName());
+        }
+
+        private List<TeamEntity> orderedCaptains() {
+                return teamService.getAllTeams().stream()
+                                .filter(team -> team.getCaptainName() != null && !team.getCaptainName().isBlank())
+                                .toList();
+        }
+
+        private boolean allCaptainsPassed(AuctionConfigEntity config) {
+                return orderedCaptains().stream()
+                                .allMatch(team -> containsCaptain(config.getPassedCaptains(), team.getCaptainName()));
+        }
+
+        private boolean allOtherCaptainsPassed(AuctionConfigEntity config, String leadingCaptain) {
+                return orderedCaptains().stream()
+                                .filter(team -> !team.getCaptainName().equalsIgnoreCase(leadingCaptain))
+                                .allMatch(team -> containsCaptain(config.getPassedCaptains(), team.getCaptainName()));
+        }
+
+        private boolean containsCaptain(java.util.Set<String> captains, String captainName) {
+                return captains.stream().anyMatch(name -> name.equalsIgnoreCase(captainName));
+        }
+
+        private boolean removeCaptain(java.util.Set<String> captains, String captainName) {
+                return captains.removeIf(name -> name.equalsIgnoreCase(captainName));
+        }
+
         public synchronized String spinWheel() {
                 List<PlayerEntity> availablePlayers = playerService.getUnsoldPlayers();
                 AuctionConfigEntity config = auctionConfigService.getConfig();
@@ -336,6 +775,7 @@ public class AuctionService {
                 if (silentBidService != null) {
                         silentBidService.clearRound();
                 }
+                recordCompletedAuction(config, player.getName());
                 currentAuctionService.setCurrentAuction(new Auction("", "", 0, "None", 0, ""));
                 clearWheelSpinState(config);
                 config.setAuctionPhase(AuctionPhase.NO_AUCTION);
@@ -974,6 +1414,8 @@ public class AuctionService {
                 clearWheelSpinState(config);
                 config.setAuctionPhase(
                                 AuctionPhase.NO_AUCTION);
+                config.setAuctionBreakEndsAt(null);
+                config.setAuctionsSinceLastBreak(0);
 
                 auctionConfigService.save(config);
                 auctionSocketService.broadcastRefresh();
@@ -1360,6 +1802,7 @@ public class AuctionService {
                 config.setTargetCompletionBonus(250);
                 config.setTargetMissPenalty(100);
                 config.setStealPenalty(200);
+                clearTimeoutState(config, true);
                 config.setMarketAdjustmentPlayer(null);
                 config.setMarketAdjustment(0);
                 config.setAuctionPhase(
@@ -1429,6 +1872,7 @@ public class AuctionService {
                         cursePlayerService.expireForUnsoldPlayers();
                 }
                 config.setAuctionStarted(false);
+                config.setAuctionBreakEndsAt(null);
                 clearWheelSpinState(config);
                 config.setAuctionPhase(AuctionPhase.NO_AUCTION);
                 auctionConfigService.save(config);

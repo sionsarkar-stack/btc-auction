@@ -1,10 +1,10 @@
 # Native Ubuntu Deployment
 
-This deployment serves the Vite build with Nginx and runs the Spring Boot backend with systemd. Nginx proxies `/api/` and `/ws/` to the backend, so the frontend can keep relative API URLs. These instructions target an Ubuntu 26.04 LTS EC2 instance or newer; the backend requires Java 25.
+This deployment serves the Vite build with Nginx and runs the Spring Boot backend with systemd. Nginx proxies `/api/` and `/ws/` to the backend, so the frontend can keep relative API URLs. These instructions target an Ubuntu 24.04 LTS EC2 instance or newer; the backend requires Java 25.
 
 ## 1. Install packages
 
-On Ubuntu 26.04 LTS or newer:
+On Ubuntu 24.04 LTS or newer:
 
 ```bash
 sudo apt update
@@ -47,6 +47,8 @@ sudo nano /etc/btc-auction/btc-auction.env
 sudo chmod 600 /etc/btc-auction/btc-auction.env
 ```
 
+Set unique, long values for `BTC_AUCTION_ADMIN_PASSWORD` and `BTC_AUCTION_VIEWER_PASSWORD` before starting the service. Production startup requires both values and will update the seeded accounts from this protected file. Never use the local defaults in production. `JAVA_TOOL_OPTIONS` limits memory for a 1 GiB instance; increase the heap only after sizing the instance accordingly.
+
 Install and start systemd:
 
 ```bash
@@ -72,7 +74,7 @@ The `/ws/` location must keep HTTP/1.1 upgrade headers; otherwise live auction a
 
 ## 4. HTTPS
 
-Point the domain DNS record to the EC2 public address, then install a certificate:
+Do not use the public HTTP site for real logins. Point a domain DNS record to the EC2 public address, then install a certificate:
 
 ```bash
 sudo apt install -y certbot python3-certbot-nginx

@@ -1,21 +1,20 @@
 import { useEffect, useState } from "react";
-import Dashboard from "./pages/Dashboard";
-import AuctionManager from "./pages/AuctionManager";
-import AuctionScreen from "./pages/AuctionScreen";
+import AuctionFlow from "./pages/AuctionFlow";
 import ManualSale from "./pages/ManualSale";
 import AdminLogs from "./pages/AdminLogs";
 import Login from "./pages/Login";
 import Settings from "./pages/Settings";
 import CaptainManagement from "./pages/CaptainManagement";
 import PlayersImport from "./pages/PlayersImport";
-import SilentBid from "./pages/SilentBid";
 import MarketPreview from "./pages/MarketPreview";
 import { API_URL } from "./config";
 
 function App() {
 
-  const [screen, setScreen] =
-    useState("dashboard");
+  const [screen, setScreen] = useState(() => {
+    const storedRole = localStorage.getItem("role");
+    return storedRole === "ADMIN" ? "auction" : ["CAPTAIN", "VIEWER"].includes(storedRole) ? "live" : "dashboard";
+  });
 
   const [role, setRole] =
     useState(
@@ -25,7 +24,6 @@ function App() {
   const [toast, setToast] = useState(null);
 
   const [seasonName, setSeasonName] = useState("");
-  const [silentBidActive, setSilentBidActive] = useState(false);
   const marketPreview = import.meta.env.DEV
     && new URLSearchParams(window.location.search).get("marketPreview") === "1";
 
@@ -74,29 +72,6 @@ function App() {
       .then(config => setSeasonName(config.seasonName || ""))
       .catch(() => { });
   }, [marketPreview]);
-
-  useEffect(() => {
-    if (role !== "CAPTAIN" || marketPreview) {
-      return undefined;
-    }
-
-    const loadSilentBidStatus = async () => {
-      try {
-        const response = await fetch(`${API_URL}/api/silent-bid/active`);
-        const active = await response.json();
-        setSilentBidActive(active);
-        if (!active && screen === "silent-bid") {
-          setScreen("dashboard");
-        }
-      } catch {
-        setSilentBidActive(false);
-      }
-    };
-
-    loadSilentBidStatus();
-    const interval = window.setInterval(loadSilentBidStatus, 2000);
-    return () => window.clearInterval(interval);
-  }, [role, screen, marketPreview]);
 
   useEffect(() => {
     const handleToast = (event) => {
@@ -154,6 +129,7 @@ function App() {
         onLogin={(loggedInRole) => {
           setSessionChecked(false);
           setRole(loggedInRole);
+          setScreen(loggedInRole === "ADMIN" ? "auction" : ["CAPTAIN", "VIEWER"].includes(loggedInRole) ? "live" : "dashboard");
         }}
       />
     );
@@ -202,23 +178,6 @@ function App() {
               onClick={() => setScreen("auction")}
             >
               BTC Control Room
-            </button>
-          )}
-
-          <button
-            className={screen === "dashboard" ? "button button-active" : "button-secondary"}
-            onClick={() =>
-              setScreen("dashboard")}
-          >
-            Dashboard
-          </button>
-
-          {role === "CAPTAIN" && silentBidActive && (
-            <button
-              className={screen === "silent-bid" ? "button button-active" : "button-secondary"}
-              onClick={() => setScreen("silent-bid")}
-            >
-              Silent Bid
             </button>
           )}
 
@@ -305,19 +264,12 @@ function App() {
         </nav>
 
         <main className="app-content">
-          {screen === "dashboard" &&
-            <Dashboard />}
-
-          {screen === "silent-bid" &&
-            role === "CAPTAIN" &&
-            <SilentBid />}
-
           {screen === "auction" &&
             role === "ADMIN" &&
-            <AuctionManager />}
+            <AuctionFlow isAdmin />}
 
           {screen === "live" && role !== "ADMIN" &&
-            <AuctionScreen />}
+            <AuctionFlow />}
 
           {screen === "manual-sale" &&
             role === "ADMIN" &&

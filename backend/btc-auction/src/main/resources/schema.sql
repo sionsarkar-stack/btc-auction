@@ -67,6 +67,36 @@ ALTER TABLE IF EXISTS auction_config
     ADD COLUMN IF NOT EXISTS wheel_spin_ends_at BIGINT;
 
 ALTER TABLE IF EXISTS auction_config
+    ADD COLUMN IF NOT EXISTS next_nomination_captain VARCHAR(255);
+
+ALTER TABLE IF EXISTS auction_config
+    ADD COLUMN IF NOT EXISTS bid_deadline_at BIGINT;
+
+ALTER TABLE IF EXISTS auction_config
+    ADD COLUMN IF NOT EXISTS auction_timeout_ends_at BIGINT;
+
+ALTER TABLE IF EXISTS auction_config
+    ADD COLUMN IF NOT EXISTS paused_bid_time_remaining_millis BIGINT;
+
+ALTER TABLE IF EXISTS auction_config
+    ADD COLUMN IF NOT EXISTS timeout_captain_name VARCHAR(255);
+
+ALTER TABLE IF EXISTS auction_config
+    ADD COLUMN IF NOT EXISTS auction_break_ends_at BIGINT;
+
+ALTER TABLE IF EXISTS auction_config
+    ADD COLUMN IF NOT EXISTS auctions_since_last_break INTEGER DEFAULT 0 NOT NULL;
+
+ALTER TABLE IF EXISTS auction_config
+    ADD COLUMN IF NOT EXISTS bid_timer_seconds INTEGER DEFAULT 10 NOT NULL;
+
+CREATE TABLE IF NOT EXISTS auction_timeout_usage (
+    auction_config_id BIGINT NOT NULL,
+    captain_name VARCHAR(255) NOT NULL,
+    timeouts_used INTEGER
+);
+
+ALTER TABLE IF EXISTS auction_config
     ALTER COLUMN auction_phase VARCHAR(255);
 
 CREATE TABLE IF NOT EXISTS current_auction (

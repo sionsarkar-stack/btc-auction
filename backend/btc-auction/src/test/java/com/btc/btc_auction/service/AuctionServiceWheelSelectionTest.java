@@ -119,6 +119,305 @@ class AuctionServiceWheelSelectionTest {
     }
 
     @Test
+    void captainsNominateInRoundRobinOrderAndBidsUseTheCsvBasePrice() {
+        config.setAuctionStarted(false);
+        config.getTimeoutUsage().put("Asha", 2);
+        config.setAuctionTimeoutEndsAt(System.currentTimeMillis() + 45_000);
+        TeamEntity captainA = new TeamEntity();
+        captainA.setCaptainName("Asha");
+        captainA.setPurse(5_000);
+        captainA.setPlayersLeft(9);
+        TeamEntity captainB = new TeamEntity();
+        captainB.setCaptainName("Zoya");
+        captainB.setPurse(5_000);
+        captainB.setPlayersLeft(9);
+        when(teamService.getAllTeams()).thenReturn(List.of(captainA, captainB));
+        when(teamService.getTeam("Asha")).thenReturn(captainA);
+        when(teamService.getTeam("Zoya")).thenReturn(captainB);
+
+        assertEquals("Auction started. Asha nominates first.", auctionService.startNominationAuction());
+        assertTrue(config.getTimeoutUsage().isEmpty());
+        assertNull(config.getAuctionTimeoutEndsAt());
+        assertEquals("Rohit Sharma nominated at ₹300.", auctionService.nominatePlayer("Rohit Sharma", "Asha"));
+        assertEquals(300, currentAuctionService.getCurrentAuction().getBasePrice());
+        assertEquals("Bid increased to ₹350.", auctionService.increaseLiveBid("Zoya"));
+        assertEquals("Passed on Rohit Sharma.", auctionService.passOnPlayer("Asha"));
+
+        assertEquals("Zoya", currentAuctionService.getCurrentAuction().getLeader());
+        assertEquals(350, currentAuctionService.getCurrentAuction().getCurrentBid());
+        assertNotNull(config.getBidDeadlineAt());
+    }
+
+    @Test
+    void onlyTheCaptainWhoseTurnItIsCanNominate() {
+        config.setAuctionStarted(false);
+        TeamEntity captain = new TeamEntity();
+        captain.setCaptainName("Asha");
+        when(teamService.getAllTeams()).thenReturn(List.of(captain));
+
+        auctionService.startNominationAuction();
+
+        assertEquals("It is Asha's turn to nominate.", auctionService.nominatePlayer("Rohit Sharma", "Zoya"));
+        assertTrue(currentAuctionService.getCurrentAuction().getCurrentPlayer().isBlank());
+    }
+
+    @Test
+    void expiredLiveBidSellsAtTheWinningBidAndAdvancesNominationTurn() {
+        TeamEntity captainA = new TeamEntity();
+        captainA.setCaptainName("Asha");
+        TeamEntity captainB = new TeamEntity();
+        captainB.setCaptainName("Zoya");
+        captainB.setPurse(5_000);
+        captainB.setPlayersLeft(9);
+        when(teamService.getAllTeams()).thenReturn(List.of(captainA, captainB));
+        when(teamService.getTeam("Zoya")).thenReturn(captainB);
+        config.setAuctionPhase(AuctionPhase.BIDDING);
+        config.setNextNominationCaptain("Asha");
+        config.setBidDeadlineAt(System.currentTimeMillis() - 1);
+        currentAuctionService.setCurrentAuction(new Auction("Rohit Sharma", "A", 350, "Zoya", 300));
+
+        auctionService.resolveLiveAuctionWhenDue();
+
+        PlayerEntity soldPlayer = playerService.getPlayer("Rohit Sharma");
+        assertTrue(soldPlayer.isSold());
+        assertEquals(350, soldPlayer.getSoldPrice());
+        assertEquals("Zoya", soldPlayer.getTeam());
+        assertEquals(4_650, captainB.getPurse());
+        assertEquals(1, captainB.getPlayersBought());
+        assertEquals(8, captainB.getPlayersLeft());
+        assertEquals("Zoya", config.getNextNominationCaptain());
+        assertEquals(1, config.getAuctionsSinceLastBreak());
+        assertEquals(AuctionPhase.NO_AUCTION, config.getAuctionPhase());
+        assertTrue(currentAuctionService.getCurrentAuction().getCurrentPlayer().isBlank());
+    }
+
+    @Test
+    void eighteenthCompletedUnsoldLotStartsTheThreeMinuteBreak() {
+        config.setAuctionPhase(AuctionPhase.BIDDING);
+        config.setAuctionsSinceLastBreak(17);
+        config.setBidDeadlineAt(System.currentTimeMillis() - 1);
+        currentAuctionService.setCurrentAuction(new Auction("Rohit Sharma", "A", 300, "None", 300));
+
+        auctionService.resolveLiveAuctionWhenDue();
+
+        assertEquals(0, config.getAuctionsSinceLastBreak());
+        assertTrue(config.getAuctionBreakEndsAt() > System.currentTimeMillis() + 179_000);
+        assertEquals(AuctionPhase.NO_AUCTION, config.getAuctionPhase());
+        assertTrue(currentAuctionService.getCurrentAuction().getCurrentPlayer().isBlank());
+    }
+
+    @Test
+    void nominationIsBlockedUntilScheduledBreakExpires() {
+        config.setAuctionStarted(true);
+        config.setNextNominationCaptain("Asha");
+        config.setAuctionBreakEndsAt(System.currentTimeMillis() + 180_000);
+
+        assertEquals("The auction is on a scheduled three-minute break.",
+                auctionService.nominatePlayer("Rohit Sharma", "Asha"));
+        assertTrue(currentAuctionService.getCurrentAuction().getCurrentPlayer().isBlank());
+    }
+
+    @Test
+    void expiredScheduledBreakResumesAuction() {
+        config.setAuctionBreakEndsAt(System.currentTimeMillis() - 1);
+
+        auctionService.resolveLiveAuctionWhenDue();
+
+        assertNull(config.getAuctionBreakEndsAt());
+    }
+
+    @Test
+    void customBidMustBeHigherAndMultipleOfFiftyAndWithinMaxBid() {
+        TeamEntity captain = new TeamEntity();
+        captain.setCaptainName("Zoya");
+        captain.setPurse(5_000);
+        captain.setPlayersLeft(9);
+        when(teamService.getTeam("Zoya")).thenReturn(captain);
+        config.setAuctionPhase(AuctionPhase.BIDDING);
+        currentAuctionService.setCurrentAuction(new Auction("Rohit Sharma", "A", 300, "None", 300));
+
+        assertEquals("Bid must be greater than the current bid of ₹300.",
+                auctionService.placeCustomLiveBid("Zoya", 300));
+        assertEquals("Custom bid must be a multiple of ₹50.",
+                auctionService.placeCustomLiveBid("Zoya", 375));
+        assertEquals("Maximum bid is ₹4200 based on remaining points and squad slots.",
+                auctionService.placeCustomLiveBid("Zoya", 4_250));
+        assertEquals("Bid increased to ₹350.", auctionService.placeCustomLiveBid("Zoya", 350));
+        assertEquals(350, currentAuctionService.getCurrentAuction().getCurrentBid());
+    }
+
+    @Test
+    void captainCanBidAgainAfterPassing() {
+        TeamEntity captain = new TeamEntity();
+        captain.setCaptainName("Asha");
+        captain.setPurse(5_000);
+        captain.setPlayersLeft(9);
+        when(teamService.getTeam("Asha")).thenReturn(captain);
+        config.setAuctionPhase(AuctionPhase.BIDDING);
+        currentAuctionService.setCurrentAuction(new Auction("Rohit Sharma", "A", 300, "None", 300));
+
+        assertEquals("Passed on Rohit Sharma.", auctionService.passOnPlayer("Asha"));
+        assertTrue(config.getPassedCaptains().contains("Asha"));
+        assertEquals("Bid increased to ₹350.", auctionService.increaseLiveBid("Asha"));
+
+        assertEquals("Asha", currentAuctionService.getCurrentAuction().getLeader());
+        assertFalse(config.getPassedCaptains().contains("Asha"));
+    }
+
+    @Test
+    void thirdDistinctPassSellsImmediatelyToTheHighestBidder() {
+        TeamEntity captainA = captain("Asha", 5_000, 9);
+        TeamEntity captainB = captain("Zoya", 5_000, 9);
+        TeamEntity captainC = captain("Bittu", 5_000, 9);
+        TeamEntity captainD = captain("Gopal", 5_000, 9);
+        when(teamService.getAllTeams()).thenReturn(List.of(captainA, captainB, captainC, captainD));
+        when(teamService.getTeam("Asha")).thenReturn(captainA);
+        when(teamService.getTeam("Zoya")).thenReturn(captainB);
+        when(teamService.getTeam("Bittu")).thenReturn(captainC);
+        when(teamService.getTeam("Gopal")).thenReturn(captainD);
+        config.setAuctionPhase(AuctionPhase.BIDDING);
+        config.setNextNominationCaptain("Asha");
+        currentAuctionService.setCurrentAuction(new Auction("Rohit Sharma", "A", 350, "Zoya", 300));
+
+        auctionService.passOnPlayer("Asha");
+        auctionService.passOnPlayer("Bittu");
+        String result = auctionService.passOnPlayer("Gopal");
+
+        assertEquals("3 captains passed. Rohit Sharma sold to Zoya for ₹350.", result);
+        assertTrue(playerService.getPlayer("Rohit Sharma").isSold());
+        assertEquals("Zoya", playerService.getPlayer("Rohit Sharma").getTeam());
+        assertEquals(4_650, captainB.getPurse());
+        assertEquals(AuctionPhase.NO_AUCTION, config.getAuctionPhase());
+        assertTrue(config.getPassedCaptains().isEmpty());
+    }
+
+    @Test
+    void configuredBidTimerSetsTheLiveDeadline() {
+        TeamEntity captain = captain("Zoya", 5_000, 9);
+        when(teamService.getTeam("Zoya")).thenReturn(captain);
+        config.setBidTimerSeconds(25);
+        config.setAuctionPhase(AuctionPhase.BIDDING);
+        currentAuctionService.setCurrentAuction(new Auction("Rohit Sharma", "A", 300, "None", 300));
+
+        long beforeBid = System.currentTimeMillis();
+        assertEquals("Bid increased to ₹350.", auctionService.increaseLiveBid("Zoya"));
+
+        assertTrue(config.getBidDeadlineAt() >= beforeBid + 24_900);
+        assertTrue(config.getBidDeadlineAt() <= System.currentTimeMillis() + 25_100);
+    }
+
+    private TeamEntity captain(String captainName, int purse, int playersLeft) {
+        TeamEntity team = new TeamEntity();
+        team.setCaptainName(captainName);
+        team.setPurse(purse);
+        team.setPlayersLeft(playersLeft);
+        return team;
+    }
+
+    @Test
+    void fixedIncrementBidIsRejectedWhenItWouldExceedMaxBid() {
+        TeamEntity captain = new TeamEntity();
+        captain.setCaptainName("Zoya");
+        captain.setPurse(1_000);
+        captain.setPlayersLeft(9);
+        when(teamService.getTeam("Zoya")).thenReturn(captain);
+        config.setAuctionPhase(AuctionPhase.BIDDING);
+        currentAuctionService.setCurrentAuction(new Auction("Rohit Sharma", "A", 200, "None", 200));
+
+        assertEquals("Maximum bid is ₹200 based on remaining points and squad slots.",
+                auctionService.increaseLiveBid("Zoya"));
+        assertEquals(200, currentAuctionService.getCurrentAuction().getCurrentBid());
+    }
+
+    @Test
+    void captainTimeoutPausesTheRemainingBidWindowAndTracksUsage() {
+        TeamEntity captain = new TeamEntity();
+        captain.setCaptainName("Zoya");
+        when(teamService.getTeam("Zoya")).thenReturn(captain);
+        config.setAuctionPhase(AuctionPhase.BIDDING);
+        config.setBidDeadlineAt(System.currentTimeMillis() + 8_000);
+        currentAuctionService.setCurrentAuction(new Auction("Rohit Sharma", "A", 300, "None", 300));
+
+        assertEquals("Timeout called. The auction is paused for 45 seconds. 2 timeouts remaining.",
+                auctionService.callAuctionTimeout("Zoya"));
+
+        assertNull(config.getBidDeadlineAt());
+        assertTrue(config.getPausedBidTimeRemainingMillis() > 7_000);
+        assertTrue(config.getAuctionTimeoutEndsAt() > System.currentTimeMillis() + 44_000);
+        assertEquals("Zoya", config.getTimeoutCaptainName());
+        assertEquals(1, config.getTimeoutUsage().get("Zoya"));
+    }
+
+    @Test
+    void timeoutResumesWithTheExactSavedBidWindow() {
+        config.setAuctionPhase(AuctionPhase.BIDDING);
+        config.setPausedBidTimeRemainingMillis(4_000L);
+        config.setAuctionTimeoutEndsAt(System.currentTimeMillis() - 1);
+        config.setTimeoutCaptainName("Zoya");
+        currentAuctionService.setCurrentAuction(new Auction("Rohit Sharma", "A", 300, "None", 300));
+
+        auctionService.resolveLiveAuctionWhenDue();
+
+        assertNull(config.getAuctionTimeoutEndsAt());
+        assertNull(config.getPausedBidTimeRemainingMillis());
+        assertNull(config.getTimeoutCaptainName());
+        assertTrue(config.getBidDeadlineAt() >= System.currentTimeMillis() + 3_900);
+        assertTrue(config.getBidDeadlineAt() <= System.currentTimeMillis() + 4_100);
+    }
+
+    @Test
+    void captainCannotExceedThreeTimeoutsPerAuction() {
+        TeamEntity captain = new TeamEntity();
+        captain.setCaptainName("Zoya");
+        when(teamService.getTeam("Zoya")).thenReturn(captain);
+        config.setAuctionPhase(AuctionPhase.BIDDING);
+        config.getTimeoutUsage().put("Zoya", 3);
+        currentAuctionService.setCurrentAuction(new Auction("Rohit Sharma", "A", 300, "None", 300));
+
+        assertEquals("You have used all 3 timeouts for this auction.",
+                auctionService.callAuctionTimeout("Zoya"));
+        assertNull(config.getAuctionTimeoutEndsAt());
+    }
+
+    @Test
+    void biddingAndPassingAreBlockedDuringAnActiveTimeout() {
+        config.setAuctionPhase(AuctionPhase.BIDDING);
+        config.setAuctionTimeoutEndsAt(System.currentTimeMillis() + 45_000);
+        config.setTimeoutCaptainName("Asha");
+        currentAuctionService.setCurrentAuction(new Auction("Rohit Sharma", "A", 300, "None", 300));
+
+        assertEquals("Bidding is paused during Asha's timeout.",
+                auctionService.increaseLiveBid("Zoya"));
+        assertEquals("Bidding is paused during Asha's timeout.",
+                auctionService.passOnPlayer("Zoya"));
+        assertEquals(300, currentAuctionService.getCurrentAuction().getCurrentBid());
+    }
+
+    @Test
+    void allCaptainsPassingClosesThePlayerAsUnsoldAfterTheTimer() {
+        TeamEntity captainA = new TeamEntity();
+        captainA.setCaptainName("Asha");
+        TeamEntity captainB = new TeamEntity();
+        captainB.setCaptainName("Zoya");
+        when(teamService.getAllTeams()).thenReturn(List.of(captainA, captainB));
+        when(teamService.getTeam("Asha")).thenReturn(captainA);
+        when(teamService.getTeam("Zoya")).thenReturn(captainB);
+        config.setAuctionPhase(AuctionPhase.BIDDING);
+        config.setNextNominationCaptain("Asha");
+        currentAuctionService.setCurrentAuction(new Auction("Rohit Sharma", "A", 300, "None", 300));
+
+        auctionService.passOnPlayer("Asha");
+        auctionService.passOnPlayer("Zoya");
+        config.setBidDeadlineAt(System.currentTimeMillis() - 1);
+        auctionService.resolveLiveAuctionWhenDue();
+
+        assertFalse(playerService.getPlayer("Rohit Sharma").isSold());
+        assertEquals("Zoya", config.getNextNominationCaptain());
+        assertEquals(AuctionPhase.NO_AUCTION, config.getAuctionPhase());
+        assertTrue(currentAuctionService.getCurrentAuction().getCurrentPlayer().isBlank());
+    }
+
+    @Test
     void spinWheelDoesNotReplaceAnActivePlayer() {
         currentAuctionService.setCurrentAuction(new Auction("Rohit Sharma", "A", 300, "Sen", 300));
 
@@ -136,6 +435,7 @@ class AuctionServiceWheelSelectionTest {
                 "Rohit Sharma marked unsold and moved to the re-auction pool.",
                 auctionService.markCurrentPlayerUnsold());
         assertTrue(playerService.getPlayer("Rohit Sharma").isDeferredToReAuction());
+        assertEquals(1, config.getAuctionsSinceLastBreak());
         assertTrue(currentAuctionService.getCurrentAuction().getCurrentPlayer().isBlank());
         assertEquals(AuctionPhase.NO_AUCTION, config.getAuctionPhase());
 

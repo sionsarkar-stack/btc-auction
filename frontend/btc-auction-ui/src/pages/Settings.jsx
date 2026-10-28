@@ -82,6 +82,20 @@ function Settings() {
                     onChange={event => setConfig({ ...config, seasonName: event.target.value })} />
             </div>
 
+            <div className="form-field">
+                <label htmlFor="bid-timer-seconds">Bid countdown (seconds)</label>
+                <input
+                    id="bid-timer-seconds"
+                    className="input"
+                    type="number"
+                    min="1"
+                    max="120"
+                    step="1"
+                    value={config.bidTimerSeconds || 10}
+                    onChange={event => setConfig({ ...config, bidTimerSeconds: Number(event.target.value) || 10 })}
+                />
+            </div>
+
             <button
                 className="button"
                 onClick={saveConfig}

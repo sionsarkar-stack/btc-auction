@@ -55,8 +55,8 @@ function Login({ onLogin }) {
 
             <section className="login-visual">
                 <div className="login-visual-copy">
-                    <p className="login-eyebrow">BELGHARIA TURF CRICKET</p>
-                    <h1>BTC SEASON 12<br />AUCTION</h1>
+                    <p className="login-eyebrow">HULK PRESENTS</p>
+                    <h1>DASHERA CUP<br />AUCTION</h1>
                     <p className="login-tagline">Four teams. One champion.<br />The bidding starts here.</p>
                 </div>
                 <img src={heroImage} alt="BTC auction visual" className="login-visual-art" />

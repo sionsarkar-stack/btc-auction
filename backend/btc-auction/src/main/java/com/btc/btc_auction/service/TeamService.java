@@ -20,8 +20,15 @@ public class TeamService {
     }
 
     public List<TeamEntity> getAllTeams() {
-
-        return teamRepository.findAll();
+        return teamRepository.findAll().stream()
+                .sorted((first, second) -> {
+                    Long firstId = first.getId();
+                    Long secondId = second.getId();
+                    if (firstId == null)
+                        return secondId == null ? 0 : 1;
+                    return secondId == null ? -1 : firstId.compareTo(secondId);
+                })
+                .toList();
     }
 
     public TeamEntity getTeam(
@@ -39,7 +46,7 @@ public class TeamService {
     }
 
     public List<TeamEntity> getTeams() {
-        return teamRepository.findAll();
+        return getAllTeams();
     }
 
     public boolean isValidBidIncrement(int amount) {

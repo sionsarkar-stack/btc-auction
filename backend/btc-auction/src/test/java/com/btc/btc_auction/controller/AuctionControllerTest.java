@@ -3,15 +3,11 @@ package com.btc.btc_auction.controller;
 import com.btc.btc_auction.security.SessionAttributes;
 import com.btc.btc_auction.entity.AuctionConfigEntity;
 import com.btc.btc_auction.entity.PlayerEntity;
-import com.btc.btc_auction.entity.TeamEntity;
 import com.btc.btc_auction.enums.AuctionPhase;
 import com.btc.btc_auction.service.AuctionConfigService;
 import com.btc.btc_auction.service.AuctionService;
-import com.btc.btc_auction.service.AuctionSocketService;
 import com.btc.btc_auction.service.ClubbedPlayerPairService;
-import com.btc.btc_auction.service.CursePlayerService;
 import com.btc.btc_auction.service.PlayerService;
-import com.btc.btc_auction.service.TeamService;
 import jakarta.servlet.http.HttpSession;
 import com.btc.btc_auction.model.UpdateAuctionRequest;
 import org.junit.jupiter.api.BeforeEach;
@@ -40,15 +36,9 @@ class AuctionControllerTest {
     @Mock
     private AuctionConfigService auctionConfigService;
     @Mock
-    private AuctionSocketService auctionSocketService;
-    @Mock
-    private TeamService teamService;
-    @Mock
     private ClubbedPlayerPairService clubbedPlayerPairService;
     @Mock
     private PlayerService playerService;
-    @Mock
-    private CursePlayerService cursePlayerService;
     @Mock
     private HttpSession session;
 
@@ -59,11 +49,8 @@ class AuctionControllerTest {
         controller = new AuctionController(
                 auctionService,
                 auctionConfigService,
-                auctionSocketService,
-                teamService,
                 clubbedPlayerPairService,
-                playerService,
-                cursePlayerService);
+                playerService);
     }
 
     @Test
@@ -97,21 +84,14 @@ class AuctionControllerTest {
     }
 
     @Test
-    void preventsAuctionStartUntilEveryCaptainHasTwoCursePicks() {
+    void startsAuctionWithoutCurseSelection() {
         when(session.getAttribute(SessionAttributes.USERNAME)).thenReturn("admin");
         when(session.getAttribute(SessionAttributes.ROLE)).thenReturn("ADMIN");
-        AuctionConfigEntity config = new AuctionConfigEntity();
-        PlayerEntity player = new PlayerEntity();
-        TeamEntity team = new TeamEntity();
-        team.setCaptainName("Sen");
-        when(auctionConfigService.getConfig()).thenReturn(config);
-        when(playerService.getAllPlayers()).thenReturn(java.util.List.of(player));
-        when(teamService.getAllTeams()).thenReturn(java.util.List.of(team));
-        when(cursePlayerService.areAllCaptainsReady(java.util.List.of(team))).thenReturn(false);
+        when(auctionService.startNominationAuction()).thenReturn("Auction started. Sen nominates first.");
 
-        assertEquals("Cannot start auction. Every captain must select two curse players first.",
+        assertEquals("Auction started. Sen nominates first.",
                 controller.startAuction(session));
-        verify(auctionSocketService, never()).broadcastRefresh();
+        verify(auctionService).startNominationAuction();
     }
 
     @Test
@@ -149,6 +129,31 @@ class AuctionControllerTest {
         assertEquals("Bid updated.", controller.updateCurrentAuction(request, session));
 
         verify(auctionService).updateCurrentAuction("Sen", 500);
+    }
+
+    @Test
+    void customLiveBidUsesTheAuthenticatedCaptainInsteadOfTheRequestName() {
+        when(session.getAttribute(SessionAttributes.USERNAME)).thenReturn("Sen");
+        when(session.getAttribute(SessionAttributes.ROLE)).thenReturn("CAPTAIN");
+        Map<String, Object> request = Map.of("captainName", "Joy", "bidAmount", 500);
+        when(auctionService.placeCustomLiveBid("Sen", 500)).thenReturn("Bid increased to ₹500.");
+
+        assertEquals("Bid increased to ₹500.", controller.placeCustomLiveBid(request, session));
+
+        verify(auctionService).placeCustomLiveBid("Sen", 500);
+    }
+
+    @Test
+    void auctionTimeoutUsesTheAuthenticatedCaptain() {
+        when(session.getAttribute(SessionAttributes.USERNAME)).thenReturn("Sen");
+        when(session.getAttribute(SessionAttributes.ROLE)).thenReturn("CAPTAIN");
+        when(auctionService.callAuctionTimeout("Sen"))
+                .thenReturn("Timeout called. The auction is paused for 45 seconds. 2 timeouts remaining.");
+
+        assertEquals("Timeout called. The auction is paused for 45 seconds. 2 timeouts remaining.",
+                controller.callAuctionTimeout(session));
+
+        verify(auctionService).callAuctionTimeout("Sen");
     }
 
     @Test
