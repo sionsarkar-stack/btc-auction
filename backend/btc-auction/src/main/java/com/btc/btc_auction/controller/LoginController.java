@@ -4,6 +4,7 @@ import com.btc.btc_auction.entity.UserEntity;
 import com.btc.btc_auction.model.LoginRequest;
 import com.btc.btc_auction.model.LoginResponse;
 import com.btc.btc_auction.security.SessionAttributes;
+import com.btc.btc_auction.service.CaptainPresenceService;
 import com.btc.btc_auction.service.UserService;
 
 import jakarta.servlet.http.HttpSession;
@@ -22,11 +23,19 @@ import org.springframework.web.bind.annotation.*;
 public class LoginController {
 
     private final UserService userService;
+    private final CaptainPresenceService captainPresenceService;
 
+    @org.springframework.beans.factory.annotation.Autowired
     public LoginController(
-            UserService userService) {
+            UserService userService,
+            CaptainPresenceService captainPresenceService) {
 
         this.userService = userService;
+        this.captainPresenceService = captainPresenceService;
+    }
+
+    public LoginController(UserService userService) {
+        this(userService, null);
     }
 
     @PostMapping("/api/login")
@@ -54,8 +63,14 @@ public class LoginController {
 
         }
 
+        if (captainPresenceService != null) {
+            captainPresenceService.signOut(session.getId());
+        }
         session.setAttribute(SessionAttributes.USERNAME, user.getUsername());
         session.setAttribute(SessionAttributes.ROLE, user.getRole());
+        if (captainPresenceService != null) {
+            captainPresenceService.checkIn(session.getId(), user.getUsername(), user.getRole());
+        }
 
         return ResponseEntity.ok(new LoginResponse(user.getUsername(), user.getRole()));
 
@@ -64,6 +79,9 @@ public class LoginController {
     @PostMapping("/api/logout")
     public ResponseEntity<Void> logout(HttpSession session) {
 
+        if (captainPresenceService != null) {
+            captainPresenceService.signOut(session.getId());
+        }
         session.invalidate();
 
         return ResponseEntity.noContent().build();

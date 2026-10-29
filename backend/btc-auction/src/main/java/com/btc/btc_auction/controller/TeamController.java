@@ -46,7 +46,7 @@ public class TeamController {
                 .map(team -> new CaptainConfigDto(
                         team.getCaptainName(),
                         team.getCaptainName(),
-                        team.getPurse(),
+                        team.getStartingPurse(),
                         team.getTournamentPoints()))
                 .toList();
     }
@@ -100,6 +100,7 @@ public class TeamController {
 
         team.setCaptainName(request.getCaptainName().trim());
         team.setPurse(request.getTotalPoints());
+        team.setStartingPurse(request.getTotalPoints());
         teamService.saveTeam(team);
         playerService.renameTeamReferences(currentName, request.getCaptainName().trim());
         cursePlayerService.renameCaptain(currentName, request.getCaptainName().trim());

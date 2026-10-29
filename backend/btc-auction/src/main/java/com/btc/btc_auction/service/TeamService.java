@@ -57,6 +57,7 @@ public class TeamService {
         TeamEntity team = new TeamEntity();
         team.setCaptainName(captainName);
         team.setPurse(totalPoints);
+        team.setStartingPurse(totalPoints);
         team.setTournamentPoints(0);
         team.setPlayersBought(0);
         team.setWildPickUsed(false);

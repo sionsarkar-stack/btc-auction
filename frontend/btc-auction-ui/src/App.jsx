@@ -7,6 +7,7 @@ import Settings from "./pages/Settings";
 import CaptainManagement from "./pages/CaptainManagement";
 import PlayersImport from "./pages/PlayersImport";
 import MarketPreview from "./pages/MarketPreview";
+import PlayerRoster from "./components/PlayerRoster";
 import { API_URL } from "./config";
 
 function App() {
@@ -59,6 +60,34 @@ function App() {
 
     return () => {
       active = false;
+    };
+  }, [role, marketPreview]);
+
+  useEffect(() => {
+    if (role !== "CAPTAIN" || marketPreview) {
+      return undefined;
+    }
+
+    let active = true;
+    const checkIn = async () => {
+      try {
+        const response = await fetch(`${API_URL}/api/captain-presence/heartbeat`, {
+          method: "POST",
+          credentials: "include",
+        });
+        if (active && response.status === 401) {
+          window.dispatchEvent(new Event("auction-session-expired"));
+        }
+      } catch {
+        // A missed heartbeat is handled by the server's grace window.
+      }
+    };
+
+    void checkIn();
+    const heartbeatInterval = window.setInterval(() => void checkIn(), 5000);
+    return () => {
+      active = false;
+      window.clearInterval(heartbeatInterval);
     };
   }, [role, marketPreview]);
 
@@ -292,6 +321,8 @@ function App() {
           {screen === "import-players" &&
             role === "ADMIN" &&
             <PlayersImport />}
+
+          <PlayerRoster />
 
         </main>
 

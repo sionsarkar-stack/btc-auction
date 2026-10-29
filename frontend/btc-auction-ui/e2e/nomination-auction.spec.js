@@ -11,6 +11,8 @@ const players = [
     { name: "E2E Player Alpha", seed: "A", basePrice: 300 },
     { name: "E2E Player Bravo", seed: "B", basePrice: 250 },
 ];
+let captainPresenceContexts = [];
+let captainHeartbeatInterval = null;
 
 async function assertSuccessful(response) {
     const body = await response.text();
@@ -42,6 +44,29 @@ async function loginCaptainRequest(captainName) {
         data: { username: captainName, password: "e2e-password" },
     }));
     return context;
+}
+
+async function checkInAllCaptains() {
+    captainPresenceContexts = await Promise.all(captains.map(loginCaptainRequest));
+    await Promise.all(captainPresenceContexts.map(async context => {
+        await assertSuccessful(await context.post(`${BACKEND_URL}/api/captain-presence/heartbeat`));
+    }));
+    captainHeartbeatInterval = setInterval(() => {
+        captainPresenceContexts.forEach(context => {
+            void context.post(`${BACKEND_URL}/api/captain-presence/heartbeat`).catch(() => undefined);
+        });
+    }, 5000);
+}
+
+async function clearCaptainCheckIns() {
+    if (captainHeartbeatInterval !== null) {
+        clearInterval(captainHeartbeatInterval);
+        captainHeartbeatInterval = null;
+    }
+    const contexts = captainPresenceContexts;
+    captainPresenceContexts = [];
+    await Promise.all(contexts.map(context => context.post(`${BACKEND_URL}/api/logout`).catch(() => undefined)));
+    await closeContexts(...contexts);
 }
 
 async function ensureFixtures(request) {
@@ -79,6 +104,7 @@ async function ensureFixtures(request) {
 }
 
 async function startAuction(page) {
+    await checkInAllCaptains();
     const startButton = page.getByRole("button", { name: "Start auction" });
     await expect(startButton).toBeEnabled();
     await startButton.click();
@@ -104,6 +130,37 @@ test.beforeEach(async ({ request }) => {
     await ensureFixtures(request);
 });
 
+test.afterEach(async () => {
+    await clearCaptainCheckIns();
+});
+
+test("shows player base prices and statuses across screens", async ({ browser, request }) => {
+    const admin = await login(browser, "auctioneer", "Sarkar");
+    const viewer = await login(browser, "viewer", "viewer");
+
+    try {
+        const adminPlayerItem = admin.page.locator(".player-roster-grid li").filter({ hasText: "E2E Player Alpha" });
+        const playersResponse = await request.get(`${BACKEND_URL}/api/players`);
+        await assertSuccessful(playersResponse);
+        await expect(admin.page.getByRole("heading", { name: "Player list" })).toBeVisible();
+        await expect(admin.page.locator(".player-roster-grid li")).toHaveCount((await playersResponse.json()).length);
+        await expect(adminPlayerItem).toContainText("₹300");
+        await expect(adminPlayerItem).toContainText("Available");
+        await expect.poll(() => admin.page.locator(".player-roster-grid").evaluate(list => list.scrollHeight === list.clientHeight)).toBe(true);
+        await expect(viewer.page.locator(".player-roster-grid li").filter({ hasText: "E2E Player Alpha" })).toContainText("Available");
+
+        await admin.page.locator(".app-nav-settings-menu > summary").click();
+        await admin.page.getByRole("button", { name: "Auction Settings" }).click();
+        await expect(admin.page.getByRole("heading", { name: "Player list" })).toBeVisible();
+
+        await admin.page.locator(".app-nav-manage-menu > summary").click();
+        await admin.page.getByRole("button", { name: "Manual Sale" }).click();
+        await expect(admin.page.getByRole("heading", { name: "Player list" })).toBeVisible();
+    } finally {
+        await closeContexts(viewer.context, admin.context);
+    }
+});
+
 test("hides next nomination when no players are available", async ({ browser }) => {
     const admin = await login(browser, "auctioneer", "Sarkar");
 
@@ -115,6 +172,122 @@ test("hides next nomination when no players are available", async ({ browser }) 
         await expect(admin.page.locator(".auction-flow-nomination")).toHaveCount(0);
     } finally {
         await closeContexts(admin.context);
+    }
+});
+
+test("reset auction restores configured team points and roster slots", async ({ request }) => {
+    const captainName = captains[0];
+    const configResponse = await request.get(`${BACKEND_URL}/api/config`);
+    await assertSuccessful(configResponse);
+    const config = await configResponse.json();
+    config.auctionsSinceLastBreak = 12;
+    config.auctionBreakEndsAt = Date.now() + 180_000;
+    config.nextNominationCaptain = captainName;
+    await assertSuccessful(await request.post(`${BACKEND_URL}/api/config`, { data: config }));
+
+    const teamsBeforeResponse = await request.get(`${BACKEND_URL}/api/teams`);
+    await assertSuccessful(teamsBeforeResponse);
+    const startingPurse = (await teamsBeforeResponse.json())
+        .find(team => team.captainName === captainName).purse;
+
+    await assertSuccessful(await request.post(`${BACKEND_URL}/api/auction/manual-sale`, {
+        data: {
+            playerName: "E2E Player Alpha",
+            newCaptain: captainName,
+            newPrice: 500,
+            reason: "Reset purse test",
+        },
+    }));
+
+    const spentTeamsResponse = await request.get(`${BACKEND_URL}/api/teams`);
+    await assertSuccessful(spentTeamsResponse);
+    const spentTeam = (await spentTeamsResponse.json()).find(team => team.captainName === captainName);
+    expect(spentTeam.purse).toBe(startingPurse - 500);
+    expect(spentTeam.playersBought).toBe(1);
+    expect(spentTeam.playersLeft).toBe(8);
+
+    await assertSuccessful(await request.post(`${BACKEND_URL}/api/auction/reset`));
+
+    const resetTeamsResponse = await request.get(`${BACKEND_URL}/api/teams`);
+    await assertSuccessful(resetTeamsResponse);
+    const resetTeam = (await resetTeamsResponse.json()).find(team => team.captainName === captainName);
+    expect(resetTeam.purse).toBe(startingPurse);
+    expect(resetTeam.playersBought).toBe(0);
+    expect(resetTeam.playersLeft).toBe(9);
+    expect(resetTeam.tournamentPoints).toBe(0);
+    expect(resetTeam.wildPickUsed).toBe(false);
+
+    const resetConfigResponse = await request.get(`${BACKEND_URL}/api/config`);
+    await assertSuccessful(resetConfigResponse);
+    const resetConfig = await resetConfigResponse.json();
+    expect(resetConfig.auctionsSinceLastBreak).toBe(0);
+    expect(resetConfig.auctionBreakEndsAt).toBeNull();
+    expect(resetConfig.nextNominationCaptain).toBeNull();
+});
+
+test("waits for every captain and pauses bidding during a disconnect", async ({ browser, request }) => {
+    test.setTimeout(60_000);
+    const admin = await login(browser, "auctioneer", "Sarkar");
+    const captainOne = await login(browser, captains[0], "e2e-password");
+    const captainTwo = await loginCaptainRequest(captains[1]);
+    const captainThree = await loginCaptainRequest(captains[2]);
+    const captainContexts = [captainTwo, captainThree];
+
+    try {
+        const startButton = admin.page.getByRole("button", { name: "Start auction" });
+        await expect(admin.page.locator(".captain-checkin-strip")).toContainText("3/4 captains checked in");
+        await expect(startButton).toBeDisabled();
+
+        const captainFour = await loginCaptainRequest(captains[3]);
+        captainContexts.push(captainFour);
+        await expect(startButton).toBeEnabled();
+        await startButton.click();
+        await expect(admin.page.getByRole("button", { name: "Auction started" })).toBeVisible();
+
+        const nomination = captainOne.page.getByRole("combobox", { name: "Choose a player to nominate" });
+        await nomination.selectOption("E2E Player Alpha");
+        await captainOne.page.getByRole("button", { name: "Nominate player" }).click();
+        await assertSuccessful(await captainTwo.post(`${BACKEND_URL}/api/auction/bid/increase`));
+
+        const activeStatusResponse = await request.get(`${BACKEND_URL}/api/auction/status`);
+        await assertSuccessful(activeStatusResponse);
+        const activeStatus = await activeStatusResponse.json();
+        expect(activeStatus.bidDeadlineAt).toBeGreaterThan(activeStatus.serverTime);
+
+        await assertSuccessful(await captainFour.post(`${BACKEND_URL}/api/logout`));
+        await expect.poll(async () => {
+            const response = await request.get(`${BACKEND_URL}/api/auction/status`);
+            return response.ok() ? (await response.json()).captainDisconnectPaused : false;
+        }).toBe(true);
+
+        const pausedStatusResponse = await request.get(`${BACKEND_URL}/api/auction/status`);
+        await assertSuccessful(pausedStatusResponse);
+        const pausedStatus = await pausedStatusResponse.json();
+        expect(pausedStatus.missingCaptains).toContain(captains[3]);
+        expect(pausedStatus.bidDeadlineAt).toBeNull();
+        expect(pausedStatus.pausedBidTimeRemainingMillis).toBeGreaterThan(0);
+        await expect(admin.page.locator(".captain-checkin-strip")).toContainText("Bidding paused");
+
+        const blockedBidResponse = await captainThree.post(`${BACKEND_URL}/api/auction/bid/increase`);
+        expect(await blockedBidResponse.text()).toContain("Waiting for captains to check in");
+
+        const reconnectedCaptainFour = await loginCaptainRequest(captains[3]);
+        captainContexts.push(reconnectedCaptainFour);
+        await expect.poll(async () => {
+            const response = await request.get(`${BACKEND_URL}/api/auction/status`);
+            if (!response.ok()) return null;
+            const status = await response.json();
+            return status.captainDisconnectPaused ? null : status.bidDeadlineAt;
+        }).toBeGreaterThan(Date.now());
+
+        const resumedStatusResponse = await request.get(`${BACKEND_URL}/api/auction/status`);
+        await assertSuccessful(resumedStatusResponse);
+        const resumedStatus = await resumedStatusResponse.json();
+        expect(resumedStatus.missingCaptains).toEqual([]);
+        expect(resumedStatus.pausedBidTimeRemainingMillis).toBeNull();
+    } finally {
+        await Promise.all(captainContexts.map(context => context.post(`${BACKEND_URL}/api/logout`).catch(() => undefined)));
+        await closeContexts(...captainContexts, captainOne.context, admin.context);
     }
 });
 
@@ -137,6 +310,18 @@ test("three passes sell to the highest bidder and update the viewer", async ({ b
         await expect(captainOne.page.getByRole("heading", { name: "E2E Player Alpha" })).toBeVisible();
         await expect(viewer.page.getByRole("heading", { name: "E2E Player Alpha" })).toBeVisible();
         await expect(captainOne.page.locator(".auction-metrics strong").nth(0)).toHaveText("₹300");
+        await Promise.all([admin.page, captainOne.page, viewer.page].map(page =>
+            page.setViewportSize({ width: 390, height: 844 })
+        ));
+        await expect.poll(() => admin.page.locator(".auction-flow-admin").evaluate(element => getComputedStyle(element).order)).toBe("3");
+        await expect.poll(() => admin.page.locator(".auction-flow-current").evaluate(element => getComputedStyle(element).order)).toBe("1");
+        await expect.poll(async () => {
+            const currentCard = await admin.page.locator(".auction-flow-current").boundingBox();
+            const adminControls = await admin.page.locator(".auction-flow-admin").boundingBox();
+            return currentCard && adminControls ? currentCard.y < adminControls.y : false;
+        }).toBe(true);
+        await expect(captainOne.page.locator(".auction-bid-actions .button")).toHaveCSS("min-height", "52px");
+        await expect(viewer.page.locator(".auction-flow-current .auction-countdown")).toBeVisible();
 
         await captainTwo.page.getByLabel("Custom bid").fill("400");
         await captainTwo.page.getByRole("button", { name: "Place custom bid" }).click();

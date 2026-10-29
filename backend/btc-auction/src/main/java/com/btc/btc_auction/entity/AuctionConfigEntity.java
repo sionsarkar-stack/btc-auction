@@ -91,6 +91,8 @@ public class AuctionConfigEntity {
 
     private String timeoutCaptainName;
 
+    private boolean captainDisconnectPaused;
+
     @ElementCollection
     @CollectionTable(name = "auction_passed_captains", joinColumns = @JoinColumn(name = "auction_config_id"))
     @Column(name = "captain_name")
@@ -108,11 +110,30 @@ public class AuctionConfigEntity {
     @Transient
     private List<String> walkoutPlayerNames;
 
+    @Transient
+    private List<String> missingCaptains = List.of();
+
     @Enumerated(EnumType.STRING)
     private AuctionPhase auctionPhase = AuctionPhase.NO_AUCTION;
 
     public Long getId() {
         return id;
+    }
+
+    public boolean isCaptainDisconnectPaused() {
+        return captainDisconnectPaused;
+    }
+
+    public void setCaptainDisconnectPaused(boolean captainDisconnectPaused) {
+        this.captainDisconnectPaused = captainDisconnectPaused;
+    }
+
+    public List<String> getMissingCaptains() {
+        return missingCaptains;
+    }
+
+    public void setMissingCaptains(List<String> missingCaptains) {
+        this.missingCaptains = missingCaptains == null ? List.of() : List.copyOf(missingCaptains);
     }
 
     public String getSeasonName() {

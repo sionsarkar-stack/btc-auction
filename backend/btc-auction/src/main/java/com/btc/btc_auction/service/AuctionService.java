@@ -61,6 +61,13 @@ public class AuctionService {
         private final ReAuctionSnapshotService reAuctionSnapshotService;
         private final CursePlayerService cursePlayerService;
         private final DoubleSupplier randomValueSupplier;
+        private CaptainPresenceService captainPresenceService;
+        private List<String> lastPublishedMissingCaptains = List.of();
+
+        @org.springframework.beans.factory.annotation.Autowired
+        public void setCaptainPresenceService(CaptainPresenceService captainPresenceService) {
+                this.captainPresenceService = captainPresenceService;
+        }
 
         public AuctionService(
                         TeamService teamService,
@@ -233,6 +240,11 @@ public class AuctionService {
                 if (captains.isEmpty()) {
                         return "Add at least one captain before starting the auction.";
                 }
+                List<String> missingCaptains = missingCaptains();
+                if (!missingCaptains.isEmpty()) {
+                        config.setMissingCaptains(missingCaptains);
+                        return waitingForCaptainsMessage(missingCaptains);
+                }
                 if (playerService.getUnsoldPlayers().isEmpty()) {
                         return "Import at least one available player before starting the auction.";
                 }
@@ -256,6 +268,10 @@ public class AuctionService {
 
         public synchronized String nominatePlayer(String playerName, String captainName) {
                 AuctionConfigEntity config = auctionConfigService.getConfig();
+                List<String> missingCaptains = updateCaptainPresence(config);
+                if (!missingCaptains.isEmpty()) {
+                        return waitingForCaptainsMessage(missingCaptains);
+                }
                 if (config.getAuctionBreakEndsAt() != null) {
                         if (System.currentTimeMillis() < config.getAuctionBreakEndsAt()) {
                                 return "The auction is on a scheduled three-minute break.";
@@ -330,6 +346,9 @@ public class AuctionService {
                 if (isTimeoutActive(config)) {
                         return "Bidding is paused during " + config.getTimeoutCaptainName() + "'s timeout.";
                 }
+                if (config.isCaptainDisconnectPaused()) {
+                        return waitingForCaptainsMessage(config.getMissingCaptains());
+                }
                 TeamEntity team = teamService.getTeam(captainName);
                 if (team == null) {
                         return "Captain not found.";
@@ -372,6 +391,9 @@ public class AuctionService {
                 }
                 if (isTimeoutActive(config)) {
                         return "Bidding is paused during " + config.getTimeoutCaptainName() + "'s timeout.";
+                }
+                if (config.isCaptainDisconnectPaused()) {
+                        return waitingForCaptainsMessage(config.getMissingCaptains());
                 }
                 TeamEntity team = teamService.getTeam(captainName);
                 if (team == null) {
@@ -433,6 +455,9 @@ public class AuctionService {
                 if (isTimeoutActive(config)) {
                         return "A timeout is already active.";
                 }
+                if (config.isCaptainDisconnectPaused()) {
+                        return waitingForCaptainsMessage(config.getMissingCaptains());
+                }
 
                 TeamEntity team = teamService.getTeam(captainName);
                 if (team == null) {
@@ -470,11 +495,15 @@ public class AuctionService {
                         finishAuctionBreak(config);
                         return;
                 }
+                updateCaptainPresence(config);
                 if (config.getAuctionTimeoutEndsAt() != null) {
                         if (System.currentTimeMillis() < config.getAuctionTimeoutEndsAt()) {
                                 return;
                         }
                         resumeAuctionAfterTimeout(config, System.currentTimeMillis());
+                        return;
+                }
+                if (config.isCaptainDisconnectPaused()) {
                         return;
                 }
                 Long deadline = config.getBidDeadlineAt();
@@ -518,10 +547,10 @@ public class AuctionService {
         private void resumeAuctionAfterTimeout(AuctionConfigEntity config, long now) {
                 Long remainingMillis = config.getPausedBidTimeRemainingMillis();
                 config.setAuctionTimeoutEndsAt(null);
-                config.setPausedBidTimeRemainingMillis(null);
                 config.setTimeoutCaptainName(null);
-                if (remainingMillis != null) {
+                if (!config.isCaptainDisconnectPaused() && remainingMillis != null) {
                         config.setBidDeadlineAt(now + remainingMillis);
+                        config.setPausedBidTimeRemainingMillis(null);
                 }
                 auctionConfigService.save(config);
                 auctionEventService.logEvent("TIMEOUT_ENDED", null, null, null,
@@ -547,9 +576,74 @@ public class AuctionService {
                 config.setAuctionTimeoutEndsAt(null);
                 config.setPausedBidTimeRemainingMillis(null);
                 config.setTimeoutCaptainName(null);
+                config.setCaptainDisconnectPaused(false);
+                config.setMissingCaptains(List.of());
                 if (clearUsage) {
                         config.getTimeoutUsage().clear();
                 }
+        }
+
+        public synchronized void refreshCaptainPresence(AuctionConfigEntity config) {
+                updateCaptainPresence(config);
+        }
+
+        private List<String> updateCaptainPresence(AuctionConfigEntity config) {
+                List<String> missingCaptains = missingCaptains();
+                config.setMissingCaptains(missingCaptains);
+                if (!missingCaptains.equals(lastPublishedMissingCaptains)) {
+                        lastPublishedMissingCaptains = List.copyOf(missingCaptains);
+                        auctionSocketService.broadcastRefresh();
+                }
+
+                Auction auction = currentAuctionService.getCurrentAuction();
+                boolean liveBidding = config.isAuctionStarted()
+                                && config.getAuctionPhase() == AuctionPhase.BIDDING
+                                && auction != null && !auction.getCurrentPlayer().isBlank();
+                if (liveBidding && !missingCaptains.isEmpty()) {
+                        if (!config.isCaptainDisconnectPaused()) {
+                                if (!isTimeoutActive(config)) {
+                                        Long deadline = config.getBidDeadlineAt();
+                                        config.setPausedBidTimeRemainingMillis(deadline == null
+                                                        ? null
+                                                        : Math.max(0, deadline - System.currentTimeMillis()));
+                                        config.setBidDeadlineAt(null);
+                                }
+                                config.setCaptainDisconnectPaused(true);
+                                auctionConfigService.save(config);
+                                auctionEventService.logEvent("CAPTAIN_DISCONNECTED", auction.getCurrentPlayer(), null,
+                                                null, waitingForCaptainsMessage(missingCaptains));
+                                auctionSocketService.broadcastRefresh();
+                        }
+                        return missingCaptains;
+                }
+
+                if (config.isCaptainDisconnectPaused() && missingCaptains.isEmpty()) {
+                        config.setCaptainDisconnectPaused(false);
+                        if (!isTimeoutActive(config) && config.getPausedBidTimeRemainingMillis() != null) {
+                                config.setBidDeadlineAt(System.currentTimeMillis()
+                                                + config.getPausedBidTimeRemainingMillis());
+                                config.setPausedBidTimeRemainingMillis(null);
+                        }
+                        auctionConfigService.save(config);
+                        auctionEventService.logEvent("CAPTAIN_RECONNECTED", auction.getCurrentPlayer(), null,
+                                        null, "All captains checked in. Bidding resumed.");
+                        auctionSocketService.broadcastRefresh();
+                }
+                return missingCaptains;
+        }
+
+        private List<String> missingCaptains() {
+                if (captainPresenceService == null) {
+                        return List.of();
+                }
+                return captainPresenceService.missingCaptains(orderedCaptains());
+        }
+
+        private String waitingForCaptainsMessage(List<String> missingCaptains) {
+                if (missingCaptains == null || missingCaptains.isEmpty()) {
+                        return "Waiting for all captains to check in.";
+                }
+                return "Waiting for captains to check in: " + String.join(", ", missingCaptains) + ".";
         }
 
         private boolean finalizeNominationSale(
@@ -1805,6 +1899,9 @@ public class AuctionService {
                 clearTimeoutState(config, true);
                 config.setMarketAdjustmentPlayer(null);
                 config.setMarketAdjustment(0);
+                config.setAuctionBreakEndsAt(null);
+                config.setAuctionsSinceLastBreak(0);
+                config.setNextNominationCaptain(null);
                 config.setAuctionPhase(
                                 AuctionPhase.NO_AUCTION);
 
@@ -1823,6 +1920,15 @@ public class AuctionService {
                                                 "None",
                                                 0,
                                                 ""));
+
+                teamService.getAllTeams().forEach(team -> {
+                        team.setPurse(team.getStartingPurse());
+                        team.setPlayersBought(0);
+                        team.setPlayersLeft(Math.max(0, config.getSquadSize() - 1));
+                        team.setTournamentPoints(0);
+                        team.setWildPickUsed(false);
+                        teamService.saveTeam(team);
+                });
 
                 playerService.getAllPlayers()
                                 .forEach(player -> {
@@ -1872,6 +1978,8 @@ public class AuctionService {
                         cursePlayerService.expireForUnsoldPlayers();
                 }
                 config.setAuctionStarted(false);
+                config.setCaptainDisconnectPaused(false);
+                config.setMissingCaptains(List.of());
                 config.setAuctionBreakEndsAt(null);
                 clearWheelSpinState(config);
                 config.setAuctionPhase(AuctionPhase.NO_AUCTION);

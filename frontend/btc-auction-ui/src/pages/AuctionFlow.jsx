@@ -20,6 +20,7 @@ function AuctionFlow({ isAdmin = false }) {
     const [isConnected, setIsConnected] = useState(false);
     const [clock, setClock] = useState(0);
     const [serverOffset, setServerOffset] = useState(0);
+    const missingCaptains = status?.missingCaptains || [];
 
     const username = localStorage.getItem("username") || "";
     const role = localStorage.getItem("role");
@@ -109,7 +110,7 @@ function AuctionFlow({ isAdmin = false }) {
         && customBidAmount % 50 === 0
         && customBidAmount <= maxBid;
     const isBidding = status?.auctionPhase === "BIDDING" && Boolean(currentPlayer);
-    const canShowNomination = Boolean(status?.auctionStarted && players.length > 0);
+    const canShowNomination = Boolean(status?.auctionStarted && players.length > 0 && missingCaptains.length === 0);
     const isMyNominationTurn = status?.nextNominationCaptain?.toLowerCase() === username.toLowerCase();
     const hasPassed = (status?.passedCaptains || []).some(name => name.toLowerCase() === username.toLowerCase());
     const deadline = status?.bidDeadlineAt;
@@ -143,7 +144,7 @@ function AuctionFlow({ isAdmin = false }) {
     }
 
     return (
-        <section className="app-container auction-flow">
+        <section className={`app-container auction-flow${isAdmin ? " is-admin" : " is-live-view"}${currentPlayer ? " has-current-player" : ""}`}>
             <header className="page-header">
                 <div>
                     <p className="auction-kicker">{isAdmin ? "Auction Control" : "Live Auction"}</p>
@@ -184,6 +185,16 @@ function AuctionFlow({ isAdmin = false }) {
                 </section>
             )}
 
+            {teams.length > 0 && (
+                <section className={`captain-checkin-strip${missingCaptains.length > 0 ? " has-missing" : ""}${status?.captainDisconnectPaused ? " is-paused" : ""}`}
+                    role="status" aria-live="polite">
+                    <strong>{teams.length - missingCaptains.length}/{teams.length} captains checked in</strong>
+                    {missingCaptains.length > 0
+                        ? <span>{status?.captainDisconnectPaused ? "Bidding paused. Waiting for " : "Waiting for "}{missingCaptains.join(", ")} to reconnect.</span>
+                        : <span>All captains are present.</span>}
+                </section>
+            )}
+
             {isAdmin && (
                 <section className="section-card auction-flow-admin">
                     <div className="section-heading-row">
@@ -196,7 +207,7 @@ function AuctionFlow({ isAdmin = false }) {
                                 className="button"
                                 type="button"
                                 onClick={() => void runAction("/api/auction/start")}
-                                disabled={isBusy || status?.auctionStarted || teams.length === 0 || players.length === 0}
+                                disabled={isBusy || status?.auctionStarted || teams.length === 0 || players.length === 0 || missingCaptains.length > 0}
                             >
                                 {status?.auctionStarted ? "Auction started" : "Start auction"}
                             </button>
@@ -217,16 +228,23 @@ function AuctionFlow({ isAdmin = false }) {
             <section className="current-auction-card auction-flow-current">
                 {currentPlayer ? (
                     <>
+                        <div className="auction-flow-live-heading">
+                            <p className="auction-kicker auction-nominated-label">Nominated player</p>
+                            <h2 className="current-player-name">{currentPlayer}</h2>
+                            <p className="current-player-seed">Seed {auction.seed || "-"}</p>
+                        </div>
                         <div className="auction-metrics" aria-label="Current auction metrics">
                             <div><span>Base price</span><strong>₹{auction.basePrice}</strong></div>
                             <div><span>Current bid</span><strong>₹{auction.currentBid}</strong></div>
                             <div><span>Leading captain</span><strong>{auction.leader === "None" ? "No bids" : auction.leader}</strong></div>
                             <div><span>Increase count</span><strong>{Math.max(0, Math.floor((auction.currentBid - auction.basePrice) / 50))}</strong></div>
                         </div>
-                        <p className="auction-kicker auction-nominated-label">Nominated player</p>
-                        <h2 className="current-player-name">{currentPlayer}</h2>
-                        <p className="current-player-seed">Seed {auction.seed || "-"}</p>
-                        {isTimeoutActive ? (
+                        {status?.captainDisconnectPaused ? (
+                            <div className="auction-timeout-banner captain-disconnect-pause" role="status" aria-live="polite">
+                                <strong>Bidding paused</strong>
+                                <span>Waiting for {missingCaptains.join(", ")} to reconnect.</span>
+                            </div>
+                        ) : isTimeoutActive ? (
                             <div className="auction-timeout-banner" role="status" aria-live="polite">
                                 <strong>{status.timeoutCaptainName} called timeout</strong>
                                 <span>Auction paused · {timeoutSecondsLeft} seconds</span>

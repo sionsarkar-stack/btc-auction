@@ -281,6 +281,7 @@ public class AuctionController {
         auctionService.completeWheelSpinWhenDue();
         AuctionConfigEntity config = auctionConfigService.getConfig();
         config.setServerTime(System.currentTimeMillis());
+        auctionService.refreshCaptainPresence(config);
 
         if (config.getAuctionPhase() == com.btc.btc_auction.enums.AuctionPhase.SPINNING) {
             List<PlayerEntity> availablePlayers = playerService.getUnsoldPlayers();

@@ -336,6 +336,40 @@ body {
     color: #7c2d12;
 }
 
+.captain-checkin-strip {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 5px 12px;
+    padding: 10px 14px;
+    border-left: 4px solid #15803d;
+    background: #ecfdf5;
+    color: #14532d;
+    font-size: 13px;
+}
+
+.captain-checkin-strip.has-missing,
+.captain-checkin-strip.is-paused {
+    border-left-color: #c2410c;
+    background: #fff7ed;
+    color: #7c2d12;
+}
+
+.captain-checkin-strip strong {
+    font-weight: 800;
+}
+
+.captain-checkin-strip span {
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.captain-disconnect-pause {
+    border-left-color: #c2410c;
+    background: #fff7ed;
+    color: #7c2d12;
+}
+
 .auction-break-state {
     min-height: 190px;
 }
@@ -499,22 +533,185 @@ body {
 }
 
 @media (max-width: 700px) {
+    .auction-flow.has-current-player>.page-header {
+        order: 0;
+    }
+
+    .auction-flow.has-current-player>.auction-flow-current {
+        order: 1;
+    }
+
+    .auction-flow.has-current-player>.auction-break-banner {
+        order: 2;
+    }
+
+    .auction-flow.has-current-player>.auction-flow-admin {
+        order: 3;
+        padding: 14px;
+    }
+
+    .auction-flow.has-current-player>p {
+        order: 4;
+    }
+
+    .auction-flow.has-current-player>.auction-flow-roster {
+        order: 5;
+    }
+
+    .auction-flow.has-current-player>.auction-flow-teams {
+        order: 6;
+    }
+
+    .auction-flow.has-current-player>.player-sold-banner {
+        display: none;
+    }
+
+    .auction-flow.has-current-player .auction-flow-admin-actions {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
+    }
+
+    .auction-flow.has-current-player .auction-flow-admin-actions button {
+        min-width: 0;
+        min-height: 46px;
+        padding: 8px;
+        font-size: 12px;
+    }
+
     .section-heading-row {
         align-items: stretch;
         flex-direction: column;
     }
 
     .auction-flow-current {
-        padding: 16px;
+        gap: 12px;
+        padding: 14px;
+    }
+
+    .auction-flow-live-heading {
+        display: grid;
+        gap: 4px;
+    }
+
+    .auction-flow-current .auction-nominated-label {
+        font-size: 11px;
+    }
+
+    .auction-flow-current .current-player-name {
+        margin: 0;
+        font-size: 30px;
+        line-height: 1.1;
+        overflow-wrap: anywhere;
+    }
+
+    .auction-flow-current .current-player-seed {
+        font-size: 12px;
     }
 
     .auction-flow-current .auction-metrics {
         grid-template-columns: repeat(2, minmax(0, 1fr));
         gap: 8px;
+        margin: 0;
+    }
+
+    .auction-flow-current .auction-metrics>div:nth-child(2) {
+        grid-column: 1 / -1;
+        order: -1;
+        border-color: #fdba74;
+        background: #fff7ed;
+    }
+
+    .auction-flow-current .auction-metrics>div:nth-child(2) span {
+        color: #9a3412;
+    }
+
+    .auction-flow-current .auction-metrics>div:nth-child(2) strong {
+        color: #7c2d12;
+        font-size: 32px;
+    }
+
+    .auction-flow-current .auction-metrics>div:nth-child(4) {
+        display: none;
     }
 
     .auction-flow-current .current-player-name {
-        font-size: 32px;
+        font-size: 30px;
+    }
+
+    .auction-flow-current .auction-countdown {
+        justify-content: center;
+        min-height: 96px;
+        padding: 12px;
+        border: 1px solid #bbf7d0;
+        border-radius: 6px;
+        background: #f0fdf4;
+        font-size: 58px;
+    }
+
+    .auction-flow-current .auction-countdown.is-urgent {
+        border-color: #fecaca;
+        background: #fef2f2;
+    }
+
+    .auction-budget-summary {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
+        padding: 10px 0;
+    }
+
+    .auction-budget-summary span {
+        display: grid;
+        gap: 3px;
+        font-size: 12px;
+    }
+
+    .auction-budget-summary strong {
+        font-size: 18px;
+    }
+
+    .auction-bid-actions {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
+    }
+
+    .auction-bid-actions button {
+        width: 100%;
+        min-width: 0;
+        min-height: 52px;
+        padding: 9px;
+        line-height: 1.2;
+        white-space: normal;
+    }
+
+    .auction-flow-current .custom-bid-form {
+        grid-template-columns: minmax(0, 1fr) auto;
+        max-width: none;
+        gap: 8px;
+        padding-top: 10px;
+        border-top: 1px solid #dbe3eb;
+    }
+
+    .auction-flow-current .custom-bid-form label,
+    .auction-flow-current .custom-bid-form .form-hint {
+        grid-column: 1 / -1;
+    }
+
+    .auction-flow-current .custom-bid-form .input,
+    .auction-flow-current .custom-bid-form .button-secondary {
+        min-width: 0;
+        min-height: 48px;
+    }
+
+    .auction-flow-current .auction-timeout-button {
+        width: 100%;
+        min-height: 46px;
+    }
+
+    .auction-flow-current .auction-pass-count {
+        text-align: center;
     }
 
     .auction-team-table-wrap {
@@ -2953,6 +3150,89 @@ body {
 .status-badge.sold {
     background: #fee2e2;
     color: #991b1b;
+}
+
+.status-badge.held {
+    background: #fef3c7;
+    color: #92400e;
+}
+
+.player-roster-heading {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.player-roster-heading h2 {
+    margin: 0;
+}
+
+.player-roster-heading>span,
+.player-roster-detail {
+    color: #64748b;
+    font-size: 13px;
+}
+
+.player-roster-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0 18px;
+    list-style: none;
+    margin: 12px 0 0;
+    padding: 0;
+}
+
+.player-roster-grid li {
+    min-width: 0;
+    border-bottom: 1px solid #e5e7eb;
+    padding: 8px 0;
+}
+
+.player-roster-player,
+.player-roster-status {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 6px;
+}
+
+.player-roster-player strong {
+    min-width: 0;
+    overflow-wrap: anywhere;
+    font-size: 13px;
+}
+
+.player-roster-base-price {
+    flex-shrink: 0;
+    color: #475569;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.player-roster-status {
+    justify-content: flex-start;
+    align-items: center;
+    flex-wrap: wrap;
+    margin-top: 4px;
+}
+
+.player-roster-grid .status-badge {
+    min-height: 22px;
+    padding: 2px 7px;
+    font-size: 10px;
+}
+
+.player-roster-detail {
+    font-size: 11px;
+    overflow-wrap: anywhere;
+}
+
+@media (max-width: 760px) {
+    .player-roster-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 0 12px;
+    }
 }
 
 .table-empty,
