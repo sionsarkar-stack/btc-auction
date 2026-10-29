@@ -174,7 +174,7 @@ class BlindOpeningBidServiceTest {
 
         assertEquals(300, service.awardBonusIfEligible("Player X", "Sen"));
         assertEquals(0, service.awardBonusIfEligible("Player X", "Sen"));
-        assertEquals(375, sen.getTournamentPoints());
+        assertEquals(75, sen.getTournamentPoints());
         assertEquals(2_000, sen.getPurse());
         assertEquals(0, config.getBlindBonanzaAwardsUsed());
         verify(auctionEventService).logEvent(
@@ -182,7 +182,37 @@ class BlindOpeningBidServiceTest {
                 "Player X",
                 "Sen",
                 300,
-                "Highest valid blind bidder won the player; +300 tournament points.");
+                "Highest valid blind bidder won the player; effective price reduced by ₹300.");
+    }
+
+    @Test
+    void pairedSaleAwardsOnlyOneBonusWhenBuyerIsEligibleForBothPlayers() {
+        BlindOpeningBidEntity firstEligibleBid = submittedBid("Sen", 500);
+        firstEligibleBid.setBonusEligible(true);
+        firstEligibleBid.setPlayerName("Player A");
+        BlindOpeningBidEntity secondEligibleBid = submittedBid("Sen", 400);
+        secondEligibleBid.setBonusEligible(true);
+        secondEligibleBid.setPlayerName("Player C");
+        TeamEntity sen = new TeamEntity();
+        sen.setCaptainName("Sen");
+        sen.setTournamentPoints(100);
+        AuctionConfigEntity config = new AuctionConfigEntity();
+        when(repository.findByPlayerName("Player A")).thenReturn(List.of(firstEligibleBid));
+        when(repository.findByPlayerName("Player C")).thenReturn(List.of(secondEligibleBid));
+        when(teamRepository.findByCaptainName("Sen")).thenReturn(java.util.Optional.of(sen));
+        when(auctionConfigService.getConfig()).thenReturn(config);
+
+        assertEquals(300, service.awardBonusIfEligibleForSale(List.of("Player A", "Player C"), "Sen"));
+        assertEquals(0, service.awardBonusIfEligibleForSale(List.of("Player A", "Player C"), "Sen"));
+        assertEquals(100, sen.getTournamentPoints());
+        assertTrue(firstEligibleBid.isBonusAwarded());
+        assertFalse(secondEligibleBid.isBonusAwarded());
+        verify(auctionEventService, org.mockito.Mockito.times(1)).logEvent(
+                eq("BLIND_BID_BONUS"),
+                any(String.class),
+                eq("Sen"),
+                eq(300),
+                any(String.class));
     }
 
     @Test
@@ -199,14 +229,14 @@ class BlindOpeningBidServiceTest {
         when(auctionConfigService.getConfig()).thenReturn(config);
 
         assertEquals(500, service.awardBonusIfEligible("Player X", "Sen"));
-        assertEquals(500, sen.getTournamentPoints());
+        assertEquals(0, sen.getTournamentPoints());
         assertEquals(1, config.getBlindBonanzaAwardsUsed());
         verify(auctionEventService).logEvent(
                 "BLIND_BONANZA_REWARDED",
                 "Player X",
                 "Sen",
                 500,
-                "Blind Bonanza upgraded the blind-bid bonus to +500 tournament points.");
+                "Blind Bonanza reduced the effective price by ₹500.");
     }
 
     @Test
@@ -224,7 +254,7 @@ class BlindOpeningBidServiceTest {
         when(auctionConfigService.getConfig()).thenReturn(config);
 
         assertEquals(300, service.awardBonusIfEligible("Player X", "Sen"));
-        assertEquals(300, sen.getTournamentPoints());
+        assertEquals(0, sen.getTournamentPoints());
         assertEquals(4, config.getBlindBonanzaAwardsUsed());
     }
 
@@ -240,12 +270,11 @@ class BlindOpeningBidServiceTest {
         AuctionConfigEntity config = new AuctionConfigEntity();
         config.setBlindBonanzaAwardsUsed(1);
         when(repository.findByPlayerName("Player X")).thenReturn(List.of(eligibleBid));
-        when(teamRepository.findByCaptainName("Sen")).thenReturn(java.util.Optional.of(sen));
         when(auctionConfigService.getConfig()).thenReturn(config);
 
         service.reverseBonusIfAwarded("Player X");
 
-        assertEquals(0, sen.getTournamentPoints());
+        assertEquals(500, sen.getTournamentPoints());
         assertEquals(0, config.getBlindBonanzaAwardsUsed());
         assertFalse(eligibleBid.isBonusAwarded());
     }
@@ -299,7 +328,7 @@ class BlindOpeningBidServiceTest {
     }
 
     @Test
-    void blindOpeningBidsCanExceedThePurseBasedMaximumBid() {
+    void blindOpeningBidsRejectAmountsAboveTheSituationalMaximum() {
         TeamEntity team = new TeamEntity();
         team.setCaptainName("Sen");
         team.setPurse(500);
@@ -308,14 +337,15 @@ class BlindOpeningBidServiceTest {
         bid.setCaptainName("Sen");
         bid.setSubmitted(false);
 
+        BidAffordabilityService affordability = org.mockito.Mockito.mock(BidAffordabilityService.class);
         service = new BlindOpeningBidService(repository, teamService, currentAuctionService, auctionSocketService,
-                auctionEventService);
+                auctionEventService, auctionConfigService, affordability);
         when(teamRepository.findByCaptainName("Sen")).thenReturn(java.util.Optional.of(team));
-        when(repository.findByPlayerNameAndCaptainName("Player X", "Sen"))
-                .thenReturn(java.util.Optional.of(bid));
+        when(affordability.validate("Player X", "Sen", 5000, true)).thenReturn("Maximum affordable bid is ₹800.");
 
-        assertEquals("Blind opening bid submitted.", service.submitBid("Player X", "Sen", 5000));
-        assertEquals(5000, bid.getBidAmount());
+        assertEquals("Maximum affordable bid is ₹800.", service.submitBid("Player X", "Sen", 5000));
+        assertFalse(bid.isSubmitted());
+        verify(repository, org.mockito.Mockito.never()).save(bid);
     }
 
     @Test

@@ -16,6 +16,12 @@ public class TeamEntity {
 
     private int tournamentPoints;
 
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    private Integer effectivePriceCredit;
+
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    private Integer curseRewardCredit;
+
     private int playersBought;
 
     private int playersLeft;
@@ -45,12 +51,29 @@ public class TeamEntity {
         this.purse = purse;
     }
 
+    @com.fasterxml.jackson.annotation.JsonIgnore
     public int getTournamentPoints() {
         return tournamentPoints;
     }
 
     public void setTournamentPoints(int tournamentPoints) {
         this.tournamentPoints = tournamentPoints;
+    }
+
+    public int getEffectivePriceCredit() {
+        return effectivePriceCredit == null ? 0 : effectivePriceCredit;
+    }
+
+    public void setEffectivePriceCredit(int effectivePriceCredit) {
+        this.effectivePriceCredit = effectivePriceCredit;
+    }
+
+    public int getCurseRewardCredit() {
+        return curseRewardCredit == null ? 0 : curseRewardCredit;
+    }
+
+    public void setCurseRewardCredit(int curseRewardCredit) {
+        this.curseRewardCredit = curseRewardCredit;
     }
 
     public int getPlayersBought() {

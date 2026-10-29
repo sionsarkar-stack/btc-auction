@@ -72,6 +72,24 @@ public class AuctionController {
         return auctionService.spinWheel();
     }
 
+    @GetMapping("/api/auction/affordability")
+    public java.util.Map<String, Integer> getAffordability(
+            @RequestParam(defaultValue = "false") boolean openingBid, HttpSession session) {
+        requireRole(session, "CAPTAIN", "Captain access required.");
+        return java.util.Map.of("maxBid", auctionService.getMaxAffordableBid(
+                SessionAuthorization.getUsername(session), openingBid));
+    }
+
+    @PostMapping("/api/auction/return-to-pool")
+    public String returnToPool(@RequestBody java.util.Map<String, String> request, HttpSession session) {
+        requireRole(session, "ADMIN", "Admin access required.");
+        String name = request.get("playerName");
+        if (name == null || name.isBlank()) {
+            return "Player name is required.";
+        }
+        return auctionService.returnPlayerToPool(name);
+    }
+
     @PostMapping("/api/auction/re-auction/start")
     public String startReAuction(HttpSession session) {
         requireRole(session, "ADMIN", "Admin access required.");
@@ -295,6 +313,7 @@ public class AuctionController {
             config.setWalkoutPlayerNames(availablePlayers.stream()
                     .filter(Objects::nonNull)
                     .filter(player -> player.getName() != null)
+                    .filter(player -> !"C".equalsIgnoreCase(player.getSeed()))
                     .filter(player -> !clubbedPlayerPairService.isPlayerTwo(player.getName()))
                     .map(player -> player.getName())
                     .sorted((first, second) -> {

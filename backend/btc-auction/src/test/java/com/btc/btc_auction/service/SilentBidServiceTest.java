@@ -33,7 +33,8 @@ class SilentBidServiceTest {
     private AuctionSocketService auctionSocketService;
 
     @Test
-    void silentBidsCanExceedThePurseBasedMaximumBid() {
+    void silentBidsRejectAmountsAboveTheSituationalMaximum() {
+        BidAffordabilityService affordability = org.mockito.Mockito.mock(BidAffordabilityService.class);
         TeamEntity team = new TeamEntity();
         SilentBidEntity bid = new SilentBidEntity();
         bid.setPlayerName("Player X");
@@ -45,14 +46,16 @@ class SilentBidServiceTest {
                 teamService,
                 auctionService,
                 auctionEventService,
-                auctionSocketService);
+                auctionSocketService, affordability);
 
         when(repository.findByPlayerNameAndCaptainName("Player X", "Sen")).thenReturn(Optional.of(bid));
         when(teamService.getTeam("Sen")).thenReturn(team);
         when(teamService.isValidBidIncrement(5000)).thenReturn(true);
+        when(affordability.validate("Player X", "Sen", 5000, false)).thenReturn("Maximum affordable bid is ₹150.");
 
-        assertEquals("Bid submitted.", service.submitBid("Player X", "Sen", 5000));
-        assertEquals(5000, bid.getBidAmount());
+        assertEquals("Maximum affordable bid is ₹150.", service.submitBid("Player X", "Sen", 5000));
+        assertFalse(bid.isSubmitted());
+        verify(repository, never()).save(bid);
     }
 
     @Test

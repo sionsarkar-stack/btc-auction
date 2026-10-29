@@ -28,6 +28,9 @@ public class PlayerEntity {
      */
     private int finalPrice;
 
+    @Transient
+    private Integer effectivePrice;
+
     private String team;
 
     private Boolean reAuctioned = false;
@@ -99,6 +102,14 @@ public class PlayerEntity {
 
     public void setFinalPrice(int finalPrice) {
         this.finalPrice = finalPrice;
+    }
+
+    public int getEffectivePrice() {
+        return effectivePrice != null ? effectivePrice : getFinalPrice();
+    }
+
+    public void setEffectivePrice(int effectivePrice) {
+        this.effectivePrice = effectivePrice;
     }
 
     public String getTeam() {

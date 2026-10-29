@@ -2,6 +2,7 @@ package com.btc.btc_auction.service;
 
 import com.btc.btc_auction.entity.AuctionConfigEntity;
 import com.btc.btc_auction.entity.BlindOpeningBidEntity;
+import com.btc.btc_auction.entity.ClubbedPlayerPairEntity;
 import com.btc.btc_auction.entity.PlayerEntity;
 import com.btc.btc_auction.entity.RandomEventEntity;
 import com.btc.btc_auction.entity.TeamEntity;
@@ -116,6 +117,22 @@ class AuctionServiceWheelSelectionTest {
         assertNotNull(config.getWheelSpinStartedAt());
         assertNotNull(config.getWheelSpinEndsAt());
         assertTrue(config.getWheelSpinEndsAt() > config.getWheelSpinStartedAt());
+    }
+
+    @Test
+    void excludesUnpairedSeedCPlayersFromBothAuctionRounds() {
+        PlayerEntity raj = new PlayerEntity();
+        raj.setName("Raj");
+        raj.setSeed("c");
+        when(playerService.getUnsoldPlayers()).thenReturn(List.of(raj));
+
+        assertEquals("No available players left to spin.", auctionService.spinWheel());
+        assertTrue(currentAuctionService.getCurrentAuction().getCurrentPlayer().isBlank());
+
+        config.setAuctionRound(2);
+        assertEquals("Re-auction completed. Remaining unsold players are displayed for admin manual sale.",
+                auctionService.spinWheel());
+        assertTrue(currentAuctionService.getCurrentAuction().getCurrentPlayer().isBlank());
     }
 
     @Test
@@ -247,6 +264,58 @@ class AuctionServiceWheelSelectionTest {
                 anyString());
         verify(cursePlayerService).settleSale("Rohit Sharma", "Sen", 600);
         verify(blindOpeningBidService).awardBonusIfEligible("Rohit Sharma", "Sen");
+    }
+
+    @Test
+    void pairedSaleChecksBlindBonusEligibilityOnceForTheWholePair() {
+        TeamEntity team = new TeamEntity();
+        team.setCaptainName("Sen");
+        team.setPurse(1000);
+        team.setPlayersLeft(5);
+        PlayerEntity firstPlayer = new PlayerEntity();
+        firstPlayer.setName("Rohit Sharma");
+        firstPlayer.setSeed("A");
+        PlayerEntity pairedPlayer = new PlayerEntity();
+        pairedPlayer.setName("Virat Kohli");
+        pairedPlayer.setSeed("C");
+        ClubbedPlayerPairEntity pair = new ClubbedPlayerPairEntity();
+        pair.setPlayerOne("Rohit Sharma");
+        pair.setPlayerTwo("Virat Kohli");
+        currentAuctionService.setCurrentAuction(new Auction("Rohit Sharma", "A", 500, "Sen", 300));
+        config.setAuctionPhase(AuctionPhase.SOLD);
+        when(teamService.getTeam("Sen")).thenReturn(team);
+        when(playerService.getPlayer("Rohit Sharma")).thenReturn(firstPlayer);
+        when(playerService.getPlayer("Virat Kohli")).thenReturn(pairedPlayer);
+        when(clubbedPlayerPairService.getPairForPlayer("Rohit Sharma"))
+                .thenReturn(java.util.Optional.of(pair));
+        auctionService = new AuctionService(
+                teamService,
+                playerService,
+                auctionLogService,
+                adminActionLogService,
+                auctionEventService,
+                auctionConfigService,
+                rtmService,
+                auctionSocketService,
+                currentAuctionService,
+                clubbedPlayerPairService,
+                null,
+                blindOpeningBidService,
+                null,
+                null,
+                () -> 0.75,
+                cursePlayerService);
+
+        auctionService.sellPlayer("Rohit Sharma", "Sen", 500);
+
+        verify(cursePlayerService).settleSaleForPlayers(
+                List.of("Rohit Sharma", "Virat Kohli"),
+                "Sen",
+                500);
+        verify(blindOpeningBidService).awardBonusIfEligibleForSale(
+                List.of("Rohit Sharma", "Virat Kohli"),
+                "Sen");
+        verify(blindOpeningBidService, never()).awardBonusIfEligible(anyString(), anyString());
     }
 
     @Test
@@ -589,7 +658,12 @@ class AuctionServiceWheelSelectionTest {
     }
 
     @Test
-    void liveBidsCanExceedThePurseBasedMaximumBid() {
+    void liveBidsRejectAmountsAboveTheSituationalMaximum() {
+        BidAffordabilityService affordability = org.mockito.Mockito.mock(BidAffordabilityService.class);
+        auctionService = new AuctionService(teamService, playerService, auctionLogService, adminActionLogService,
+                auctionEventService, auctionConfigService, rtmService, auctionSocketService, currentAuctionService,
+                clubbedPlayerPairService, randomEventService, blindOpeningBidService, silentBidService,
+                reAuctionSnapshotService, cursePlayerService, null, affordability);
         TeamEntity team = new TeamEntity();
         team.setCaptainName("Sen");
         team.setPlayersLeft(4);
@@ -598,11 +672,13 @@ class AuctionServiceWheelSelectionTest {
         config.setAuctionPhase(AuctionPhase.BIDDING);
         when(teamService.getTeam("Sen")).thenReturn(team);
         when(teamService.isValidBidIncrement(5000)).thenReturn(true);
+        when(affordability.validate("Rohit Sharma", "Sen", 5000, false))
+                .thenReturn("Maximum affordable bid is ₹150.");
 
-        auctionService.updateCurrentAuction("Sen", 5000);
+        assertEquals("Maximum affordable bid is ₹150.", auctionService.updateCurrentAuction("Sen", 5000));
 
-        assertEquals("Sen", currentAuctionService.getCurrentAuction().getLeader());
-        assertEquals(5000, currentAuctionService.getCurrentAuction().getCurrentBid());
+        assertEquals("None", currentAuctionService.getCurrentAuction().getLeader());
+        assertEquals(300, currentAuctionService.getCurrentAuction().getCurrentBid());
     }
 
     private AuctionService auctionServiceWithRandomEvents(DoubleSupplier randomValueSupplier) {

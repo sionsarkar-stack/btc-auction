@@ -12,6 +12,8 @@ public interface BlindOpeningBidRepository extends JpaRepository<BlindOpeningBid
 
     List<BlindOpeningBidEntity> findByPlayerName(String playerName);
 
+    List<BlindOpeningBidEntity> findByPlayerNameIn(List<String> playerNames);
+
     void deleteByPlayerName(String playerName);
 
     Optional<BlindOpeningBidEntity> findByPlayerNameAndCaptainName(String playerName, String captainName);

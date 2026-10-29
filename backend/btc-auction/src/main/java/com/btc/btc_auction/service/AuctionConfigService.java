@@ -44,7 +44,7 @@ public class AuctionConfigService {
         AuctionConfigEntity config = new AuctionConfigEntity();
 
         config.setSeasonName(
-                "BTC Season 12");
+                "BTC Season 13");
 
         // The captain occupies one of the ten squad places, leaving nine purchases.
         config.setSquadSize(10);

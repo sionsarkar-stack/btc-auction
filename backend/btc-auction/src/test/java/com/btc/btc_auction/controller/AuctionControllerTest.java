@@ -67,6 +67,29 @@ class AuctionControllerTest {
     }
 
     @Test
+    void affordabilityUsesAuthenticatedCaptainAndRejectsOtherRoles() {
+        when(session.getAttribute(SessionAttributes.USERNAME)).thenReturn("Sen");
+        when(session.getAttribute(SessionAttributes.ROLE)).thenReturn("CAPTAIN");
+        when(auctionService.getMaxAffordableBid("Sen", true)).thenReturn(450);
+        assertEquals(Map.of("maxBid", 450), controller.getAffordability(true, session));
+        when(session.getAttribute(SessionAttributes.ROLE)).thenReturn("VIEWER");
+        assertThrows(ResponseStatusException.class, () -> controller.getAffordability(true, session));
+    }
+
+    @Test
+    void returningToPoolRequiresAdminAndValidPlayerName() {
+        when(session.getAttribute(SessionAttributes.USERNAME)).thenReturn("Sen");
+        when(session.getAttribute(SessionAttributes.ROLE)).thenReturn("CAPTAIN");
+        assertThrows(ResponseStatusException.class,
+                () -> controller.returnToPool(Map.of("playerName", "Tiyas"), session));
+        when(session.getAttribute(SessionAttributes.ROLE)).thenReturn("ADMIN");
+        assertEquals("Player name is required.", controller.returnToPool(Map.of(), session));
+        when(auctionService.returnPlayerToPool("Tiyas")).thenReturn("Tiyas returned to the auction pool.");
+        assertEquals("Tiyas returned to the auction pool.",
+                controller.returnToPool(Map.of("playerName", "Tiyas"), session));
+    }
+
+    @Test
     void activatesWildcardForTheCaptainStoredInTheSession() {
         when(session.getAttribute(SessionAttributes.USERNAME)).thenReturn("Sen");
         when(session.getAttribute(SessionAttributes.ROLE)).thenReturn("CAPTAIN");

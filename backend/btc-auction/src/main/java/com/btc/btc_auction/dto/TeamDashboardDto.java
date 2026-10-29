@@ -38,6 +38,7 @@ public class TeamDashboardDto {
         return purse;
     }
 
+    @com.fasterxml.jackson.annotation.JsonIgnore
     public int getTournamentPoints() {
         return tournamentPoints;
     }

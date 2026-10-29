@@ -12,6 +12,8 @@ function PlayerWalkout({
     players = [],
     walkoutPlayers,
     selectedPlayer = "",
+    selectedPlayerLabel = "",
+    selectedPlayerSeed = "",
     spinStartedAt,
     spinEndsAt,
     serverTime,
@@ -187,6 +189,8 @@ function PlayerWalkout({
     const activeName = getPlayerName(activePlayer);
     const activeSeed = typeof activePlayer === "object" ? activePlayer?.seed || activePlayer?.category : "";
     const isRevealed = Boolean(selectedPlayer) && !isAwaitingReveal;
+    const revealedName = isRevealed && selectedPlayerLabel ? selectedPlayerLabel : activeName;
+    const revealedSeed = isRevealed && selectedPlayerSeed ? selectedPlayerSeed : activeSeed;
     const slipProgress = isRevealed ? 1 : Math.max(0, Math.min(1, (walkoutProgress - 0.58) / 0.36));
     const visibleRosterCenter = isWalkingOut
         ? rollingIndex
@@ -233,7 +237,7 @@ function PlayerWalkout({
             <div
                 className={`walkout-stage bottle-draw-stage ${isWalkingOut ? "is-scanning" : ""} ${isClimax ? "is-climax" : ""} ${isRevealed ? "has-winner" : ""}`}
                 data-testid="player-walkout-stage"
-                data-active-player={activeName || ""}
+                data-active-player={revealedName || ""}
                 style={walkoutStyle}
             >
                 <Suspense fallback={null}>
@@ -259,9 +263,9 @@ function PlayerWalkout({
                         {isClimax ? "THE NAME IS COMING OUT" : isWalkingOut ? "DRAWING A NAME" : isRevealed ? "SELECTED PLAYER" : "SEALED INSIDE"}
                     </span>
                     <strong className="walkout-player-name">
-                        {activeName || (isAwaitingReveal ? "A name is sealed" : "Waiting for the draw")}
+                        {revealedName || (isAwaitingReveal ? "A name is sealed" : "Waiting for the draw")}
                     </strong>
-                    <span className="walkout-player-seed">{activeSeed ? `SEED ${activeSeed}` : isRevealed ? "NOMINEE" : "BTC AUCTION"}</span>
+                    <span className="walkout-player-seed">{revealedSeed ? `SEED ${revealedSeed}` : isRevealed ? "NOMINEE" : "BTC AUCTION"}</span>
                 </div>
 
                 <div className="walkout-roster" aria-label="Players in the draw">

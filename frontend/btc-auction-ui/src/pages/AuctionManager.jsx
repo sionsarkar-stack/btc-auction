@@ -66,9 +66,12 @@ function AuctionManager() {
             }
 
             const nominatedPlayer = currentAuction?.currentPlayer;
-            const [allPassed, currentOpeningBids] = statusData?.auctionPhase === "BLIND_OPENING_BID" && nominatedPlayer
+            const isBlindOpeningBid = statusData?.auctionPhase === "BLIND_OPENING_BID";
+            const [allPassed, currentOpeningBids] = nominatedPlayer
                 ? await Promise.all([
-                    apiRequest(`/api/auction/blind-opening-bid/${encodeURIComponent(nominatedPlayer)}/all-passed`),
+                    isBlindOpeningBid
+                        ? apiRequest(`/api/auction/blind-opening-bid/${encodeURIComponent(nominatedPlayer)}/all-passed`)
+                        : Promise.resolve(false),
                     apiRequest(`/api/auction/blind-opening-bid/${encodeURIComponent(nominatedPlayer)}`),
                 ])
                 : [false, []];
@@ -450,11 +453,14 @@ function AuctionManager() {
     };
 
     const wheelPlayers = players.filter(player =>
-        !clubbedPairs.some(pair =>
+        player.seed?.toUpperCase() !== "C" && !clubbedPairs.some(pair =>
             pair.playerTwo?.toLowerCase() === player.name?.toLowerCase()
         )
     );
     const isWheelSpinning = auctionStatus?.auctionPhase === "SPINNING";
+    const highestOpeningBid = openingBids.find(bid =>
+        bid.bonusEligible && bid.submitted && !bid.passed
+    );
     const cursesReady = auctionStatus?.curseSelectionEnabled
         && isManagerDataReady
         && teams.length > 0
@@ -684,13 +690,20 @@ function AuctionManager() {
 
                         <div className="section-card" style={{ margin: 0 }}>
                             <h3 style={{ margin: "0 0 10px" }}>Opening Bids</h3>
-                            {auctionStatus?.auctionPhase === "BLIND_OPENING_BID" && openingBids.length > 0 ? (
+                            {highestOpeningBid && auctionStatus?.auctionPhase !== "BLIND_OPENING_BID" && (
+                                <p className="message-success" role="status" style={{ margin: "0 0 12px" }}>
+                                    Highest opening bid: <strong>₹{highestOpeningBid.bidAmount}</strong>
+                                    {" "}by <strong>{highestOpeningBid.captainName}</strong>
+                                </p>
+                            )}
+                            {openingBids.length > 0 ? (
                                 <table className="standings-table opening-bid-table">
                                     <thead>
                                         <tr>
                                             <th>Captain</th>
                                             <th>Status</th>
                                             <th>Bid</th>
+                                            <th>Outcome</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -699,12 +712,17 @@ function AuctionManager() {
                                                 <td>{bid.captainName}</td>
                                                 <td>{bid.submitted ? (bid.passed ? "Passed" : "Submitted") : "Waiting"}</td>
                                                 <td>{bid.submitted && !bid.passed ? `₹${bid.bidAmount}` : "-"}</td>
+                                                <td>{bid.bonusEligible ? "Highest opening bid" : "-"}</td>
                                             </tr>
                                         ))}
                                     </tbody>
                                 </table>
                             ) : (
-                                <p className="table-empty">Opening bid round has not started.</p>
+                                <p className="table-empty">
+                                    {auctionStatus?.auctionPhase === "BLIND_OPENING_BID"
+                                        ? "Waiting for opening bids."
+                                        : "Opening bids appear here once submitted."}
+                                </p>
                             )}
                         </div>
                     </div>

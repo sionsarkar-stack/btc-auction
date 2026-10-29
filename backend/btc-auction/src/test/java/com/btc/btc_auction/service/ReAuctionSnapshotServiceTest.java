@@ -47,7 +47,7 @@ class ReAuctionSnapshotServiceTest {
     @Test
     void restoreRevertsTournamentPointsAndTriggeredCurseState() throws Exception {
         ReAuctionSnapshotService.ReAuctionState state = new ReAuctionSnapshotService.ReAuctionState(
-                List.of(new ReAuctionSnapshotService.TeamState("Sen", 3_000, 475, 4, 5, false)),
+                List.of(new ReAuctionSnapshotService.TeamState("Sen", 3_000, 475, 4, 5, false, 300, 100)),
                 List.of(),
                 List.of(),
                 List.of(new ReAuctionSnapshotService.CurseState("Sen", "Target", true, "Buyer", 250, 250)),
@@ -62,6 +62,7 @@ class ReAuctionSnapshotServiceTest {
         team.setCaptainName("Sen");
         team.setPurse(1_000);
         team.setTournamentPoints(225);
+        team.setEffectivePriceCredit(600);
         when(snapshotRepository.findById(1L)).thenReturn(Optional.of(snapshot));
         when(teamRepository.findByCaptainName("Sen")).thenReturn(Optional.of(team));
 
@@ -79,6 +80,8 @@ class ReAuctionSnapshotServiceTest {
 
         assertEquals(3_000, team.getPurse());
         assertEquals(475, team.getTournamentPoints());
+        assertEquals(300, team.getEffectivePriceCredit());
+        assertEquals(100, team.getCurseRewardCredit());
         verify(cursePlayerRepository).deleteAll();
         verify(cursePlayerRepository).saveAll(argThat(containsTriggeredCurseFor("Sen", "Target", "Buyer", 250)));
         verify(blindOpeningBidRepository).saveAll(argThat(containsAwardedBidFor("Target", "Sen", 400)));

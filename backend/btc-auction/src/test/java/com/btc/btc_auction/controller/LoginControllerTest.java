@@ -12,6 +12,9 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+import org.springframework.web.filter.ForwardedHeaderFilter;
 
 import java.util.Objects;
 
@@ -19,6 +22,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @ExtendWith(MockitoExtension.class)
 class LoginControllerTest {
@@ -61,5 +67,42 @@ class LoginControllerTest {
 
         assertEquals(HttpStatus.UNAUTHORIZED, response.getStatusCode());
         assertNull(response.getBody());
+    }
+
+    @Test
+    void acceptsSameOriginLoginBehindAnHttpsProxy() throws Exception {
+        UserEntity user = new UserEntity();
+        user.setUsername("Sen");
+        user.setRole("CAPTAIN");
+        when(userService.login("Sen", "secret")).thenReturn(user);
+
+        MockMvc mvc = MockMvcBuilders.standaloneSetup(new LoginController(userService))
+                .addFilters(new ForwardedHeaderFilter())
+                .build();
+
+        mvc.perform(post("/api/login")
+                        .header("Host", "auction.example.com")
+                        .header("X-Forwarded-Proto", "https")
+                        .header("Origin", "https://auction.example.com")
+                        .contentType("application/json")
+                        .content("{\"username\":\"Sen\",\"password\":\"secret\"}"))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void rejectsUntrustedCrossOriginLoginBehindAnHttpsProxy() throws Exception {
+        MockMvc mvc = MockMvcBuilders.standaloneSetup(new LoginController(userService))
+                .addFilters(new ForwardedHeaderFilter())
+                .build();
+
+        mvc.perform(post("/api/login")
+                        .header("Host", "auction.example.com")
+                        .header("X-Forwarded-Proto", "https")
+                        .header("Origin", "https://untrusted.example.com")
+                        .contentType("application/json")
+                        .content("{\"username\":\"Sen\",\"password\":\"secret\"}"))
+                .andExpect(status().isForbidden());
+
+        verifyNoInteractions(userService);
     }
 }

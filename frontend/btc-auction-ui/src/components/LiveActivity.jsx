@@ -4,6 +4,7 @@ import { Client } from "@stomp/stompjs";
 import SockJS from "sockjs-client";
 
 import { API_URL } from "../config";
+import { eventDetails } from "../services/eventDetails";
 
 const eventNames = {
     RTM_CLAIMED: "🔄 RTM Claimed",
@@ -50,11 +51,11 @@ const formatEventAmount = event => {
     }
 
     if (["CURSE_REVEALED", "CURSE_CANCELLED"].includes(event.eventType)) {
-        return ` ${event.amount} tournament points`;
+        return ` ₹${event.amount} curse adjustment`;
     }
 
     if (["BLIND_BID_BONUS", "BLIND_BONANZA_REWARDED"].includes(event.eventType)) {
-        return ` +${event.amount} tournament points`;
+        return ` ₹${event.amount} effective-price discount`;
     }
 
     if (event.eventType === "PURSE_FLUSH") {
@@ -62,7 +63,7 @@ const formatEventAmount = event => {
     }
 
     if (event.eventType === "BLIND_BONANZA") {
-        return ` Up to +${event.amount} tournament points`;
+        return ` Up to ₹${event.amount} effective-price discount`;
     }
 
     return ` Final ₹${event.amount > 0 ? "+" : ""}${event.amount}`;
@@ -258,7 +259,7 @@ function LiveActivity({ showActivity = true }) {
 
                             <small>
 
-                                {event.details}
+                                {eventDetails(event)}
 
                             </small>
 

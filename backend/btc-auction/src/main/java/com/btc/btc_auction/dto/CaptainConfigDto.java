@@ -26,6 +26,7 @@ public class CaptainConfigDto {
         return totalPoints;
     }
 
+    @com.fasterxml.jackson.annotation.JsonIgnore
     public int getTournamentPoints() {
         return tournamentPoints;
     }

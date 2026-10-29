@@ -70,6 +70,8 @@ sudo systemctl reload nginx
 
 The `/ws/` location must keep HTTP/1.1 upgrade headers; otherwise live auction and silent-bid updates will not work.
 
+The production profile uses `server.forward-headers-strategy=framework` to recognize Nginx's forwarded HTTPS scheme. Keep the `Host` and `X-Forwarded-Proto` proxy headers so same-origin login requests are not rejected as cross-origin. The backend must remain reachable only through the trusted proxy.
+
 ## 4. HTTPS
 
 Point the domain DNS record to the EC2 public address, then install a certificate:

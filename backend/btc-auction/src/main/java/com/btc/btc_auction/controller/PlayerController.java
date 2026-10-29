@@ -2,6 +2,7 @@ package com.btc.btc_auction.controller;
 
 import com.btc.btc_auction.entity.PlayerEntity;
 import com.btc.btc_auction.model.AddPlayerRequest;
+import com.btc.btc_auction.service.EffectiveSalePriceService;
 import com.btc.btc_auction.service.PlayerService;
 
 import org.springframework.web.bind.annotation.CrossOrigin;
@@ -25,17 +26,20 @@ import java.util.List;
 public class PlayerController {
 
     private final PlayerService playerService;
+    private final EffectiveSalePriceService effectiveSalePriceService;
 
     public PlayerController(
-            PlayerService playerService) {
+            PlayerService playerService,
+            EffectiveSalePriceService effectiveSalePriceService) {
 
         this.playerService = playerService;
+        this.effectiveSalePriceService = effectiveSalePriceService;
     }
 
     @GetMapping("/api/players")
     public List<PlayerEntity> getPlayers() {
 
-        return playerService.getAllPlayers();
+        return effectiveSalePriceService.applyToPlayers(playerService.getAllPlayers());
     }
 
     @GetMapping("/api/players/available")

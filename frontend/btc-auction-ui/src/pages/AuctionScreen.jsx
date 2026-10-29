@@ -55,6 +55,9 @@ function AuctionScreen() {
     const [availablePlayers, setAvailablePlayers] =
         useState([]);
 
+    const [clubbedPairs, setClubbedPairs] =
+        useState([]);
+
     const role =
         localStorage.getItem("role");
 
@@ -103,6 +106,10 @@ function AuctionScreen() {
             axios
                 .get(`${API_URL}/api/players/available`)
                 .then(response => setAvailablePlayers(response.data));
+
+            axios
+                .get(`${API_URL}/api/auction/clubbed-pair`)
+                .then(response => setClubbedPairs(Array.isArray(response.data) ? response.data : []));
 
             axios
                 .get(
@@ -275,7 +282,19 @@ function AuctionScreen() {
     const isWheelSpinning =
         auctionStatus?.auctionPhase === "SPINNING";
 
-    const reelPlayers = availablePlayers.filter(player => !player.sold);
+    const reelPlayers = availablePlayers.filter(player => !player.sold
+        && player.seed?.toUpperCase() !== "C"
+        && !clubbedPairs.some(pair =>
+            pair.playerTwo?.toLowerCase() === player.name?.toLowerCase()
+        ));
+    const currentPlayerPair = clubbedPairs.find(pair =>
+        pair.playerOne?.toLowerCase() === auction.currentPlayer?.toLowerCase()
+        || pair.playerTwo?.toLowerCase() === auction.currentPlayer?.toLowerCase()
+    );
+    const currentPlayerLabel = currentPlayerPair
+        ? `${currentPlayerPair.playerOne} + ${currentPlayerPair.playerTwo}`
+        : auction.currentPlayer;
+    const currentPlayerSeed = currentPlayerPair ? "A + C" : auction.seed;
 
     return (
         <>
@@ -459,14 +478,14 @@ function AuctionScreen() {
 
                         {isWheelSpinning
                             ? "PLAYER WALKING OUT..."
-                            : auction.currentPlayer ||
+                            : currentPlayerLabel ||
                             "No Player Nominated"}
 
                     </div>
 
                     <div className="current-player-seed">
 
-                        {isWheelSpinning ? "-" : auction.seed || "-"}
+                        {isWheelSpinning ? "-" : currentPlayerSeed || "-"}
 
                     </div>
 
@@ -474,6 +493,8 @@ function AuctionScreen() {
                         players={reelPlayers}
                         walkoutPlayers={auctionStatus?.walkoutPlayerNames}
                         selectedPlayer={auction.currentPlayer}
+                        selectedPlayerLabel={currentPlayerLabel}
+                        selectedPlayerSeed={currentPlayerSeed}
                         spinStartedAt={auctionStatus?.wheelSpinStartedAt}
                         spinEndsAt={auctionStatus?.wheelSpinEndsAt}
                         serverTime={auctionStatus?.serverTime}

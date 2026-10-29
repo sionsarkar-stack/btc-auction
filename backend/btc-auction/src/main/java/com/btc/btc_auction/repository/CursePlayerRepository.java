@@ -14,6 +14,8 @@ public interface CursePlayerRepository extends JpaRepository<CursePlayerEntity, 
 
     List<CursePlayerEntity> findByPlayerName(String playerName);
 
+    List<CursePlayerEntity> findByPlayerNameIn(List<String> playerNames);
+
     Optional<CursePlayerEntity> findByCaptainNameAndPlayerName(String captainName, String playerName);
 
     void deleteByCaptainName(String captainName);

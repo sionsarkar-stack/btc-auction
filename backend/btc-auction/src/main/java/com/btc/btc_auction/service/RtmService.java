@@ -27,6 +27,17 @@ public class RtmService {
     private final AuctionSocketService auctionSocketService;
 
     private final TeamService teamService;
+    private BidAffordabilityService bidAffordabilityService;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public RtmService(RtmRepository repository, CurrentAuctionService currentAuctionService,
+            AuctionEventService auctionEventService, AuctionConfigService auctionConfigService,
+            AuctionSocketService auctionSocketService, TeamService teamService,
+            BidAffordabilityService bidAffordabilityService) {
+        this(repository, currentAuctionService, auctionEventService, auctionConfigService,
+                auctionSocketService, teamService);
+        this.bidAffordabilityService = bidAffordabilityService;
+    }
 
     public RtmService(
             RtmRepository repository,
@@ -87,6 +98,14 @@ public class RtmService {
         }
 
         RtmEntity rtm = new RtmEntity();
+
+        if (bidAffordabilityService != null) {
+            String error = bidAffordabilityService.validate(
+                    auction.getCurrentPlayer(), captainName, auction.getCurrentBid(), false);
+            if (error != null) {
+                return error;
+            }
+        }
 
         rtm.setCaptainName(
                 captainName);
@@ -164,6 +183,14 @@ public class RtmService {
 
             return "No active auction.";
 
+        }
+
+        if (bidAffordabilityService != null) {
+            String error = bidAffordabilityService.validate(
+                    auction.getCurrentPlayer(), claim.getCaptainName(), auction.getCurrentBid(), false);
+            if (error != null) {
+                return error;
+            }
         }
 
         auction.setLeader(
@@ -272,6 +299,14 @@ public class RtmService {
 
             return "No active auction.";
 
+        }
+
+        if (bidAffordabilityService != null) {
+            String error = bidAffordabilityService.validate(
+                    auction.getCurrentPlayer(), claim.getCaptainName(), bidAmount, false);
+            if (error != null) {
+                return error;
+            }
         }
 
         claim.setBidAmount(

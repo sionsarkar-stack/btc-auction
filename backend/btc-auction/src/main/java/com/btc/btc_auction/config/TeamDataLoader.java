@@ -9,6 +9,6 @@ public class TeamDataLoader implements CommandLineRunner {
     @Override
     public void run(String... args) {
 
-        System.out.println("BTC Season 12 teams are managed by the admin console");
+        System.out.println("BTC Season 13 teams are managed by the admin console");
     }
 }

@@ -56,11 +56,11 @@ function Login({ onLogin }) {
             <section className="login-visual">
                 <div className="login-visual-copy">
                     <p className="login-eyebrow">BELGHARIA TURF CRICKET</p>
-                    <h1>BTC SEASON 12<br />AUCTION</h1>
+                    <h1>BTC SEASON 13<br />AUCTION</h1>
                     <p className="login-tagline">Four teams. One champion.<br />The bidding starts here.</p>
                 </div>
                 <img src={heroImage} alt="BTC auction visual" className="login-visual-art" />
-                <span className="login-season-mark">12</span>
+                <span className="login-season-mark">13</span>
             </section>
 
             <section className="login-panel">
@@ -127,7 +127,7 @@ function Login({ onLogin }) {
 
                 )}
 
-                <p className="login-footer">Authorized access · BTC Season 12</p>
+                <p className="login-footer">Authorized access · BTC Season 13</p>
             </section>
 
         </div>

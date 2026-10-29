@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
 import { API_URL } from "../config";
 import { showToast } from "../services/toast";
+import { apiRequest } from "../services/apiClient";
 
 function SilentBid() {
+    const [maxAffordableBid, setMaxAffordableBid] = useState(null);
+    const [loadError, setLoadError] = useState(null);
 
     const username =
         localStorage.getItem("username");
@@ -21,30 +24,24 @@ function SilentBid() {
 
     const loadRound = useCallback(async () => {
 
-        const response =
-            await fetch(
+        try {
+            const [data, affordability] = await Promise.all([
+                apiRequest(`/api/silent-bid/${encodeURIComponent(username)}`),
+                apiRequest("/api/auction/affordability"),
+            ]);
+            setMaxAffordableBid(affordability.maxBid);
+            setLoadError(null);
 
-                `${API_URL}/api/silent-bid/${username}`
-
-            );
-
-        const data =
-            await response.json();
-
-        if (data) {
-
-            setRound(data);
-
-            setSubmitted(
-                data.submitted
-            );
-
-            setTieBreak(data.tieBreakRound);
-            if (data.tieBreakRound && !data.submitted) {
-
-                setBid("");
-
+            if (data) {
+                setRound(data);
+                setSubmitted(data.submitted);
+                setTieBreak(data.tieBreakRound);
+                if (data.tieBreakRound && !data.submitted) {
+                    setBid("");
+                }
             }
+        } catch (error) {
+            setLoadError(error.message || "Unable to refresh the silent bid limit.");
         }
 
     }, [username]);
@@ -129,7 +126,7 @@ function SilentBid() {
 
                 <div className="form-card">
 
-                    No Silent Bid Round Active
+                    {loadError || "No Silent Bid Round Active"}
 
                 </div>
 
@@ -156,6 +153,10 @@ function SilentBid() {
                     {round.playerName}
 
                 </h2>
+                {loadError && <p className="message-error">{loadError}</p>}
+                {maxAffordableBid !== null && (
+                    <p>Maximum affordable bid: ₹{maxAffordableBid} (including market events and curses).</p>
+                )}
 
                 {!submitted && round.eligibleForTieBreak ? (
 
@@ -186,6 +187,8 @@ function SilentBid() {
                         <input
                             className="input"
                             type="number"
+                            min="0"
+                            max={maxAffordableBid ?? undefined}
                             step={Number(bid) > 1000 ? 100 : 50}
                             placeholder="Enter Bid"
                             value={bid}
@@ -201,6 +204,7 @@ function SilentBid() {
                                 marginTop: "20px"
                             }}
                             onClick={submitBid}
+                            disabled={Boolean(loadError) || maxAffordableBid === null || Number(bid) > maxAffordableBid}
                         >
 
                             Submit Bid

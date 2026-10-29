@@ -21,7 +21,7 @@ public class UserDataLoader implements CommandLineRunner {
 
                 createOrUpdateUser("auctioneer", "Sarkar", "ADMIN");
                 createOrUpdateUser("viewer", "viewer", "VIEWER");
-                System.out.println("BTC Season 12 admin and viewer users loaded");
+                System.out.println("BTC Season 13 admin and viewer users loaded");
         }
 
         private void createOrUpdateUser(String username, String password, String role) {

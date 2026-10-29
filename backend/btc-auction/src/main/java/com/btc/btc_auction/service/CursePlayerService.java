@@ -13,6 +13,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.ThreadLocalRandom;
 
 @Service
@@ -163,56 +164,92 @@ public class CursePlayerService {
 
     @Transactional
     public void settleSale(String playerName, String buyerCaptainName, int finalPayablePrice) {
-        List<CursePlayerEntity> curses = repository.findByPlayerName(playerName).stream()
+        settleSaleForPlayers(List.of(playerName), buyerCaptainName, finalPayablePrice);
+    }
+
+    @Transactional
+    public void settleSaleForPlayers(List<String> playerNames, String buyerCaptainName, int finalPayablePrice) {
+        List<String> salePlayerNames = playerNames.stream()
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+        List<CursePlayerEntity> curses = salePlayerNames.stream()
+                .flatMap(name -> repository.findByPlayerName(name).stream())
                 .filter(curse -> !curse.isTriggered())
                 .toList();
         if (curses.isEmpty()) {
             return;
         }
 
-        List<String> setters = curses.stream()
+        List<CursePlayerEntity> applicableCurses = applicableCurses(curses, buyerCaptainName);
+        List<String> setters = applicableCurses.stream()
                 .map(CursePlayerEntity::getCaptainName)
                 .distinct()
                 .toList();
-        boolean buyerSetTheCurse = setters.stream()
-                .anyMatch(setter -> setter.equalsIgnoreCase(buyerCaptainName));
-        if (buyerSetTheCurse) {
+        List<CursePlayerEntity> cancelledCurses = curses.stream()
+                .filter(curse -> !applicableCurses.contains(curse))
+                .toList();
+        if (applicableCurses.isEmpty()) {
             markTriggered(curses, buyerCaptainName, 0, 0);
             auctionEventService.logEvent(
                     "CURSE_CANCELLED",
-                    playerName,
+                    salePlayerNames.get(0),
                     buyerCaptainName,
                     0,
-                    "Curse cancelled: the player was bought by a captain who cursed them.");
+                    salePlayerNames.size() > 1
+                            ? "Curse cancelled: the buyer had cursed a player in the A + C package."
+                            : "Curse cancelled: the player was bought by a captain who cursed them.");
             return;
         }
 
-        int curseAmount = calculateCurseAmount(finalPayablePrice, curses.size());
+        int curseAmount = calculateCurseAmount(finalPayablePrice, setters.size());
         TeamEntity buyer = teamService.getTeam(buyerCaptainName);
-        int pointsBefore = buyer.getTournamentPoints();
-        buyer.setTournamentPoints(Math.max(0, pointsBefore - curseAmount));
-        int buyerDeduction = pointsBefore - buyer.getTournamentPoints();
-        teamService.saveTeam(buyer);
-
-        for (String setter : setters) {
-            TeamEntity setterTeam = teamService.getTeam(setter);
-            if (setterTeam != null) {
-                setterTeam.setTournamentPoints(setterTeam.getTournamentPoints() + curseAmount);
-                teamService.saveTeam(setterTeam);
-            }
+        if (buyer == null) {
+            return;
         }
+        int buyerDeduction = curseAmount;
 
         String setterNames = String.join(", ", setters);
-        String details = "Curse set by " + setterNames + ". Buyer lost " + buyerDeduction
-                + " tournament points; each setter gained " + curseAmount + ".";
-        auctionEventService.logEvent("CURSE_REVEALED", playerName, buyerCaptainName, curseAmount, details);
-        adminActionLogService.addLog("CURSE_SETTLED", playerName, "", buyerCaptainName, 0, -buyerDeduction, details);
-        markTriggered(curses, buyerCaptainName, curseAmount, buyerDeduction);
+        String details = "Curse set by " + setterNames + ". Buyer effective price increased by ₹" + buyerDeduction
+                + "; each setter's purse credited ₹" + curseAmount + "."
+                + (cancelledCurses.isEmpty() ? ""
+                        : " Self-set curse on a package player was cancelled.")
+                + (salePlayerNames.size() > 1 ? " A + C package treated as one curse target." : "");
+        String affectedPlayer = applicableCurses.get(0).getPlayerName();
+        auctionEventService.logEvent("CURSE_REVEALED", affectedPlayer, buyerCaptainName, curseAmount, details);
+        adminActionLogService.addLog(
+                "CURSE_SETTLED", affectedPlayer, "", buyerCaptainName, 0, -buyerDeduction, details);
+        markTriggered(cancelledCurses, buyerCaptainName, 0, 0);
+        markTriggered(applicableCurses, buyerCaptainName, curseAmount, buyerDeduction);
     }
 
     public int calculateCurseAmount(int finalPayablePrice, int curseCount) {
+        return Math.toIntExact(calculateCurseAmount((long) finalPayablePrice, curseCount));
+    }
+
+    public long calculateCurseAmount(long finalPayablePrice, int curseCount) {
         double rawPoints = (double) finalPayablePrice * CURSE_PERCENT * curseCount / 100;
-        return (int) (Math.floor(rawPoints / POINTS_STEP + 0.5) * POINTS_STEP);
+        return (long) (Math.floor(rawPoints / POINTS_STEP + 0.5) * POINTS_STEP);
+    }
+
+    public int countApplicableSetters(List<String> playerNames, String buyer) {
+        List<CursePlayerEntity> curses = playerNames.stream()
+                .flatMap(name -> repository.findByPlayerName(name).stream())
+                .filter(curse -> !curse.isTriggered())
+                .toList();
+        return (int) applicableCurses(curses, buyer).stream()
+                .map(CursePlayerEntity::getCaptainName)
+                .distinct().count();
+    }
+
+    private List<CursePlayerEntity> applicableCurses(List<CursePlayerEntity> curses, String buyer) {
+        java.util.Set<String> selfCursed = curses.stream()
+                .filter(curse -> curse.getCaptainName().equalsIgnoreCase(buyer))
+                .map(CursePlayerEntity::getPlayerName)
+                .collect(java.util.stream.Collectors.toSet());
+        return curses.stream()
+                .filter(curse -> !selfCursed.contains(curse.getPlayerName()))
+                .toList();
     }
 
     @Transactional
@@ -228,27 +265,19 @@ public class CursePlayerService {
 
     @Transactional
     public void undoSettlement(String playerName) {
-        List<CursePlayerEntity> triggered = repository.findByPlayerName(playerName).stream()
+        undoSettlementForPlayers(List.of(playerName));
+    }
+
+    @Transactional
+    public void undoSettlementForPlayers(List<String> playerNames) {
+        List<CursePlayerEntity> triggered = playerNames.stream()
+                .filter(Objects::nonNull)
+                .distinct()
+                .flatMap(name -> repository.findByPlayerName(name).stream())
                 .filter(CursePlayerEntity::isTriggered)
                 .toList();
         if (triggered.isEmpty()) {
             return;
-        }
-
-        CursePlayerEntity settlement = triggered.get(0);
-        if (settlement.getSettledAmount() > 0) {
-            TeamEntity buyer = teamService.getTeam(settlement.getSettledBuyer());
-            if (buyer != null) {
-                buyer.setTournamentPoints(buyer.getTournamentPoints() + settlement.getBuyerDeduction());
-                teamService.saveTeam(buyer);
-            }
-            triggered.stream().map(CursePlayerEntity::getCaptainName).distinct().forEach(setter -> {
-                TeamEntity setterTeam = teamService.getTeam(setter);
-                if (setterTeam != null) {
-                    setterTeam.setTournamentPoints(setterTeam.getTournamentPoints() - settlement.getSettledAmount());
-                    teamService.saveTeam(setterTeam);
-                }
-            });
         }
 
         triggered.forEach(curse -> {

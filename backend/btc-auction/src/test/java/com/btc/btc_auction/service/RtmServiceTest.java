@@ -50,7 +50,10 @@ class RtmServiceTest {
     }
 
     @Test
-    void rtmBidsCanExceedThePurseBasedMaximumBid() {
+    void rtmBidsRejectAmountsAboveTheSituationalMaximum() {
+        BidAffordabilityService affordability = org.mockito.Mockito.mock(BidAffordabilityService.class);
+        service = new RtmService(repository, currentAuctionService, auctionEventService, auctionConfigService,
+                auctionSocketService, teamService, affordability);
         TeamEntity team = new TeamEntity();
         RtmEntity claim = new RtmEntity();
         claim.setCaptainName("Sen");
@@ -59,9 +62,10 @@ class RtmServiceTest {
         when(repository.findByPlayerName("Player X")).thenReturn(Optional.of(claim));
         when(teamService.getTeam("Sen")).thenReturn(team);
         when(teamService.isValidBidIncrement(5000)).thenReturn(true);
+        when(affordability.validate("Player X", "Sen", 5000, false)).thenReturn("Maximum affordable bid is ₹150.");
 
-        assertEquals("RTM bid submitted.", service.submitBid(5000));
-        assertEquals(5000, claim.getBidAmount());
+        assertEquals("Maximum affordable bid is ₹150.", service.submitBid(5000));
+        verify(repository, never()).save(claim);
     }
 
     @Test

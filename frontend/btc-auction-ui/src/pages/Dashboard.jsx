@@ -3,6 +3,7 @@ import { Client } from "@stomp/stompjs";
 import SockJS from "sockjs-client";
 
 import { API_URL } from "../config";
+import { eventDetails } from "../services/eventDetails";
 import LiveActivity from "../components/LiveActivity";
 import PlayerWalkout from "../components/PlayerWalkout";
 import { showToast } from "../services/toast";
@@ -18,6 +19,7 @@ const RANDOM_EVENT_BANTER = {
 };
 
 function Dashboard() {
+    const [maxAffordableBid, setMaxAffordableBid] = useState(null);
 
     const [dashboard, setDashboard] =
         useState(null);
@@ -185,7 +187,7 @@ function Dashboard() {
                 apiRequest("/api/silent-bid/active", { signal: controller.signal }),
             ]);
 
-            const [allSilentBidData, captainSilentData, openingBidData] = await Promise.all([
+            const [allSilentBidData, captainSilentData, openingBidData, affordabilityData] = await Promise.all([
                 silentActive
                     ? apiRequest("/api/silent-bid/all", { signal: controller.signal })
                     : Promise.resolve([]),
@@ -201,6 +203,10 @@ function Dashboard() {
                             )
                             : null
                     )
+                    : Promise.resolve(null),
+                isCaptain
+                    ? apiRequest(`/api/auction/affordability?openingBid=${statusData.auctionPhase === "BLIND_OPENING_BID"}`,
+                        { signal: controller.signal })
                     : Promise.resolve(null),
             ]);
 
@@ -220,6 +226,7 @@ function Dashboard() {
             setAllSilentBids(Array.isArray(allSilentBidData) ? allSilentBidData : []);
             setSilentRound(captainSilentData || null);
             setOpeningBidStatus(openingBidData || null);
+            setMaxAffordableBid(affordabilityData?.maxBid ?? null);
             setDashboardError(null);
             setLastSuccessfulRefresh(Date.now());
             return true;
@@ -488,9 +495,20 @@ function Dashboard() {
     const currentPlayerLabel = currentPlayerPair
         ? `${currentPlayerPair.playerOne} + ${currentPlayerPair.playerTwo}`
         : currentAuction.currentPlayer;
-    const effectiveSaleValue = player => {
+    const actualSaleValue = player => {
         return player.finalPrice !== 0 ? player.finalPrice : player.soldPrice;
     };
+    const effectiveSaleValue = player => player.effectivePrice ?? actualSaleValue(player);
+    const salePriceLabel = player => {
+        const actualPrice = actualSaleValue(player);
+        const effectivePrice = effectiveSaleValue(player);
+        return effectivePrice === actualPrice
+            ? `Final ₹${actualPrice}`
+            : `Bid ₹${actualPrice} · Effective ₹${effectivePrice}`;
+    };
+    const isPairedPlayerTwo = playerName => clubbedPairs.some(pair =>
+        pair.playerTwo?.toLowerCase() === playerName?.toLowerCase()
+    );
     const squadValueForTeam = captainName => players
         .filter(player => player.team === captainName)
         .filter(player => !clubbedPairs.some(pair =>
@@ -503,9 +521,12 @@ function Dashboard() {
             return playerName;
         }
         const saleValue = player ? effectiveSaleValue(player) : null;
-        return saleValue === null || saleValue === undefined
-            ? playerName
-            : `${playerName} (₹${saleValue})`;
+        if (saleValue === null || saleValue === undefined)
+            return playerName;
+        const actualPrice = actualSaleValue(player);
+        return saleValue === actualPrice
+            ? `${playerName} (₹${saleValue})`
+            : `${playerName} (bid ₹${actualPrice}; effective ₹${saleValue})`;
     };
     const rtmLocked = auctionStatus?.rtmLockdownPlayer?.toLowerCase()
         === currentAuction.currentPlayer?.toLowerCase();
@@ -599,6 +620,12 @@ function Dashboard() {
             {isCaptain && dashboardView === "overview" && (
                 <div className="section-card captain-actions" style={{ marginBottom: "18px" }}>
                     <h2>Auction Actions</h2>
+                    {currentAuction.currentPlayer && maxAffordableBid !== null && (
+                        <p role="status">
+                            Maximum affordable {auctionStatus?.auctionPhase === "BLIND_OPENING_BID" ? "opening " : ""}bid:
+                            {" "}₹{maxAffordableBid} (includes applicable discounts, market events and curses).
+                        </p>
+                    )}
                     <ActionFeedback
                         feedback={actionFeedback}
                         onRefresh={refreshBeforeRetry}
@@ -608,11 +635,12 @@ function Dashboard() {
                     />
                     {silentBidActive && silentRound && !silentRound.submitted && (
                         <div className="captain-action-row silent-action-row" style={{ display: "flex", gap: "8px", marginBottom: "12px" }}>
-                            <input className="input" type="number" min="1"
+                            <input className="input" type="number" min="0" max={maxAffordableBid ?? undefined}
                                 step={Number(silentBid) > 1000 ? 100 : 50}
                                 placeholder={pendingAction === "Submitting silent bid" ? "Submitting..." : "Secret silent bid"}
                                 value={silentBid} onChange={event => setSilentBid(event.target.value)} />
-                            <button className="button" onClick={submitSilentBid} disabled={actionsDisabled}>
+                            <button className="button" onClick={submitSilentBid}
+                                disabled={actionsDisabled || maxAffordableBid === null || Number(silentBid) > maxAffordableBid}>
                                 {pendingAction === "Submitting silent bid" ? "Submitting..." : "Submit Silent Bid"}
                             </button>
                         </div>
@@ -622,11 +650,12 @@ function Dashboard() {
                     )}
                     {isBidding && auctionStatus?.auctionPhase !== "SOLD" && (
                         <div className="captain-action-row" style={{ display: "flex", gap: "8px", marginBottom: "12px" }}>
-                            <input className="input" type="number" min="1"
+                            <input className="input" type="number" min="1" max={maxAffordableBid ?? undefined}
                                 step={Number(liveBid) > 1000 ? 100 : 50}
                                 placeholder="Enter bid"
                                 value={liveBid} onChange={event => setLiveBid(event.target.value)} />
-                            <button className="button" onClick={submitLiveBid} disabled={actionsDisabled}>
+                            <button className="button" onClick={submitLiveBid}
+                                disabled={actionsDisabled || maxAffordableBid === null || maxAffordableBid === 0 || Number(liveBid) > maxAffordableBid}>
                                 {pendingAction === "Placing bid" ? "Placing bid..." : "Place Bid"}
                             </button>
                         </div>
@@ -635,13 +664,14 @@ function Dashboard() {
                         <div className="captain-action-row" style={{ display: "flex", gap: "8px", marginBottom: "12px" }}>
                             {openingBidStatus && !openingBidStatus.submitted && (
                                 <>
-                                    <input className="input" type="number" min="1"
+                                    <input className="input" type="number" min="1" max={maxAffordableBid ?? undefined}
                                         data-testid="blind-opening-bid"
                                         step={Number(openingBid) > 1000 ? 100 : 50}
                                         placeholder="Opening bid"
                                         value={openingBid}
                                         onChange={event => setOpeningBid(event.target.value)} />
-                                    <button className="button" data-testid="place-blind-opening-bid" onClick={submitOpeningBid} disabled={actionsDisabled}>
+                                    <button className="button" data-testid="place-blind-opening-bid" onClick={submitOpeningBid}
+                                        disabled={actionsDisabled || maxAffordableBid === null || maxAffordableBid === 0 || Number(openingBid) > maxAffordableBid}>
                                         {pendingAction === "Submitting opening bid" ? "Submitting..." : "Place Blind Opening Bid"}
                                     </button>
                                     <button className="button-secondary" data-testid="pass-blind-opening-bid" onClick={passOpeningBid} disabled={actionsDisabled}>
@@ -666,7 +696,8 @@ function Dashboard() {
                             </p>
                         )}
                     {auctionStatus?.auctionPhase === "SOLD" && !isCurrentHighestBidder && !rtmLocked && !rtm && !rtmAlreadyUsed && (
-                        <button className="button" onClick={claimRtm} disabled={actionsDisabled}>
+                        <button className="button" onClick={claimRtm}
+                            disabled={actionsDisabled || maxAffordableBid === null || currentAuction.currentBid > maxAffordableBid}>
                             {pendingAction === "Claiming RTM" ? "Claiming..." : "Claim RTM"}
                         </button>
                     )}
@@ -674,9 +705,11 @@ function Dashboard() {
                     {isRtmCaptain && rtm?.status === "CLAIMED" && (
                         <div className="captain-action-row" style={{ display: "flex", gap: "8px" }}>
                             <input className="input" type="number" min={currentAuction.currentBid + 100}
+                                max={maxAffordableBid ?? undefined}
                                 value={rtmBid}
                                 onChange={event => setRtmBid(event.target.value)} placeholder="RTM price" />
-                            <button className="button" onClick={submitRtmBid} disabled={actionsDisabled}>
+                            <button className="button" onClick={submitRtmBid}
+                                disabled={actionsDisabled || maxAffordableBid === null || Number(rtmBid) > maxAffordableBid}>
                                 {pendingAction === "Submitting RTM bid" ? "Submitting..." : "Submit RTM Price"}
                             </button>
                         </div>
@@ -685,7 +718,8 @@ function Dashboard() {
                         <div>
                             <p>RTM price: <strong>₹{rtm.bidAmount}</strong></p>
                             <div className="captain-action-row rtm-decision-row">
-                                <button className="button" onClick={acceptRtm} disabled={actionsDisabled}>
+                                <button className="button" onClick={acceptRtm}
+                                    disabled={actionsDisabled || maxAffordableBid === null || rtm.bidAmount > maxAffordableBid}>
                                     {pendingAction === "Accepting RTM" ? "Accepting..." : "Accept"}
                                 </button>
                                 <button className="button-secondary" onClick={declineRtm} disabled={actionsDisabled}>
@@ -737,6 +771,7 @@ function Dashboard() {
 
                 <PlayerWalkout
                     players={players.filter(player => !player.sold
+                        && player.seed?.toUpperCase() !== "C"
                         && (isReAuction || !player.deferredToReAuction)
                         && !clubbedPairs.some(pair =>
                             pair.playerTwo?.toLowerCase() === player.name?.toLowerCase()
@@ -795,9 +830,6 @@ function Dashboard() {
                                 💰 Purse: ₹{team.purse}
                             </p>
                             <p>
-                                🏆 Tournament Points: {team.tournamentPoints ?? 0}
-                            </p>
-                            <p>
                                 🔄 RTM:
                                 {team.rtmAvailable
                                     ? " 🟢 Available"
@@ -807,7 +839,7 @@ function Dashboard() {
                                 👥 Players Bought: {team.playersBought}
                             </p>
                             <p>
-                                📊 Squad Value: ₹{squadValueForTeam(team.captainName)}
+                                📊 Effective Squad Value: ₹{squadValueForTeam(team.captainName)}
                             </p>
 
 
@@ -854,7 +886,6 @@ function Dashboard() {
                             <tr>
                                 <th>Team</th>
                                 <th>Purse</th>
-                                <th>Tournament points</th>
                                 <th>Slots left</th>
                                 <th>Squad value</th>
                             </tr>
@@ -864,7 +895,6 @@ function Dashboard() {
                                 <tr key={`comparison-${team.captainName}`}>
                                     <td>{team.captainName}</td>
                                     <td>₹{team.purse}</td>
-                                    <td>{team.tournamentPoints ?? 0}</td>
                                     <td>{team.playersLeft}</td>
                                     <td>₹{squadValueForTeam(team.captainName)}</td>
                                 </tr>
@@ -926,7 +956,9 @@ function Dashboard() {
                                         </span>
                                     </td>
                                     <td>{player.sold
-                                        ? `Final ₹${effectiveSaleValue(player)}`
+                                        ? isPairedPlayerTwo(player.name)
+                                            ? "Included in A + C package"
+                                            : salePriceLabel(player)
                                         : `Base ₹${player.basePrice}`}</td>
                                 </tr>
                             ))}
@@ -1079,14 +1111,12 @@ function Dashboard() {
                                 </div>
 
                                 <div>
-                                    {event.details}
+                                    {eventDetails(event)}
                                 </div>
 
                                 {event.amount !== 0 && (
                                     <div>
-                                        {["CURSE_REVEALED", "CURSE_CANCELLED", "BLIND_BID_BONUS", "BLIND_BONANZA", "BLIND_BONANZA_REWARDED"].includes(event.eventType)
-                                            ? `${event.amount > 0 ? "+" : ""}${event.amount} tournament points`
-                                            : `₹${event.amount > 0 ? "+" : ""}${event.amount}`}
+                                        {`₹${event.amount > 0 ? "+" : ""}${event.amount}`}
                                     </div>
                                 )}
 
@@ -1109,7 +1139,7 @@ function Dashboard() {
                 {dashboard.teams?.map(team => (
                     <article key={`pdf-${team.captainName}`}>
                         <h2>{team.captainName}</h2>
-                        <p>Purse: ₹{team.purse} | Tournament points: {team.tournamentPoints ?? 0} | Players bought: {team.playersBought} | Slots left: {team.playersLeft}</p>
+                        <p>Purse: ₹{team.purse} | Players bought: {team.playersBought} | Slots left: {team.playersLeft}</p>
                         <p>Squad value: ₹{squadValueForTeam(team.captainName)}</p>
                         <p>Squad: {team.squad?.length
                             ? team.squad.map(squadPlayerLabel).join(", ")

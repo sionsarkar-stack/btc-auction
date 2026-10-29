@@ -21,6 +21,15 @@ public class SilentBidService {
     private final AuctionEventService auctionEventService;
 
     private final AuctionSocketService auctionSocketService;
+    private BidAffordabilityService bidAffordabilityService;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public SilentBidService(SilentBidRepository repository, TeamService teamService,
+            AuctionService auctionService, AuctionEventService auctionEventService,
+            AuctionSocketService auctionSocketService, BidAffordabilityService bidAffordabilityService) {
+        this(repository, teamService, auctionService, auctionEventService, auctionSocketService);
+        this.bidAffordabilityService = bidAffordabilityService;
+    }
 
     public SilentBidService(
             SilentBidRepository repository,
@@ -107,6 +116,13 @@ public class SilentBidService {
         TeamEntity team = teamService.getTeam(captainName);
         if (team == null) {
             return "Captain not found.";
+        }
+
+        if (amount > 0 && bidAffordabilityService != null) {
+            String error = bidAffordabilityService.validate(playerName, captainName, amount, false);
+            if (error != null) {
+                return error;
+            }
         }
 
         bid.setBidAmount(amount);

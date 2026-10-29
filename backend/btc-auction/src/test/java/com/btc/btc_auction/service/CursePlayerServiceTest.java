@@ -14,12 +14,14 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.never;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.times;
 
 @ExtendWith(MockitoExtension.class)
@@ -103,7 +105,7 @@ class CursePlayerServiceTest {
     }
 
     @Test
-    void stackedCursesMultiplyTransferWithoutTouchingThePurse() {
+    void stackedCursesRecordFullPenaltyForPurseReconciliation() {
         CursePlayerEntity firstCurse = curse("Alpha", "Target");
         CursePlayerEntity secondCurse = curse("Beta", "Target");
         TeamEntity buyer = team("Buyer", 700, 1_300);
@@ -111,19 +113,65 @@ class CursePlayerServiceTest {
         TeamEntity beta = team("Beta", 50, 600);
         when(repository.findByPlayerName("Target")).thenReturn(List.of(firstCurse, secondCurse));
         when(teamService.getTeam("Buyer")).thenReturn(buyer);
-        when(teamService.getTeam("Alpha")).thenReturn(alpha);
-        when(teamService.getTeam("Beta")).thenReturn(beta);
 
         service.settleSale("Target", "Buyer", 1_350);
 
-        assertEquals(150, buyer.getTournamentPoints());
+        assertEquals(700, buyer.getTournamentPoints());
         assertEquals(1_300, buyer.getPurse());
-        assertEquals(650, alpha.getTournamentPoints());
+        assertEquals(100, alpha.getTournamentPoints());
         assertEquals(800, alpha.getPurse());
-        assertEquals(600, beta.getTournamentPoints());
+        assertEquals(50, beta.getTournamentPoints());
         assertEquals(600, beta.getPurse());
         assertTrue(firstCurse.isTriggered());
         assertTrue(secondCurse.isTriggered());
+        assertEquals(550, firstCurse.getSettledAmount());
+        assertEquals(550, firstCurse.getBuyerDeduction());
+    }
+
+    @Test
+    void pairedPlayersCursedByTheSameCaptainCauseOnlyOneCurseEffect() {
+        CursePlayerEntity curseOnA = curse("Alpha", "Player A");
+        CursePlayerEntity curseOnC = curse("Alpha", "Player C");
+        TeamEntity buyer = team("Buyer", 1_000, 2_000);
+        TeamEntity alpha = team("Alpha", 0, 1_000);
+        when(repository.findByPlayerName("Player A")).thenReturn(List.of(curseOnA));
+        when(repository.findByPlayerName("Player C")).thenReturn(List.of(curseOnC));
+        when(teamService.getTeam("Buyer")).thenReturn(buyer);
+
+        service.settleSaleForPlayers(List.of("Player A", "Player C"), "Buyer", 1_000);
+
+        assertEquals(1_000, buyer.getTournamentPoints());
+        assertEquals(0, alpha.getTournamentPoints());
+        assertTrue(curseOnA.isTriggered());
+        assertTrue(curseOnC.isTriggered());
+        assertEquals(200, curseOnA.getSettledAmount());
+        assertEquals(200, curseOnC.getSettledAmount());
+        verify(auctionEventService, times(1)).logEvent(
+                eq("CURSE_REVEALED"),
+                anyString(),
+                eq("Buyer"),
+                eq(200),
+                anyString());
+    }
+
+    @Test
+    void buyerSelfCurseCancelsOnlyThatPlayersCurseInAPair() {
+        CursePlayerEntity buyerCurse = curse("Buyer", "Player A");
+        CursePlayerEntity otherCurseOnA = curse("Alpha", "Player A");
+        CursePlayerEntity curseOnC = curse("Beta", "Player C");
+        TeamEntity buyer = team("Buyer", 1_000, 2_000);
+        TeamEntity beta = team("Beta", 0, 1_000);
+        when(repository.findByPlayerName("Player A")).thenReturn(List.of(buyerCurse, otherCurseOnA));
+        when(repository.findByPlayerName("Player C")).thenReturn(List.of(curseOnC));
+        when(teamService.getTeam("Buyer")).thenReturn(buyer);
+
+        service.settleSaleForPlayers(List.of("Player A", "Player C"), "Buyer", 1_000);
+
+        assertEquals(1_000, buyer.getTournamentPoints());
+        assertEquals(0, beta.getTournamentPoints());
+        assertEquals(0, buyerCurse.getSettledAmount());
+        assertEquals(0, otherCurseOnA.getSettledAmount());
+        assertEquals(200, curseOnC.getSettledAmount());
     }
 
     @Test
@@ -155,12 +203,12 @@ class CursePlayerServiceTest {
         TeamEntity setter = team("Alpha", 0, 800);
         when(repository.findByPlayerName("Target")).thenReturn(List.of(curse));
         when(teamService.getTeam("Buyer")).thenReturn(buyer);
-        when(teamService.getTeam("Alpha")).thenReturn(setter);
 
         service.settleSale("Target", "Buyer", 1_350);
 
-        assertEquals(0, buyer.getTournamentPoints());
-        assertEquals(250, setter.getTournamentPoints());
+        assertEquals(100, buyer.getTournamentPoints());
+        assertEquals(0, setter.getTournamentPoints());
+        assertEquals(250, curse.getBuyerDeduction());
         assertEquals(1_000, buyer.getPurse());
     }
 
@@ -171,7 +219,6 @@ class CursePlayerServiceTest {
         TeamEntity setter = team("Alpha", 0, 800);
         when(repository.findByPlayerName("Target")).thenReturn(List.of(curse));
         when(teamService.getTeam("Buyer")).thenReturn(buyer);
-        when(teamService.getTeam("Alpha")).thenReturn(setter);
 
         service.settleSale("Target", "Buyer", 1_350);
         service.undoSettlement("Target");
@@ -181,6 +228,25 @@ class CursePlayerServiceTest {
         assertEquals(1_000, buyer.getPurse());
         assertEquals(800, setter.getPurse());
         assertEquals(false, curse.isTriggered());
+    }
+
+    @Test
+    void undoPairedSettlementRestoresPointsOnlyOnce() {
+        CursePlayerEntity curseOnA = curse("Alpha", "Player A");
+        CursePlayerEntity curseOnC = curse("Alpha", "Player C");
+        TeamEntity buyer = team("Buyer", 1_000, 2_000);
+        TeamEntity alpha = team("Alpha", 0, 1_000);
+        when(repository.findByPlayerName("Player A")).thenReturn(List.of(curseOnA));
+        when(repository.findByPlayerName("Player C")).thenReturn(List.of(curseOnC));
+        when(teamService.getTeam("Buyer")).thenReturn(buyer);
+
+        service.settleSaleForPlayers(List.of("Player A", "Player C"), "Buyer", 1_000);
+        service.undoSettlementForPlayers(List.of("Player A", "Player C"));
+
+        assertEquals(1_000, buyer.getTournamentPoints());
+        assertEquals(0, alpha.getTournamentPoints());
+        assertFalse(curseOnA.isTriggered());
+        assertFalse(curseOnC.isTriggered());
     }
 
     @Test

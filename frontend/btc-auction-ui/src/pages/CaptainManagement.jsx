@@ -141,10 +141,6 @@ function CaptainManagement() {
                                                 itemIndex === index ? { ...item, captainName: event.target.value } : item
                                             ))} />
                                     </div>
-                                    <div className="captain-score">
-                                        <span>Tournament Score</span>
-                                        <strong>{captain.tournamentPoints ?? 0}<small> pts</small></strong>
-                                    </div>
                                 </div>
                                 <div className="captain-credentials-grid">
                                     <div className="form-field">

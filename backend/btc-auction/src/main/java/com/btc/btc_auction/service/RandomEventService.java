@@ -212,7 +212,7 @@ public class RandomEventService {
             case MARKET_BOOM -> "Next player's final price increases by 100 points.";
             case MARKET_CRASH -> "When SOLD is called, the player's final price decreases by 100 points.";
             case BLIND_BONANZA ->
-                "The unique highest blind bidder receives +500 tournament points instead of +300 if they win the player.";
+                "The unique highest blind bidder receives a ₹500 effective-price discount instead of ₹300 if they win the player.";
             case RTM_LOCKDOWN -> "RTM and Wild Pick cannot be used on the next player.";
             case SILENT_AUCTION -> "No live bidding for the next player. All captains submit one secret bid.";
         };

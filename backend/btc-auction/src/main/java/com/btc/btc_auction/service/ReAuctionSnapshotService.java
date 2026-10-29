@@ -64,7 +64,9 @@ public class ReAuctionSnapshotService {
                                 team.getTournamentPoints(),
                                 team.getPlayersBought(),
                                 team.getPlayersLeft(),
-                                team.isWildPickUsed()))
+                                team.isWildPickUsed(),
+                                team.getEffectivePriceCredit(),
+                                team.getCurseRewardCredit()))
                         .toList(),
                 playerRepository.findAll().stream()
                         .map(player -> new PlayerState(
@@ -139,6 +141,8 @@ public class ReAuctionSnapshotService {
                 team.setPlayersBought(teamState.playersBought());
                 team.setPlayersLeft(teamState.playersLeft());
                 team.setWildPickUsed(teamState.wildPickUsed());
+                team.setEffectivePriceCredit(teamState.effectivePriceCredit());
+                team.setCurseRewardCredit(teamState.curseRewardCredit());
                 teamRepository.save(team);
             });
         }
@@ -257,7 +261,9 @@ public class ReAuctionSnapshotService {
             int tournamentPoints,
             int playersBought,
             int playersLeft,
-            boolean wildPickUsed) {
+            boolean wildPickUsed,
+            int effectivePriceCredit,
+            int curseRewardCredit) {
     }
 
     public record PlayerState(

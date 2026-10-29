@@ -36,7 +36,7 @@ function EventOverlay({ event, onDismiss }) {
         case "CURSE_REVEALED":
             icon = "🎯";
             title = "CURSE TRIGGERED";
-            message = `${event.playerName} · ${event.details || `Transfer ${event.amount} tournament points`}`;
+            message = `${event.playerName} · Effective price +₹${event.amount}; each curse setter receives ₹${event.amount} in their purse.`;
             break;
 
         case "CURSE_CANCELLED":
@@ -48,19 +48,19 @@ function EventOverlay({ event, onDismiss }) {
         case "BLIND_BID_BONUS":
             icon = "🏆";
             title = "BLIND BID BONUS";
-            message = `${event.captainName} · +${event.amount} tournament points`;
+            message = `${event.captainName} · Effective price discount ₹${event.amount}`;
             break;
 
         case "BLIND_BONANZA":
             icon = "🎊";
             title = "BLIND BONANZA IN PLAY";
-            message = "Highest blind bidder can earn +500 tournament points if they buy the player.";
+            message = "Highest blind bidder can earn a ₹500 effective-price discount if they buy the player.";
             break;
 
         case "BLIND_BONANZA_REWARDED":
             icon = "🎊";
             title = "BLIND BONANZA AWARDED";
-            message = `${event.captainName} · +${event.amount} tournament points`;
+            message = `${event.captainName} · Effective price discount ₹${event.amount}`;
             break;
 
         case "MARKET_CRASH":
